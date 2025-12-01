@@ -16,12 +16,14 @@ interface HeaderProps {
   empresaName?: string
   userName?: string
   onLogout?: () => void
+  onNavigate?: (view: string) => void
 }
 
 export function Header({
   empresaName = 'Organismo Operador de servicio...',
   userName = 'luis',
   onLogout,
+  onNavigate,
 }: HeaderProps) {
   const [currentTime, setCurrentTime] = useState(new Date())
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
@@ -113,23 +115,28 @@ export function Header({
   return (
     <header className="bg-card border-b border-border px-6 py-3 shadow-sm">
       <div className="grid grid-cols-3 items-center">
-        {/* Left: Greeting Info */}
-        <div className="flex items-center gap-2 text-xs">
-          {getGreetingIcon(currentTime)}
-          <span className="text-muted-foreground">{getGreeting(currentTime)} • Turno {getShift(currentTime)}</span>
+        {/* Left: Gravio Logo + Greeting Info */}
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-gradient-to-br from-primary to-primary/60 rounded-lg flex items-center justify-center shadow-md">
+            <span className="text-white font-bold text-lg">G</span>
+          </div>
+          <div className="flex items-center gap-2 text-xs">
+            {getGreetingIcon(currentTime)}
+            <span className="text-muted-foreground">{getGreeting(currentTime)} • Turno {getShift(currentTime)}</span>
+          </div>
         </div>
 
-        {/* Center: Logo and Company Name */}
+        {/* Center: Company Logo and Name */}
         <div className="flex items-center justify-center gap-3">
           {logoUrl ? (
             <img 
               src={logoUrl} 
               alt="Logo Empresa" 
-              className="h-12 w-12 object-contain rounded-lg shadow-md"
+              className="h-14 w-14 object-contain rounded-lg shadow-md border border-border/30"
             />
           ) : (
-            <div className="w-12 h-12 bg-gradient-to-br from-primary to-primary/60 rounded-lg flex items-center justify-center shadow-md">
-              <span className="text-white font-bold text-xl">G</span>
+            <div className="h-14 w-14 rounded-lg border-2 border-dashed border-border/50 bg-secondary/30 flex items-center justify-center">
+              <Building2 className="w-6 h-6 text-muted-foreground" />
             </div>
           )}
           <div className="flex flex-col items-center">
@@ -166,7 +173,10 @@ export function Header({
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="cursor-pointer">
+              <DropdownMenuItem 
+                className="cursor-pointer"
+                onSelect={() => onNavigate?.('company-config')}
+              >
                 <Building2 className="mr-2 h-4 w-4" />
                 <span>Configuración de Empresa</span>
               </DropdownMenuItem>

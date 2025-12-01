@@ -4,9 +4,10 @@ import { Dashboard } from './components/Dashboard'
 import { LoginPanel } from './components/LoginPanel'
 import { Header } from './components/Header'
 import { SplashScreen } from './components/SplashScreen'
+import { CompanyConfigPanel } from './components/CompanyConfigPanel'
 import { initSync, getSyncStatus, onSyncStatusChange } from './lib/sync'
 
-type View = 'dashboard' | 'login'
+type View = 'dashboard' | 'login' | 'company-config'
 
 function App() {
   const [currentView, setCurrentView] = useState<View>('dashboard')
@@ -76,15 +77,26 @@ function App() {
         empresaName={empresaName}
         userName={userName}
         onLogout={handleLogout}
+        onNavigate={(view) => setCurrentView(view as View)}
       />
 
       {/* Content */}
       <div className="flex-1 p-6">
-        {currentView === 'dashboard' ? (
-          <Dashboard />
-        ) : (
+        {currentView === 'dashboard' && <Dashboard />}
+        {currentView === 'login' && (
           <div className="flex items-center justify-center min-h-[calc(100vh-200px)]">
             <LoginPanel />
+          </div>
+        )}
+        {currentView === 'company-config' && (
+          <div className="max-w-4xl mx-auto">
+            <CompanyConfigPanel 
+              onClose={() => setCurrentView('dashboard')}
+              onSave={() => {
+                loadUserInfo() // Recargar info de empresa
+                setCurrentView('dashboard')
+              }}
+            />
           </div>
         )}
       </div>
