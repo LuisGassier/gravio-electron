@@ -21,19 +21,20 @@ export function PendingTrucksPanel() {
     if (!window.electron) return
 
     try {
-      // Query for trucks that have entrada but no salida
+      // Query basado en la estructura real de las tablas
+      // registros: tiene placa_vehiculo, numero_economico, operador, fecha_entrada, fecha_salida
+      // vehiculos: tiene no_economico, placas
       const query = `
         SELECT
           r.id,
-          v.numero_economico,
-          v.placas,
-          o.nombre as operador_nombre,
-          r.fecha_hora_entrada as hora_entrada
+          r.numero_economico,
+          r.placa_vehiculo as placas,
+          r.operador as operador_nombre,
+          r.fecha_entrada as hora_entrada
         FROM registros r
-        LEFT JOIN vehiculos v ON r.vehiculo_id = v.id
-        LEFT JOIN operadores o ON r.operador_id = o.id
-        WHERE r.fecha_hora_salida IS NULL
-        ORDER BY r.fecha_hora_entrada DESC
+        WHERE r.fecha_salida IS NULL
+          AND r.fecha_entrada IS NOT NULL
+        ORDER BY r.fecha_entrada DESC
       `
       const trucks = await window.electron.db.query(query, [])
       setPendingTrucks(trucks)
