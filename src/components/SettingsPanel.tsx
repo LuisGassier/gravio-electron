@@ -209,7 +209,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
             <Button 
               onClick={testPrint} 
               disabled={loading} 
-              className="w-full bg-warning hover:bg-warning/90 text-black font-medium"
+              className="w-full bg-warning hover:bg-warning/90 text-primary-foreground font-medium"
             >
               <Printer className="w-4 h-4 mr-2" />
               Probar Impresión
