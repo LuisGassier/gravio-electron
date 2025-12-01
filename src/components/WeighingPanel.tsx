@@ -2,12 +2,14 @@ import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Scale, AlertCircle, Truck, User, Route, FileText } from 'lucide-react'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Combobox } from '@/components/ui/combobox'
 
 interface SelectOption {
   id: string
   nombre: string
+  numero_economico?: string
+  placas?: string
   [key: string]: any
 }
 
@@ -19,13 +21,11 @@ export function WeighingPanel() {
   const [rutas, setRutas] = useState<SelectOption[]>([])
   const [conceptos, setConceptos] = useState<SelectOption[]>([])
 
-  const [, setSelectedVehiculo] = useState('')
-  const [, setSelectedOperador] = useState('')
+  const [selectedVehiculo, setSelectedVehiculo] = useState('')
+  const [selectedOperador, setSelectedOperador] = useState('')
   const [selectedRuta, setSelectedRuta] = useState('')
   const [selectedConcepto, setSelectedConcepto] = useState('')
   const [observaciones, setObservaciones] = useState('')
-  const [searchVehiculo, setSearchVehiculo] = useState('')
-  const [searchOperador, setSearchOperador] = useState('')
 
   useEffect(() => {
     loadFormData()
@@ -73,14 +73,26 @@ export function WeighingPanel() {
     setIsScaleConnected(success)
   }
 
-  const filteredVehiculos = vehiculos.filter(v =>
-    v.numero_economico?.toLowerCase().includes(searchVehiculo.toLowerCase()) ||
-    v.placas?.toLowerCase().includes(searchVehiculo.toLowerCase())
-  )
+  // Prepare options for comboboxes
+  const vehiculoOptions = vehiculos.map(v => ({
+    value: v.id,
+    label: `${v.numero_economico} - ${v.placas}`
+  }))
 
-  const filteredOperadores = operadores.filter(o =>
-    o.nombre?.toLowerCase().includes(searchOperador.toLowerCase())
-  )
+  const operadorOptions = operadores.map(o => ({
+    value: o.id,
+    label: o.nombre
+  }))
+
+  const rutaOptions = rutas.map(r => ({
+    value: r.id,
+    label: r.nombre
+  }))
+
+  const conceptoOptions = conceptos.map(c => ({
+    value: c.id,
+    label: c.nombre
+  }))
 
   return (
     <div className="space-y-4">
@@ -122,145 +134,74 @@ export function WeighingPanel() {
       {/* Form Section */}
       <Card className="bg-card border-border">
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Información del Pesaje</CardTitle>
+          <CardTitle className="text-base flex items-center gap-2">
+            <FileText className="w-5 h-5 text-primary" />
+            Información del Pesaje
+          </CardTitle>
           <CardDescription>Complete los datos del vehículo</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Vehiculo */}
-          <div className="space-y-2">
-            <Label htmlFor="vehiculo" className="text-sm font-medium flex items-center gap-2">
-              <Truck className="w-4 h-4 text-primary" />
-              Vehículo
-            </Label>
-            <div className="relative">
-              <Input
-                id="vehiculo"
-                placeholder="Buscar por número económico o pl..."
-                value={searchVehiculo}
-                onChange={(e) => setSearchVehiculo(e.target.value)}
-                className="bg-input border-border text-foreground pr-8"
-              />
-              <button className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-            </div>
-            {searchVehiculo && filteredVehiculos.length > 0 && (
-              <div className="bg-popover border border-border rounded-md max-h-32 overflow-y-auto">
-                {filteredVehiculos.slice(0, 5).map((v) => (
-                  <button
-                    key={v.id}
-                    onClick={() => {
-                      setSelectedVehiculo(v.id)
-                      setSearchVehiculo(`${v.numero_economico} - ${v.placas}`)
-                    }}
-                    className="w-full px-3 py-2 text-left text-sm hover:bg-accent transition-colors"
-                  >
-                    <div className="font-medium text-foreground">{v.numero_economico}</div>
-                    <div className="text-xs text-muted-foreground">{v.placas}</div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Conductor */}
-          <div className="space-y-2">
-            <Label htmlFor="conductor" className="text-sm font-medium flex items-center gap-2">
-              <User className="w-4 h-4 text-primary" />
-              Conductor
-            </Label>
-            <div className="relative">
-              <Input
-                id="conductor"
-                placeholder="Buscar conductor..."
-                value={searchOperador}
-                onChange={(e) => setSearchOperador(e.target.value)}
-                className="bg-input border-border text-foreground pr-8"
-              />
-              <button className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-            </div>
-            {searchOperador && filteredOperadores.length > 0 && (
-              <div className="bg-popover border border-border rounded-md max-h-32 overflow-y-auto">
-                {filteredOperadores.slice(0, 5).map((o) => (
-                  <button
-                    key={o.id}
-                    onClick={() => {
-                      setSelectedOperador(o.id)
-                      setSearchOperador(o.nombre)
-                    }}
-                    className="w-full px-3 py-2 text-left text-sm hover:bg-accent transition-colors"
-                  >
-                    <div className="font-medium text-foreground">{o.nombre}</div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Ruta */}
-          <div className="space-y-2">
-            <Label htmlFor="ruta" className="text-sm font-medium flex items-center gap-2">
-              <Route className="w-4 h-4 text-primary" />
-              Ruta
-            </Label>
-            <div className="relative">
-              <select
-                id="ruta"
-                value={selectedRuta}
-                onChange={(e) => setSelectedRuta(e.target.value)}
-                className="w-full h-10 px-3 bg-input border border-border rounded-md text-foreground text-sm appearance-none pr-8"
-              >
-                <option value="">Buscar ruta...</option>
-                {rutas.map((r) => (
-                  <option key={r.id} value={r.id}>{r.nombre}</option>
-                ))}
-              </select>
-              <button className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-            </div>
-          </div>
-
-          {/* Concepto */}
-          <div className="space-y-2">
-            <Label htmlFor="concepto" className="text-sm font-medium flex items-center gap-2">
-              <FileText className="w-4 h-4 text-primary" />
-              Concepto
-            </Label>
-            <div className="relative">
-              <select
-                id="concepto"
+          {/* Row 1: Concepto y Operador */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Concepto</Label>
+              <Combobox
+                options={conceptoOptions}
                 value={selectedConcepto}
-                onChange={(e) => setSelectedConcepto(e.target.value)}
-                className="w-full h-10 px-3 bg-input border border-border rounded-md text-foreground text-sm appearance-none pr-8"
-              >
-                <option value="">Buscar concepto...</option>
-                {conceptos.map((c) => (
-                  <option key={c.id} value={c.id}>{c.nombre}</option>
-                ))}
-              </select>
-              <button className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
+                onValueChange={setSelectedConcepto}
+                placeholder="Buscar concepto..."
+                searchPlaceholder="Buscar..."
+                emptyText="No se encontraron conceptos"
+                icon={<FileText className="w-4 h-4" />}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Conductor</Label>
+              <Combobox
+                options={operadorOptions}
+                value={selectedOperador}
+                onValueChange={setSelectedOperador}
+                placeholder="Buscar conductor..."
+                searchPlaceholder="Buscar..."
+                emptyText="No se encontraron conductores"
+                icon={<User className="w-4 h-4" />}
+              />
+            </div>
+          </div>
+
+          {/* Row 2: Ruta y Vehículo */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Ruta</Label>
+              <Combobox
+                options={rutaOptions}
+                value={selectedRuta}
+                onValueChange={setSelectedRuta}
+                placeholder="Buscar ruta..."
+                searchPlaceholder="Buscar..."
+                emptyText="No se encontraron rutas"
+                icon={<Route className="w-4 h-4" />}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Vehículo</Label>
+              <Combobox
+                options={vehiculoOptions}
+                value={selectedVehiculo}
+                onValueChange={setSelectedVehiculo}
+                placeholder="Buscar por número económico o pl..."
+                searchPlaceholder="Buscar..."
+                emptyText="No se encontraron vehículos"
+                icon={<Truck className="w-4 h-4" />}
+              />
             </div>
           </div>
 
           {/* Observaciones */}
           <div className="space-y-2">
-            <Label htmlFor="observaciones" className="text-sm font-medium flex items-center gap-2">
-              <FileText className="w-4 h-4 text-primary" />
-              Observaciones
-            </Label>
+            <Label htmlFor="observaciones" className="text-sm font-medium">Observaciones</Label>
             <textarea
               id="observaciones"
               placeholder="Observaciones adicionales (opcional)"
