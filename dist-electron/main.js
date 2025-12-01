@@ -16348,12 +16348,17 @@ async function listSerialPorts() {
 function parseWeightData(data) {
   try {
     const cleaned = data.trim();
+    const mettlerPattern = /\)0\s+(\d+)\s+(\d+)/;
+    const mettlerMatch = cleaned.match(mettlerPattern);
+    if (mettlerMatch) {
+      const [, integer, decimal] = mettlerMatch;
+      return parseFloat(`${integer}.${decimal}`);
+    }
     const pattern2 = /[)>+\-SD]\s*(\d+)\s+(\d+)\s+(\d+)/;
     const match = cleaned.match(pattern2);
     if (match) {
       const [, , integer, decimal] = match;
-      const weight = parseFloat(`${integer}.${decimal}`);
-      return weight;
+      return parseFloat(`${integer}.${decimal}`);
     }
     const simplePattern = /(\d+\.?\d*)/;
     const simpleMatch = cleaned.match(simplePattern);
@@ -16380,10 +16385,12 @@ async function openSerialPort(portPath, baudRate = DEFAULT_CONFIG.baudRate, onDa
       parity: DEFAULT_CONFIG.parity,
       autoOpen: false
     });
-    parser = port.pipe(new ReadlineParser({ delimiter: "\r\n" }));
+    parser = port.pipe(new ReadlineParser({ delimiter: "\r" }));
     parser.on("data", (data) => {
-      console.log("📊 Datos recibidos:", data);
-      const weight = parseWeightData(data);
+      const cleanData = data.trim();
+      if (!cleanData) return;
+      console.log(`📥 RAW: ${JSON.stringify(cleanData)}`);
+      const weight = parseWeightData(cleanData);
       if (weight !== null) {
         currentWeight = weight.toString();
         console.log("⚖️ Peso parseado:", weight, "kg");

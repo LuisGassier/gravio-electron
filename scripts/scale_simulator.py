@@ -33,14 +33,15 @@ def simulate_scale(port, baudrate, interval, weight_val=None):
                 # Nota: El formato exacto depende de la báscula, aquí replicamos el ejemplo del usuario
                 # )0 [espacios] [entero] [espacios] [decimal]
                 
-                data = f")0   {integer_part}    {decimal_part:02d}\r\n"
+                data = f")0   {integer_part}    {decimal_part:02d}\r"
             else:
                 # Usar el valor fijo proporcionado
                 # Asumimos que el usuario quiere probar exactamente este string o variaciones
-                data = f")0   {weight_val}    00\r\n"
+                data = f")0   {weight_val}    00\r"
 
             ser.write(data.encode('ascii'))
-            print(f"📤 Enviado: {data.strip()}")
+            # Usar \r en el print para simular la actualización en línea en la consola también
+            print(f"📤 Enviado: {data.strip()}   ", end='\r', flush=True)
             time.sleep(interval)
             
     except serial.SerialException as e:

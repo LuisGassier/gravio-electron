@@ -56,23 +56,27 @@ export async function listSerialPorts() {
  */
 function parseWeightData(data: string): number | null {
   try {
-    // Limpiar espacios extras
     const cleaned = data.trim()
     
-    // Patrón para formato Mettler Toledo: )0 1050 0500
-    // También acepta variaciones como: +0 1050 0500, S 1050 0500, etc.
+    // Patrón específico: )0   2119    38
+    const mettlerPattern = /\)0\s+(\d+)\s+(\d+)/
+    const mettlerMatch = cleaned.match(mettlerPattern)
+
+    if (mettlerMatch) {
+      const [, integer, decimal] = mettlerMatch
+      return parseFloat(`${integer}.${decimal}`)
+    }
+
+    // Patrón genérico (backup)
     const pattern = /[)>+\-SD]\s*(\d+)\s+(\d+)\s+(\d+)/
     const match = cleaned.match(pattern)
     
     if (match) {
       const [, , integer, decimal] = match
-      // Combinar parte entera y decimal
-      // Ejemplo: 1050 + 0.0500 = 1050.0500 kg
-      const weight = parseFloat(`${integer}.${decimal}`)
-      return weight
+      return parseFloat(`${integer}.${decimal}`)
     }
     
-    // Patrón alternativo más simple: solo números
+    // Patrón simple
     const simplePattern = /(\d+\.?\d*)/
     const simpleMatch = cleaned.match(simplePattern)
     
@@ -113,14 +117,18 @@ export async function openSerialPort(
       autoOpen: false,
     })
 
-    // Parser de líneas (los datos vienen línea por línea)
-    parser = port.pipe(new ReadlineParser({ delimiter: '\r\n' }))
+    // Parser de líneas
+    // Usamos \r como delimitador para soportar básculas que actualizan la línea
+    parser = port.pipe(new ReadlineParser({ delimiter: '\r' }))
 
     // Listener de datos
     parser.on('data', (data: string) => {
-      console.log('📊 Datos recibidos:', data)
+      const cleanData = data.trim()
+      if (!cleanData) return
+
+      console.log(`📥 RAW: ${JSON.stringify(cleanData)}`)
       
-      const weight = parseWeightData(data)
+      const weight = parseWeightData(cleanData)
       if (weight !== null) {
         currentWeight = weight.toString()
         console.log('⚖️ Peso parseado:', weight, 'kg')
