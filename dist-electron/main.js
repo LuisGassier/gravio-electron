@@ -11,6 +11,8 @@ import os from "node:os";
 import "node:events";
 import "node:stream";
 import fs$1 from "fs";
+import { exec } from "child_process";
+import { promisify as promisify$1 } from "util";
 const isObject = (value) => {
   const type2 = typeof value;
   return value !== null && (type2 === "object" || type2 === "function");
@@ -16308,6 +16310,7 @@ function closeDatabase() {
     console.log("✅ Base de datos cerrada");
   }
 }
+const execPromise = promisify$1(exec);
 let SerialPort;
 let ReadlineParser;
 async function loadModules() {
@@ -16332,7 +16335,28 @@ async function listSerialPorts() {
   try {
     await loadModules();
     const ports = await SerialPort.list();
-    console.log("🔌 Puertos raw encontrados:", ports);
+    console.log("🔌 Puertos raw encontrados (node-serialport):", ports);
+    if (process.platform === "win32") {
+      try {
+        const { stdout } = await execPromise('powershell -command "[System.IO.Ports.SerialPort]::GetPortNames()"');
+        const psPorts = stdout.trim().split(/\r?\n/).filter((p) => p && p.trim().length > 0);
+        console.log("🔌 Puertos encontrados vía PowerShell:", psPorts);
+        psPorts.forEach((psPort) => {
+          const portName = psPort.trim();
+          if (!ports.find((p) => p.path === portName)) {
+            ports.push({
+              path: portName,
+              manufacturer: "Puerto Virtual (Detectado por OS)",
+              serialNumber: void 0,
+              vendorId: void 0,
+              productId: void 0
+            });
+          }
+        });
+      } catch (psError) {
+        console.warn("⚠️ Error al listar puertos con PowerShell:", psError);
+      }
+    }
     return ports.map((port2) => ({
       path: port2.path,
       manufacturer: port2.manufacturer,

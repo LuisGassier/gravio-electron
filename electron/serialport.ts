@@ -1,3 +1,8 @@
+import { exec } from 'child_process'
+import { promisify } from 'util'
+
+const execPromise = promisify(exec)
+
 // Importaciones dinámicas para evitar problemas con ES modules
 let SerialPort: any
 let ReadlineParser: any
@@ -26,14 +31,39 @@ const DEFAULT_CONFIG = {
   autoOpen: false,
 }
 
-/**
- * Listar puertos seriales disponibles
- */
 export async function listSerialPorts() {
   try {
     await loadModules()
     const ports = await SerialPort.list()
-    console.log('🔌 Puertos raw encontrados:', ports)
+    console.log('🔌 Puertos raw encontrados (node-serialport):', ports)
+
+    // En Windows, a veces node-serialport no detecta puertos virtuales (com0com).
+    // Intentamos obtenerlos vía PowerShell como fallback.
+    if (process.platform === 'win32') {
+      try {
+        const { stdout } = await execPromise('powershell -command "[System.IO.Ports.SerialPort]::GetPortNames()"')
+        const psPorts = stdout.trim().split(/\r?\n/).filter(p => p && p.trim().length > 0)
+        
+        console.log('🔌 Puertos encontrados vía PowerShell:', psPorts)
+
+        psPorts.forEach((psPort: string) => {
+          const portName = psPort.trim()
+          // Si el puerto no está en la lista de node-serialport, agregarlo
+          if (!ports.find((p: any) => p.path === portName)) {
+            ports.push({
+              path: portName,
+              manufacturer: 'Puerto Virtual (Detectado por OS)',
+              serialNumber: undefined,
+              vendorId: undefined,
+              productId: undefined,
+            })
+          }
+        })
+      } catch (psError) {
+        console.warn('⚠️ Error al listar puertos con PowerShell:', psError)
+      }
+    }
+
     return ports.map((port: any) => ({
       path: port.path,
       manufacturer: port.manufacturer,
