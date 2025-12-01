@@ -190,7 +190,14 @@ export function WeighingPanel() {
 
   const syncDataFromSupabase = async () => {
     try {
-      // Sincronizar entidades maestras desde Supabase (silencioso en background)
+      // 1. Descargar registros actualizados de Supabase (otras PCs)
+      const { downloadRegistros } = await import('@/lib/sync')
+      await downloadRegistros()
+      
+      // 2. Subir registros pendientes a Supabase
+      await container.syncService.syncNow()
+      
+      // 3. Sincronizar entidades maestras desde Supabase
       const { syncAllEntities } = await import('@/lib/syncEntities')
       const results = await syncAllEntities()
       
@@ -204,9 +211,6 @@ export function WeighingPanel() {
       if (totalSynced > 0) {
         console.log(`🔄 Sincronizadas ${totalSynced} entidades desde Supabase`)
       }
-      
-      // También sincronizar registros
-      await container.syncService.syncNow()
     } catch (error) {
       console.warn('⚠️ Error en sincronización automática:', error)
     }

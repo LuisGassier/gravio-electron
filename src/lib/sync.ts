@@ -107,7 +107,7 @@ async function syncTransactions() {
  * Descargar registros actualizados de Supabase a SQLite local
  * Esto permite ver cambios hechos en otras PCs (como registros de salida)
  */
-async function downloadRegistros() {
+export async function downloadRegistros() {
   if (!supabase) return
   
   try {
@@ -132,31 +132,50 @@ async function downloadRegistros() {
       return
     }
     
+    console.log(`📥 Descargando ${registros.length} registros de Supabase...`)
+    console.log('📋 Primeros 3 registros:', registros.slice(0, 3))
+    
     let updated = 0
     for (const reg of registros) {
       try {
-        // Actualizar en SQLite local
+        // Usar INSERT OR REPLACE para crear o actualizar el registro
         await window.electron.db.run(
-          `UPDATE registros SET 
-            peso_salida = ?,
-            fecha_salida = ?,
-            hora_salida = ?,
-            observaciones = ?,
-            folio = ?,
-            sincronizado = 1,
-            updated_at = ?
-          WHERE id = ?`,
+          `INSERT OR REPLACE INTO registros (
+            id, folio, clave_ruta, ruta, placa_vehiculo, numero_economico,
+            clave_operador, operador, clave_empresa, clave_concepto, concepto_id,
+            peso_entrada, peso_salida, fecha_entrada, fecha_salida,
+            tipo_pesaje, observaciones, sincronizado, fecha_registro, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
-            reg.peso_salida,
-            reg.fecha_salida,
-            reg.hora_salida,
-            reg.observaciones,
+            reg.id,
             reg.folio,
-            reg.updated_at || Date.now(),
-            reg.id
+            reg.clave_ruta,
+            reg.ruta,
+            reg.placa_vehiculo,
+            reg.numero_economico,
+            reg.clave_operador,
+            reg.operador,
+            reg.clave_empresa,
+            reg.clave_concepto,
+            reg.concepto_id,
+            reg.peso_entrada,
+            reg.peso_salida,
+            reg.fecha_entrada,
+            reg.fecha_salida,
+            reg.tipo_pesaje,
+            reg.observaciones,
+            1, // sincronizado
+            reg.fecha_registro || reg.created_at,
+            reg.created_at,
+            reg.updated_at || new Date().toISOString()
           ]
         )
         updated++
+        
+        // Log detallado de registros con salida
+        if (reg.peso_salida && reg.fecha_salida) {
+          console.log(`✅ Registro con salida sincronizado: ${reg.placa_vehiculo} - Salida: ${reg.peso_salida}kg el ${reg.fecha_salida}`)
+        }
       } catch (err) {
         console.error(`❌ Error al actualizar registro ${reg.id}:`, err)
       }
@@ -164,6 +183,8 @@ async function downloadRegistros() {
     
     if (updated > 0) {
       console.log(`✅ Actualizados ${updated} registros desde Supabase`)
+    } else {
+      console.warn('⚠️ No se actualizó ningún registro')
     }
   } catch (error) {
     console.error('❌ Error al descargar registros:', error)
