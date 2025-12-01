@@ -312,11 +312,11 @@ export function Combobox({
 
                   {/* Label y Subtitle */}
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-foreground truncate">
+                    <div className="text-base font-semibold text-foreground truncate">
                       {option.label}
                     </div>
                     {option.subtitle && (
-                      <div className="text-xs text-muted-foreground truncate">
+                      <div className="text-sm text-foreground/80 truncate font-medium mt-0.5">
                         {option.subtitle}
                       </div>
                     )}
