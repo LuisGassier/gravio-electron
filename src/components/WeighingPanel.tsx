@@ -359,11 +359,11 @@ export function WeighingPanel() {
       placaVehiculo: vehiculo?.placas || customNumeroEconomico || 'NUEVO',
       numeroEconomico: vehiculo?.no_economico || customNumeroEconomico || 'NUEVO',
       claveEmpresa: vehiculo?.clave_empresa || claveEmpresaFinal,
-      claveOperador: operador?.clave_operador || 0,
+      claveOperador: operador?.clave_operador || 999999, // Clave temporal para "NUEVO"
       operador: selectedOperador === 'NUEVO' ? 'Nuevo' : (operador?.operador || 'Sin operador'),
-      claveRuta: ruta?.clave_ruta || 0,
+      claveRuta: ruta?.clave_ruta || 999999, // Clave temporal para "NUEVO"
       ruta: selectedRuta === 'NUEVO' ? 'Nuevo' : (ruta?.ruta || 'Sin ruta'),
-      claveConcepto: concepto?.clave_concepto || 0,
+      claveConcepto: concepto?.clave_concepto || 999999, // Clave temporal para "NUEVO"
       conceptoId: conceptoId,
       observaciones: observaciones || undefined
     })
