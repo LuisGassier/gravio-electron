@@ -337,14 +337,5 @@ export async function syncAllEntities(): Promise<{
     empresas: await syncEmpresas(),
   }
 
-  const totalSynced =
-    results.vehiculos.synced +
-    results.operadores.synced +
-    results.rutas.synced +
-    results.conceptos.synced +
-    results.empresas.synced
-
-
-
   return results
 }
