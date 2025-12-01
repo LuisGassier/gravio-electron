@@ -25,6 +25,109 @@ export const supabase = hasValidCredentials
     })
   : null as any // Modo offline puro
 
+// Estado de autenticación
+let isAuthenticated = false
+let currentUserId: string | null = null
+
+/**
+ * Autenticar usuario con email y PIN o contraseña
+ */
+export async function authenticateUser(
+  email: string, 
+  pin?: string, 
+  password?: string
+): Promise<{ success: boolean; user?: any; error?: string }> {
+  if (!supabase) {
+    return { success: false, error: 'Supabase no configurado' }
+  }
+
+  try {
+    const { data, error } = await supabase.rpc('authenticate_user', {
+      user_email: email,
+      user_pin: pin || null,
+      user_password: password || null,
+    })
+
+    if (error) {
+      console.error('❌ Error de autenticación:', error)
+      return { success: false, error: error.message }
+    }
+
+    if (!data || data.length === 0) {
+      return { success: false, error: 'Credenciales inválidas' }
+    }
+
+    const user = data[0]
+    isAuthenticated = true
+    currentUserId = user.user_id
+
+    // Guardar sesión localmente
+    if (window.electron) {
+      await window.electron.storage.set('supabase_user', {
+        id: user.user_id,
+        email: user.email,
+        nombre: user.nombre,
+        activo: user.activo,
+      })
+    }
+
+    console.log('✅ Usuario autenticado:', user.email)
+    return { success: true, user }
+  } catch (error: any) {
+    console.error('❌ Error en autenticación:', error)
+    return { success: false, error: error.message }
+  }
+}
+
+/**
+ * Cerrar sesión
+ */
+export async function signOut() {
+  isAuthenticated = false
+  currentUserId = null
+  
+  if (window.electron) {
+    await window.electron.storage.delete('supabase_user')
+  }
+  
+  console.log('✅ Sesión cerrada')
+}
+
+/**
+ * Verificar si hay una sesión activa
+ */
+export function isUserAuthenticated(): boolean {
+  return isAuthenticated
+}
+
+/**
+ * Obtener ID del usuario actual
+ */
+export function getCurrentUserId(): string | null {
+  return currentUserId
+}
+
+/**
+ * Restaurar sesión guardada
+ */
+export async function restoreSession(): Promise<boolean> {
+  if (!window.electron || !supabase) return false
+
+  try {
+    const savedUser = await window.electron.storage.get('supabase_user')
+    if (savedUser && savedUser.id) {
+      isAuthenticated = true
+      currentUserId = savedUser.id
+      console.log('✅ Sesión restaurada:', savedUser.email)
+      return true
+    }
+  } catch (error) {
+    console.error('❌ Error al restaurar sesión:', error)
+  }
+
+  return false
+}
+
 // Types para TypeScript
 export type Transaction = {
   id: string

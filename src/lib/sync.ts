@@ -1,4 +1,7 @@
-import { supabase } from './supabase'
+import { supabase, restoreSession, authenticateUser, signOut, getCurrentUserId } from './supabase'
+
+// Re-exportar funciones de autenticación para facilitar el acceso
+export { authenticateUser, signOut, getCurrentUserId } from './supabase'
 
 // Estado de sincronización
 export type SyncStatus = {
@@ -7,6 +10,7 @@ export type SyncStatus = {
   lastSync: Date | null
   pendingItems: number
   errors: string[]
+  isAuthenticated: boolean
 }
 
 let syncStatus: SyncStatus = {
@@ -15,6 +19,7 @@ let syncStatus: SyncStatus = {
   lastSync: null,
   pendingItems: 0,
   errors: [],
+  isAuthenticated: false,
 }
 
 let syncInterval: ReturnType<typeof setInterval> | null = null
@@ -92,6 +97,12 @@ async function syncTransaction(transaction: any) {
       [transaction.id]
     )
     return true
+  }
+
+  // Verificar autenticación antes de sincronizar
+  if (!syncStatus.isAuthenticated) {
+    console.warn('⚠️ Usuario no autenticado, transacción pendiente')
+    return false
   }
   
   try {
@@ -181,6 +192,19 @@ async function downloadCacheData() {
   if (!supabase) {
     console.log('⚠️ Supabase no configurado, omitiendo descarga de cache')
     return
+  }
+
+  // Verificar autenticación
+  if (!syncStatus.isAuthenticated) {
+    console.warn('⚠️ Usuario no autenticado. Intentando restaurar sesión...')
+    const restored = await restoreSession()
+    if (restored) {
+      syncStatus.isAuthenticated = true
+      notifyStatusChange()
+    } else {
+      console.warn('⚠️ No se pudo restaurar la sesión. Omitiendo descarga de cache.')
+      return
+    }
   }
   
   try {
@@ -317,9 +341,20 @@ export function getSyncStatus(): SyncStatus {
 /**
  * Inicializar sincronización
  */
-export function initSync() {
+export async function initSync() {
   // Actualizar estado inicial de conexión
   syncStatus.isOnline = navigator.onLine
+  
+  // Intentar restaurar sesión guardada
+  if (supabase) {
+    const restored = await restoreSession()
+    syncStatus.isAuthenticated = restored
+    if (restored) {
+      console.log('✅ Sesión de usuario restaurada')
+    } else {
+      console.warn('⚠️ No hay sesión guardada. Inicia sesión para sincronizar con Supabase.')
+    }
+  }
   
   // Iniciar sincronización automática si hay conexión
   if (syncStatus.isOnline) {
