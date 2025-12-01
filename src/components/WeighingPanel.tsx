@@ -8,6 +8,7 @@ import { container } from '@/application'
 import { toast } from 'sonner'
 import { usePesaje } from '@/contexts/PesajeContext'
 import type { Registro } from '@/domain'
+import { PesajeCompletedModal } from './PesajeCompletedModal'
 
 interface Vehiculo {
   id: string
@@ -51,7 +52,7 @@ export function WeighingPanel() {
   const [isScaleConnected, setIsScaleConnected] = useState(false)
   const [isSalidaMode, setIsSalidaMode] = useState(false)
   const [currentRegistro, setCurrentRegistro] = useState<Registro | null>(null)
-  
+
   const [vehiculos, setVehiculos] = useState<Vehiculo[]>([])
   const [operadores, setOperadores] = useState<Operador[]>([])
   const [rutas, setRutas] = useState<Ruta[]>([])
@@ -63,6 +64,11 @@ export function WeighingPanel() {
   const [selectedConcepto, setSelectedConcepto] = useState('')
   const [selectedEmpresa, setSelectedEmpresa] = useState<number | null>(null)
   const [observaciones, setObservaciones] = useState('')
+
+  // Modal de pesaje completado
+  const [showCompletedModal, setShowCompletedModal] = useState(false)
+  const [completedRegistro, setCompletedRegistro] = useState<Registro | null>(null)
+  const [completedEmpresa, setCompletedEmpresa] = useState<string>('')
 
   useEffect(() => {
     loadFormData()
@@ -351,61 +357,121 @@ export function WeighingPanel() {
     if (result.success) {
       let registro = result.value
       const pesoNeto = registro.getPesoNeto()
-      
-      // Intentar sincronizar inmediatamente para obtener el folio de Supabase
+
+      // Sincronizar y esperar activamente por el folio de Supabase
       try {
+        console.log('🔄 Sincronizando con Supabase para obtener folio...')
         const syncResult = await container.syncService.syncNow()
+
         if (syncResult.success) {
-          // Recargar el registro para obtener el folio actualizado
-          const updatedResult = await container.sqliteRegistroRepository.findById(registro.id!)
-          if (updatedResult.success && updatedResult.value) {
-            registro = updatedResult.value
+          // Esperar activamente por el folio (máximo 5 segundos)
+          const maxAttempts = 10
+          let attempts = 0
+
+          while (attempts < maxAttempts) {
+            const updatedResult = await container.sqliteRegistroRepository.findById(registro.id!)
+
+            if (updatedResult.success && updatedResult.value && updatedResult.value.folio) {
+              registro = updatedResult.value
+              console.log('✅ Folio obtenido de Supabase:', registro.folio)
+              break
+            }
+
+            attempts++
+            if (attempts < maxAttempts) {
+              await new Promise(resolve => setTimeout(resolve, 500))
+            }
+          }
+
+          if (!registro.folio) {
+            console.warn('⚠️ No se pudo obtener folio después de sincronizar')
           }
         }
       } catch (error) {
         console.warn('⚠️ No se pudo sincronizar inmediatamente (modo offline):', error)
       }
-      
+
       toast.success('Salida registrada exitosamente', {
         description: `Folio: ${registro.folio || 'Pendiente'} - Peso neto: ${pesoNeto ? pesoNeto.toFixed(2) + ' kg' : 'N/A'}`
       })
 
-      // Imprimir ticket térmico
-      try {
-        console.log('🖨️ Iniciando impresión de ticket...')
+      // Obtener el nombre de la empresa
+      const empresaResult = await window.electron.db.query(
+        'SELECT empresa FROM empresa WHERE clave_empresa = ?',
+        [registro.claveEmpresa]
+      )
+      const empresaNombre = empresaResult[0]?.empresa || 'Sin empresa'
 
-        // Obtener el nombre de la empresa
-        const empresaResult = await window.electron.db.query(
-          'SELECT empresa FROM empresa WHERE clave_empresa = ?',
-          [registro.claveEmpresa]
-        )
-        const empresaNombre = empresaResult[0]?.empresa || 'Sin empresa'
+      // Verificar si la impresión automática está habilitada
+      const autoPrintEnabled = await container.printerService.isAutoPrintEnabled()
+      console.log('🖨️ Impresión automática:', autoPrintEnabled)
 
-        const printResult = await container.printerService.printTicket({
-          registro,
-          empresa: empresaNombre
-        })
+      if (autoPrintEnabled) {
+        // Imprimir automáticamente
+        try {
+          console.log('🖨️ Imprimiendo automáticamente...')
+          const printResult = await container.printerService.printTicket({
+            registro,
+            empresa: empresaNombre
+          })
 
-        if (printResult.success) {
-          console.log('✅ Ticket impreso exitosamente')
-          toast.success('Ticket impreso exitosamente')
-        } else {
-          console.error('❌ Error al imprimir ticket:', printResult.error)
+          if (printResult.success) {
+            console.log('✅ Ticket impreso exitosamente')
+            toast.success('Ticket impreso exitosamente')
+          } else {
+            console.error('❌ Error al imprimir ticket:', printResult.error)
+            toast.warning('Salida registrada pero no se pudo imprimir el ticket', {
+              description: printResult.error.message
+            })
+          }
+        } catch (error) {
+          console.error('❌ Error al imprimir ticket:', error)
           toast.warning('Salida registrada pero no se pudo imprimir el ticket', {
-            description: printResult.error.message
+            description: error instanceof Error ? error.message : 'Error desconocido'
           })
         }
-      } catch (error) {
-        console.error('❌ Error al imprimir ticket:', error)
-        toast.warning('Salida registrada pero no se pudo imprimir el ticket', {
-          description: error instanceof Error ? error.message : 'Error desconocido'
-        })
+        cancelarSalida()
+      } else {
+        // Mostrar modal para confirmar impresión
+        setCompletedRegistro(registro)
+        setCompletedEmpresa(empresaNombre)
+        setShowCompletedModal(true)
+        cancelarSalida()
       }
-
-      cancelarSalida()
     } else {
       toast.error('Error al registrar salida', {
         description: result.error.message
+      })
+    }
+  }
+
+  const handlePrintFromModal = async (copies: number) => {
+    if (!completedRegistro) return
+
+    try {
+      for (let i = 0; i < copies; i++) {
+        console.log(`🖨️ Imprimiendo copia ${i + 1} de ${copies}...`)
+        const printResult = await container.printerService.printTicket({
+          registro: completedRegistro,
+          empresa: completedEmpresa
+        })
+
+        if (!printResult.success) {
+          throw printResult.error
+        }
+
+        // Pequeño delay entre copias
+        if (i < copies - 1) {
+          await new Promise(resolve => setTimeout(resolve, 1000))
+        }
+      }
+
+      toast.success(`✅ ${copies} ticket${copies > 1 ? 's' : ''} impreso${copies > 1 ? 's' : ''} exitosamente`)
+      setShowCompletedModal(false)
+    } catch (error) {
+      console.error('❌ Error al imprimir tickets:', error)
+      toast.error('Error al imprimir', {
+        description: error instanceof Error ? error.message : 'Error desconocido'
       })
     }
   }
@@ -760,6 +826,17 @@ export function WeighingPanel() {
           )}
         </CardContent>
       </Card>
+
+      {/* Modal de pesaje completado */}
+      {completedRegistro && (
+        <PesajeCompletedModal
+          open={showCompletedModal}
+          onClose={() => setShowCompletedModal(false)}
+          registro={completedRegistro}
+          empresa={completedEmpresa}
+          onPrint={handlePrintFromModal}
+        />
+      )}
     </div>
   )
 }

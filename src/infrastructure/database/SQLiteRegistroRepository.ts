@@ -18,17 +18,19 @@ export class SQLiteRegistroRepository implements IRegistroRepository {
       const id = registro.id || uuidv4();
       const now = new Date().toISOString();
 
+      // Usar INSERT OR REPLACE para permitir actualizaciones (como agregar folio)
       const query = `
-        INSERT INTO registros (
-          id, clave_ruta, ruta, placa_vehiculo, numero_economico,
+        INSERT OR REPLACE INTO registros (
+          id, folio, clave_ruta, ruta, placa_vehiculo, numero_economico,
           clave_operador, operador, clave_empresa, clave_concepto, concepto_id,
-          peso_entrada, fecha_entrada, tipo_pesaje, observaciones,
+          peso_entrada, peso_salida, fecha_entrada, fecha_salida, tipo_pesaje, observaciones,
           sincronizado, fecha_registro, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
 
       const params = [
         id,
+        registro.folio || null,
         registro.claveRuta,
         registro.ruta,
         registro.placaVehiculo,
@@ -39,7 +41,9 @@ export class SQLiteRegistroRepository implements IRegistroRepository {
         registro.claveConcepto,
         registro.conceptoId || null,
         registro.pesoEntrada || null,
+        registro.pesoSalida || null,
         registro.fechaEntrada?.toISOString() || null,
+        registro.fechaSalida?.toISOString() || null,
         registro.tipoPesaje,
         registro.observaciones || null,
         registro.sincronizado ? 1 : 0,

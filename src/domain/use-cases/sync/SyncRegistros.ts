@@ -86,6 +86,13 @@ export class SyncRegistrosUseCase {
             const remoteResult = await this.remoteRepository.saveEntrada(registro);
 
             if (remoteResult.success) {
+              // Actualizar el registro local con el folio generado por Supabase
+              const registroConFolio = remoteResult.value;
+              if (registroConFolio.folio) {
+                console.log(`📝 Actualizando folio local: ${registroConFolio.folio} para registro ${registroConFolio.id}`);
+                await this.localRepository.saveEntrada(registroConFolio);
+              }
+
               // Marcar como sincronizado localmente
               await this.localRepository.markAsSynced(registro.id!);
               synced++;

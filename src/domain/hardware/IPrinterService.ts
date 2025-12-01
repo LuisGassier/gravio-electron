@@ -38,4 +38,14 @@ export interface IPrinterService {
    * Establece la impresora por defecto
    */
   setDefaultPrinter(printerName: string): Promise<Result<void>>;
+
+  /**
+   * Verifica si la impresión automática está habilitada
+   */
+  isAutoPrintEnabled(): Promise<boolean>;
+
+  /**
+   * Configura la impresión automática
+   */
+  setAutoPrint(enabled: boolean): Promise<Result<void>>;
 }

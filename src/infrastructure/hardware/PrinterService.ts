@@ -12,6 +12,7 @@ import { ResultFactory } from '@/domain/shared/Result';
  */
 export class PrinterService implements IPrinterService {
   private readonly STORAGE_KEY = 'defaultPrinter';
+  private readonly AUTO_PRINT_KEY = 'autoPrintEnabled';
 
   async listPrinters(): Promise<Result<PrinterInfo[]>> {
     try {
@@ -100,10 +101,43 @@ export class PrinterService implements IPrinterService {
       }
 
       const printerName = await window.electron.storage.get(this.STORAGE_KEY);
+      console.log('🖨️ Impresora por defecto obtenida:', printerName);
       return printerName || null;
     } catch (error) {
       console.error('❌ Error al obtener impresora por defecto:', error);
       return null;
+    }
+  }
+
+  async isAutoPrintEnabled(): Promise<boolean> {
+    try {
+      if (!window.electron) {
+        return false;
+      }
+
+      const enabled = await window.electron.storage.get(this.AUTO_PRINT_KEY);
+      console.log('🖨️ Impresión automática:', enabled);
+      return enabled === true;
+    } catch (error) {
+      console.error('❌ Error al obtener configuración de impresión automática:', error);
+      return false;
+    }
+  }
+
+  async setAutoPrint(enabled: boolean): Promise<Result<void>> {
+    try {
+      if (!window.electron) {
+        return ResultFactory.fail(new Error('API de Electron no disponible'));
+      }
+
+      await window.electron.storage.set(this.AUTO_PRINT_KEY, enabled);
+      console.log('✅ Impresión automática configurada:', enabled);
+      return ResultFactory.ok(undefined);
+    } catch (error) {
+      console.error('❌ Error al configurar impresión automática:', error);
+      return ResultFactory.fail(
+        error instanceof Error ? error : new Error('Error desconocido al configurar impresión automática')
+      );
     }
   }
 
