@@ -70,9 +70,13 @@ export type ElectronAPI = {
     clear: () => Promise<void>
   }
   updater: {
-    downloadAndInstall: (downloadUrl: string, fileName: string) => Promise<void>
+    check: () => Promise<any>
+    download: () => Promise<any>
+    installAndRestart: () => Promise<void>
     openExternal: (url: string) => Promise<void>
-    onProgress: (callback: (progress: number) => void) => void
+    onUpdateAvailable: (callback: (info: any) => void) => () => void
+    onDownloadProgress: (callback: (progress: any) => void) => () => void
+    onUpdateDownloaded: (callback: (info: any) => void) => () => void
   }
 }
 
