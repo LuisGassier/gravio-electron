@@ -33,6 +33,11 @@ export type ElectronAPI = {
     delete: (key: string) => Promise<void>
     clear: () => Promise<void>
   }
+  updater: {
+    downloadAndInstall: (downloadUrl: string, fileName: string) => Promise<void>
+    openExternal: (url: string) => Promise<void>
+    onProgress: (callback: (progress: number) => void) => void
+  }
 }
 
 declare global {

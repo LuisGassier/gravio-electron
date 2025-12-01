@@ -51,6 +51,17 @@ contextBridge.exposeInMainWorld('electron', {
     delete: (key: string) => ipcRenderer.invoke('storage:delete', key),
     clear: () => ipcRenderer.invoke('storage:clear'),
   },
+
+  // Updater
+  updater: {
+    downloadAndInstall: (downloadUrl: string, fileName: string) => 
+      ipcRenderer.invoke('updater:downloadAndInstall', downloadUrl, fileName),
+    openExternal: (url: string) => 
+      ipcRenderer.invoke('updater:openExternal', url),
+    onProgress: (callback: (progress: number) => void) => {
+      ipcRenderer.on('updater:progress', (_event, progress) => callback(progress))
+    },
+  },
 })
 
 // Types para TypeScript
@@ -84,6 +95,11 @@ export type ElectronAPI = {
     set: (key: string, value: any) => Promise<void>
     delete: (key: string) => Promise<void>
     clear: () => Promise<void>
+  }
+  updater: {
+    downloadAndInstall: (downloadUrl: string, fileName: string) => Promise<void>
+    openExternal: (url: string) => Promise<void>
+    onProgress: (callback: (progress: number) => void) => void
   }
 }
 

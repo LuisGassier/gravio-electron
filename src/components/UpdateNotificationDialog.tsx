@@ -25,31 +25,41 @@ export function UpdateNotificationDialog({
   currentVersion
 }: UpdateNotificationDialogProps) {
   const [isDownloading, setIsDownloading] = useState(false)
+  const [downloadProgress, setDownloadProgress] = useState(0)
 
   const handleDownload = async () => {
     try {
       setIsDownloading(true)
+      setDownloadProgress(0)
       
       // Registrar el inicio de la descarga
       await trackDownloadStart(updateInfo.version)
       
-      // Abrir el enlace de descarga en el navegador
       if (window.electron) {
-        // Si estamos en Electron, usar el método nativo para abrir URL
-        window.open(updateInfo.download_url, '_blank')
+        // Escuchar progreso de descarga
+        window.electron.updater.onProgress((progress) => {
+          setDownloadProgress(progress)
+        })
+
+        // Descargar e instalar automáticamente
+        await window.electron.updater.downloadAndInstall(
+          updateInfo.download_url,
+          updateInfo.file_name
+        )
+        
+        // Si llega aquí, la aplicación se cerrará para instalar
       } else {
-        // Fallback para navegador
+        // Fallback para navegador - abrir en nueva pestaña
         window.open(updateInfo.download_url, '_blank')
+        setTimeout(() => {
+          setIsDownloading(false)
+          onOpenChange(false)
+        }, 1000)
       }
-      
-      // Cerrar el diálogo después de iniciar la descarga
-      setTimeout(() => {
-        setIsDownloading(false)
-        onOpenChange(false)
-      }, 1000)
     } catch (error) {
-      console.error('Error al iniciar descarga:', error)
+      console.error('Error al descargar e instalar:', error)
       setIsDownloading(false)
+      setDownloadProgress(0)
     }
   }
 
@@ -132,6 +142,25 @@ export function UpdateNotificationDialog({
               </p>
             </div>
           )}
+
+          {/* Download Progress */}
+          {isDownloading && downloadProgress > 0 && (
+            <div className="space-y-2">
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">Descargando actualización...</span>
+                <span className="text-foreground font-semibold">{downloadProgress}%</span>
+              </div>
+              <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
+                <div 
+                  className="bg-warning h-full transition-all duration-300 ease-out"
+                  style={{ width: `${downloadProgress}%` }}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground text-center">
+                La aplicación se cerrará automáticamente cuando la descarga termine para instalar la actualización.
+              </p>
+            </div>
+          )}
         </div>
 
         <DialogFooter className="flex gap-2">
@@ -152,7 +181,7 @@ export function UpdateNotificationDialog({
             {isDownloading ? (
               <>
                 <Download className="w-4 h-4 mr-2 animate-bounce" />
-                Iniciando...
+                {downloadProgress > 0 ? `Descargando... ${downloadProgress}%` : 'Iniciando descarga...'}
               </>
             ) : (
               <>

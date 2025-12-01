@@ -1,4 +1,4 @@
-import electron, { app as app$1, BrowserWindow, ipcMain as ipcMain$1 } from "electron";
+import electron, { app as app$1, BrowserWindow, ipcMain as ipcMain$1, shell as shell$1 } from "electron";
 import path$1 from "path";
 import { fileURLToPath } from "url";
 import process$1 from "node:process";
@@ -11,6 +11,7 @@ import os from "node:os";
 import "node:events";
 import "node:stream";
 import fs$1 from "fs";
+import https from "https";
 import { exec } from "child_process";
 import { promisify as promisify$1 } from "util";
 const isObject = (value) => {
@@ -4133,7 +4134,7 @@ function requireSchemes() {
       serialize: httpSerialize
     }
   );
-  const https = (
+  const https2 = (
     /** @type {SchemeHandler} */
     {
       scheme: "https",
@@ -4182,7 +4183,7 @@ function requireSchemes() {
     /** @type {Record<SchemeName, SchemeHandler>} */
     {
       http,
-      https,
+      https: https2,
       ws,
       wss,
       urn,
@@ -16703,6 +16704,73 @@ function registerIpcHandlers() {
   });
   ipcMain$1.handle("storage:clear", () => {
     store.clear();
+  });
+  ipcMain$1.handle("updater:downloadAndInstall", async (_event, downloadUrl, fileName) => {
+    try {
+      const downloadsPath = app$1.getPath("downloads");
+      const filePath = path$1.join(downloadsPath, fileName);
+      if (fs$1.existsSync(filePath)) {
+        return await executeInstaller(filePath);
+      }
+      await downloadFile(downloadUrl, filePath, (progress) => {
+        mainWindow?.webContents.send("updater:progress", progress);
+      });
+      return await executeInstaller(filePath);
+    } catch (error) {
+      console.error("Error downloading/installing update:", error);
+      throw error;
+    }
+  });
+  ipcMain$1.handle("updater:openExternal", async (_event, url) => {
+    await shell$1.openExternal(url);
+  });
+}
+function downloadFile(url, destination, onProgress) {
+  return new Promise((resolve2, reject) => {
+    const file = fs$1.createWriteStream(destination);
+    https.get(url, (response) => {
+      if (response.statusCode !== 200) {
+        reject(new Error(`Failed to download: ${response.statusCode}`));
+        return;
+      }
+      const totalSize = parseInt(response.headers["content-length"] || "0", 10);
+      let downloadedSize = 0;
+      response.on("data", (chunk) => {
+        downloadedSize += chunk.length;
+        if (onProgress && totalSize > 0) {
+          const progress = Math.round(downloadedSize / totalSize * 100);
+          onProgress(progress);
+        }
+      });
+      response.pipe(file);
+      file.on("finish", () => {
+        file.close();
+        resolve2();
+      });
+    }).on("error", (err) => {
+      fs$1.unlink(destination, () => {
+      });
+      reject(err);
+    });
+    file.on("error", (err) => {
+      fs$1.unlink(destination, () => {
+      });
+      reject(err);
+    });
+  });
+}
+async function executeInstaller(installerPath) {
+  return new Promise((resolve2, reject) => {
+    exec(`"${installerPath}"`, (error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      setTimeout(() => {
+        app$1.quit();
+      }, 1e3);
+      resolve2();
+    });
   });
 }
 const gotTheLock = app$1.requestSingleInstanceLock();

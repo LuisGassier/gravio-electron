@@ -1,7 +1,10 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain, shell } from 'electron'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import Store from 'electron-store'
+import fs from 'fs'
+import https from 'https'
+import { exec } from 'child_process'
 
 // Importar módulos
 import {
@@ -181,6 +184,101 @@ function registerIpcHandlers() {
   
   ipcMain.handle('storage:clear', () => {
     store.clear()
+  })
+
+  // Updater - Descargar e instalar actualización
+  ipcMain.handle('updater:downloadAndInstall', async (_event, downloadUrl: string, fileName: string) => {
+    try {
+      const downloadsPath = app.getPath('downloads')
+      const filePath = path.join(downloadsPath, fileName)
+      
+      // Verificar si ya existe el archivo
+      if (fs.existsSync(filePath)) {
+        // Si ya existe, ejecutar directamente
+        return await executeInstaller(filePath)
+      }
+
+      // Descargar el archivo
+      await downloadFile(downloadUrl, filePath, (progress) => {
+        // Enviar progreso al renderer
+        mainWindow?.webContents.send('updater:progress', progress)
+      })
+
+      // Ejecutar el instalador
+      return await executeInstaller(filePath)
+    } catch (error) {
+      console.error('Error downloading/installing update:', error)
+      throw error
+    }
+  })
+
+  // Abrir URL en el navegador externo
+  ipcMain.handle('updater:openExternal', async (_event, url: string) => {
+    await shell.openExternal(url)
+  })
+}
+
+/**
+ * Descarga un archivo desde una URL
+ */
+function downloadFile(url: string, destination: string, onProgress?: (progress: number) => void): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const file = fs.createWriteStream(destination)
+    
+    https.get(url, (response) => {
+      if (response.statusCode !== 200) {
+        reject(new Error(`Failed to download: ${response.statusCode}`))
+        return
+      }
+
+      const totalSize = parseInt(response.headers['content-length'] || '0', 10)
+      let downloadedSize = 0
+
+      response.on('data', (chunk) => {
+        downloadedSize += chunk.length
+        if (onProgress && totalSize > 0) {
+          const progress = Math.round((downloadedSize / totalSize) * 100)
+          onProgress(progress)
+        }
+      })
+
+      response.pipe(file)
+
+      file.on('finish', () => {
+        file.close()
+        resolve()
+      })
+    }).on('error', (err) => {
+      fs.unlink(destination, () => {}) // Eliminar archivo parcial
+      reject(err)
+    })
+
+    file.on('error', (err) => {
+      fs.unlink(destination, () => {})
+      reject(err)
+    })
+  })
+}
+
+/**
+ * Ejecuta el instalador y cierra la aplicación
+ */
+async function executeInstaller(installerPath: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    // Ejecutar el instalador
+    exec(`"${installerPath}"`, (error) => {
+      if (error) {
+        reject(error)
+        return
+      }
+      
+      // Cerrar la aplicación después de iniciar el instalador
+      setTimeout(() => {
+        app.quit()
+      }, 1000)
+      
+      resolve()
+    })
   })
 }
 

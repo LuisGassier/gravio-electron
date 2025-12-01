@@ -62,11 +62,15 @@ Panel de estado que:
 3. **Notificación**: 
    - Si `is_required = true`: Muestra diálogo automáticamente
    - Si `is_required = false`: Muestra banner en StatusPanel
-4. **Descarga**: Al hacer clic en "Actualizar ahora":
+4. **Descarga Automática**: Al hacer clic en "Actualizar ahora":
    - Registra inicio de descarga en `app_update_downloads`
-   - Abre URL de descarga en navegador
-   - Usuario instala manualmente el .exe
-5. **Instalación**: Usuario ejecuta el instalador descargado
+   - Descarga el .exe a la carpeta Downloads del usuario
+   - Muestra barra de progreso en tiempo real
+   - Al completar, ejecuta el instalador automáticamente
+5. **Instalación Automática**: 
+   - El instalador se ejecuta automáticamente
+   - La aplicación se cierra
+   - Usuario completa el proceso de instalación guiado
 
 ## Cómo Publicar una Actualización
 
@@ -154,11 +158,22 @@ La tabla `app_update_downloads` permite monitorear:
 - Plataformas más usadas
 - User agents de los clientes
 
+## Características Implementadas
+
+- ✅ Descarga automática del instalador
+- ✅ Barra de progreso en tiempo real
+- ✅ Ejecución automática del instalador
+- ✅ Cierre automático de la app para instalar
+- ✅ Analytics de descargas en Supabase
+- ✅ Detección automática cada 30 minutos
+- ✅ Diálogo modal con detalles completos
+- ✅ Banner de notificación en StatusPanel
+
 ## Mejoras Futuras
 
-- [ ] Auto-actualización integrada (usando electron-updater)
 - [ ] Verificación de integridad (checksums)
 - [ ] Actualizaciones delta (solo diferencias)
 - [ ] Rollback automático en caso de error
 - [ ] Notificaciones push para actualizaciones críticas
-- [ ] Changelog integrado en la app
+- [ ] Instalación silenciosa en segundo plano
+- [ ] Reinicio automático después de instalar

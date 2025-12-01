@@ -41,5 +41,13 @@ electron.contextBridge.exposeInMainWorld("electron", {
     set: (key, value) => electron.ipcRenderer.invoke("storage:set", key, value),
     delete: (key) => electron.ipcRenderer.invoke("storage:delete", key),
     clear: () => electron.ipcRenderer.invoke("storage:clear")
+  },
+  // Updater
+  updater: {
+    downloadAndInstall: (downloadUrl, fileName) => electron.ipcRenderer.invoke("updater:downloadAndInstall", downloadUrl, fileName),
+    openExternal: (url) => electron.ipcRenderer.invoke("updater:openExternal", url),
+    onProgress: (callback) => {
+      electron.ipcRenderer.on("updater:progress", (_event, progress) => callback(progress));
+    }
   }
 });
