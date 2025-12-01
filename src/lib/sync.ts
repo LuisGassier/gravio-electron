@@ -104,6 +104,73 @@ async function syncTransactions() {
 }
 
 /**
+ * Descargar registros actualizados de Supabase a SQLite local
+ * Esto permite ver cambios hechos en otras PCs (como registros de salida)
+ */
+async function downloadRegistros() {
+  if (!supabase) return
+  
+  try {
+    // Obtener registros actualizados en las últimas 24 horas
+    const yesterday = new Date()
+    yesterday.setHours(yesterday.getHours() - 24)
+    
+    const { data: registros, error } = await supabase
+      .from('registros')
+      .select('*')
+      .gte('updated_at', yesterday.toISOString())
+      .order('updated_at', { ascending: false })
+      .limit(500)
+    
+    if (error) {
+      console.error('❌ Error al descargar registros:', error)
+      return
+    }
+    
+    if (!registros || registros.length === 0) {
+      console.log('📋 No hay registros nuevos para descargar')
+      return
+    }
+    
+    let updated = 0
+    for (const reg of registros) {
+      try {
+        // Actualizar en SQLite local
+        await window.electron.db.run(
+          `UPDATE registros SET 
+            peso_salida = ?,
+            fecha_salida = ?,
+            hora_salida = ?,
+            observaciones = ?,
+            folio = ?,
+            sincronizado = 1,
+            updated_at = ?
+          WHERE id = ?`,
+          [
+            reg.peso_salida,
+            reg.fecha_salida,
+            reg.hora_salida,
+            reg.observaciones,
+            reg.folio,
+            reg.updated_at || Date.now(),
+            reg.id
+          ]
+        )
+        updated++
+      } catch (err) {
+        console.error(`❌ Error al actualizar registro ${reg.id}:`, err)
+      }
+    }
+    
+    if (updated > 0) {
+      console.log(`✅ Actualizados ${updated} registros desde Supabase`)
+    }
+  } catch (error) {
+    console.error('❌ Error al descargar registros:', error)
+  }
+}
+
+/**
  * Descargar datos de Supabase a cache local
  * Usa queries directos a Supabase para cachear datos de catálogos
  */
@@ -126,6 +193,9 @@ async function downloadCacheData() {
   }
   
   try {
+    // 🔄 PRIMERO: Sincronizar registros actualizados (salidas registradas en otras PCs)
+    await downloadRegistros()
+    
     // Descargar empresas primero (requerido para las relaciones)
     const { data: empresas, error: empresasError } = await supabase
       .from('empresa')
