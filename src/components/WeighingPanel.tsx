@@ -61,14 +61,33 @@ export function WeighingPanel() {
 
   useEffect(() => {
     loadFormData()
+    checkScaleConnection()
 
     // Serial port listener
     if (window.electron) {
       window.electron.serialPort.onData((data) => {
         setWeight(data)
+        setIsScaleConnected(true)
       })
     }
   }, [])
+
+  const checkScaleConnection = () => {
+    try {
+      const isConnected = container.pesajeService.isBasculaConectada()
+      setIsScaleConnected(isConnected)
+      
+      if (isConnected) {
+        // Registrar callback para actualizaciones de peso
+        container.pesajeService.onPesoActualizado((peso) => {
+          setWeight(peso.toFixed(4))
+        })
+      }
+    } catch (error) {
+      console.warn('⚠️ Báscula no disponible:', error)
+      setIsScaleConnected(false)
+    }
+  }
 
   const loadFormData = async () => {
     if (!window.electron) return
@@ -124,23 +143,12 @@ export function WeighingPanel() {
   }
 
   const connectScale = async () => {
-    if (!window.electron) return
-
-    const savedPort = await window.electron.storage.get('serialPort')
-    const savedBaudRate = await window.electron.storage.get('baudRate')
-
-    if (!savedPort) {
-      toast.error('⚠️ Configura el puerto serial en Configuración')
-      return
-    }
-
-    const result = await window.electron.serialPort.open(savedPort, savedBaudRate || 2400)
-    if (result.success) {
-      setIsScaleConnected(true)
-      toast.success('Báscula conectada correctamente')
+    checkScaleConnection()
+    
+    if (isScaleConnected) {
+      toast.success('✅ Báscula ya conectada')
     } else {
-      setIsScaleConnected(false)
-      toast.error(`Error al conectar: ${result.error || 'Desconocido'}`)
+      toast.warning('⚠️ Báscula no disponible - usar peso manual')
     }
   }
 

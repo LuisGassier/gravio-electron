@@ -210,25 +210,35 @@ class DIContainer {
   async initialize(): Promise<void> {
     console.log('🚀 Inicializando contenedor de dependencias...');
 
+    // Inicializar báscula (no bloqueante) - leer configuración guardada
     try {
-      // Inicializar báscula (si está configurada)
-      const comPort = import.meta.env.VITE_COM_PORT || 'COM2';
-      const baudRate = 2400;
+      const savedPort = await window.electron?.storage.get('serialPort');
+      const savedBaudRate = await window.electron?.storage.get('baudRate');
+      
+      // Usar configuración guardada o valores por defecto
+      const comPort = savedPort || import.meta.env.VITE_COM_PORT || 'COM2';
+      const baudRate = savedBaudRate || 2400;
 
-      console.log(`📡 Conectando báscula en ${comPort}...`);
+      console.log(`📡 Intentando conectar báscula en ${comPort}...`);
       await this.mettlerToledoScale.open(comPort, baudRate);
-      console.log('✅ Báscula conectada');
+      console.log('✅ Báscula conectada correctamente');
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      console.warn(`⚠️ Báscula no disponible: ${errorMsg}`);
+      console.warn('ℹ️ La aplicación funcionará sin báscula (usar peso manual)');
+      console.warn('💡 Configura el puerto serial en el panel de Configuración');
+    }
 
-      // Iniciar sincronización automática
+    // Iniciar sincronización automática (no bloqueante)
+    try {
       console.log('🔄 Iniciando sincronización automática...');
       this.syncService.startAutoSync();
       console.log('✅ Sincronización automática iniciada');
-
-      console.log('✅ Contenedor de dependencias inicializado correctamente');
     } catch (error) {
-      console.error('❌ Error al inicializar contenedor:', error);
-      // No lanzar error - permitir que la app funcione sin báscula
+      console.warn('⚠️ Error al iniciar sincronización automática:', error);
     }
+
+    console.log('✅ Contenedor de dependencias inicializado');
   }
 
   /**
