@@ -83,16 +83,41 @@ export function WeighingPanel() {
       setIsSalidaMode(true)
       setCurrentRegistro(selectedRegistro)
       
-      // Prellenar datos del registro
+      // Prellenar TODOS los datos del registro
       console.log('📋 Prellenando datos:', selectedRegistro)
-      setSelectedVehiculo(selectedRegistro.id || '')
+      
+      // Buscar el vehiculo por placa para obtener su ID
+      const vehiculo = vehiculos.find(v => v.placas === selectedRegistro.placaVehiculo)
+      if (vehiculo) {
+        setSelectedVehiculo(vehiculo.id)
+        setSelectedEmpresa(vehiculo.clave_empresa)
+      }
+      
+      // Buscar operador por clave
+      const operador = operadores.find(o => o.clave_operador === selectedRegistro.claveOperador)
+      if (operador) {
+        setSelectedOperador(`${operador.id}-${operador.clave_empresa}`)
+      }
+      
+      // Buscar ruta por clave
+      const ruta = rutas.find(r => r.clave_ruta === selectedRegistro.claveRuta)
+      if (ruta) {
+        setSelectedRuta(String(ruta.id))
+      }
+      
+      // Buscar concepto por clave
+      const concepto = conceptos.find(c => c.clave_concepto === selectedRegistro.claveConcepto)
+      if (concepto) {
+        setSelectedConcepto(concepto.id)
+      }
+      
       setObservaciones(selectedRegistro.observaciones || '')
       
       toast.info(`📥 Modo SALIDA: ${selectedRegistro.placaVehiculo}`, {
         description: `Peso entrada: ${selectedRegistro.pesoEntrada?.toFixed(2)} kg`
       })
     }
-  }, [selectedRegistro])
+  }, [selectedRegistro, vehiculos, operadores, rutas, conceptos])
 
   const cancelarSalida = () => {
     setIsSalidaMode(false)
@@ -536,6 +561,7 @@ export function WeighingPanel() {
                 searchPlaceholder="Buscar..."
                 emptyText="No se encontraron conceptos"
                 icon={<FileText className="w-4 h-4" />}
+                disabled={isSalidaMode}
               />
             </div>
 
@@ -550,6 +576,7 @@ export function WeighingPanel() {
                 searchPlaceholder="Buscar..."
                 emptyText="No se encontraron operadores"
                 icon={<User className="w-4 h-4" />}
+                disabled={isSalidaMode}
               />
             </div>
           </div>
@@ -567,6 +594,7 @@ export function WeighingPanel() {
                 searchPlaceholder="Buscar..."
                 emptyText="No se encontraron rutas"
                 icon={<Route className="w-4 h-4" />}
+                disabled={isSalidaMode}
               />
             </div>
 
@@ -582,6 +610,7 @@ export function WeighingPanel() {
                 emptyText="No se encontraron vehículos"
                 icon={<Truck className="w-4 h-4" />}
                 showCount={true}
+                disabled={isSalidaMode}
               />
             </div>
           </div>

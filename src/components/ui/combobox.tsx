@@ -21,6 +21,7 @@ interface ComboboxProps {
   icon?: React.ReactNode
   className?: string
   showCount?: boolean
+  disabled?: boolean
 }
 
 // Function to generate avatar color based on text
@@ -58,6 +59,7 @@ export function Combobox({
   icon,
   className,
   showCount = false,
+  disabled = false,
 }: ComboboxProps) {
   const [isOpen, setIsOpen] = React.useState(false)
   const [searchValue, setSearchValue] = React.useState("")
@@ -146,7 +148,9 @@ export function Combobox({
   }
 
   const handleInputFocus = () => {
-    setIsOpen(true)
+    if (!disabled) {
+      setIsOpen(true)
+    }
   }
 
   const displayValue = selectedOption?.label || ""
@@ -167,47 +171,51 @@ export function Combobox({
           onFocus={handleInputFocus}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
+          disabled={disabled}
           className={cn(
             "w-full h-11 px-3 bg-input border-2 border-border rounded-lg text-foreground text-sm outline-none transition-all",
             "focus:border-primary focus:bg-background focus:shadow-sm",
             "placeholder:text-muted-foreground/60",
             icon && "pl-10",
-            (value || isOpen) && "pr-16"
+            (value || isOpen) && "pr-16",
+            disabled && "opacity-60 cursor-not-allowed bg-muted"
           )}
         />
 
         {/* Clear and Dropdown Icons */}
-        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-          {value && !isOpen && (
-            <button
-              type="button"
-              onClick={handleClear}
-              className="p-1.5 hover:bg-destructive/10 rounded-md transition-colors group"
-            >
-              <X className="h-4 w-4 text-muted-foreground group-hover:text-destructive" />
-            </button>
-          )}
-          <div className={cn(
-            "p-1.5 rounded-md transition-all",
-            isOpen && "bg-primary/10"
-          )}>
-            <svg
-              className={cn(
-                "w-4 h-4 text-muted-foreground transition-transform duration-200",
-                isOpen && "rotate-180 text-primary"
-              )}
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
+        {!disabled && (
+          <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+            {value && !isOpen && (
+              <button
+                type="button"
+                onClick={handleClear}
+                className="p-1.5 hover:bg-destructive/10 rounded-md transition-colors group"
+              >
+                <X className="h-4 w-4 text-muted-foreground group-hover:text-destructive" />
+              </button>
+            )}
+            <div className={cn(
+              "p-1.5 rounded-md transition-all",
+              isOpen && "bg-primary/10"
+            )}>
+              <svg
+                className={cn(
+                  "w-4 h-4 text-muted-foreground transition-transform duration-200",
+                  isOpen && "rotate-180 text-primary"
+                )}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Dropdown */}
-      {isOpen && (
+      {isOpen && !disabled && (
         <div
           ref={dropdownRef}
           className="absolute z-50 w-full mt-2 bg-popover border border-primary/20 rounded-lg shadow-2xl max-h-[320px] overflow-hidden animate-in fade-in-0 zoom-in-95"
