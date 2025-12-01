@@ -86,11 +86,13 @@ export function WeighingPanel() {
       // Prellenar TODOS los datos del registro
       console.log('📋 Prellenando datos:', selectedRegistro)
       
+      // Primero establecer la empresa (necesario para filtros)
+      setSelectedEmpresa(selectedRegistro.claveEmpresa)
+      
       // Buscar el vehiculo por placa para obtener su ID
       const vehiculo = vehiculos.find(v => v.placas === selectedRegistro.placaVehiculo)
       if (vehiculo) {
         setSelectedVehiculo(vehiculo.id)
-        setSelectedEmpresa(vehiculo.clave_empresa)
       }
       
       // Buscar operador por clave
@@ -105,10 +107,19 @@ export function WeighingPanel() {
         setSelectedRuta(String(ruta.id))
       }
       
-      // Buscar concepto por clave
-      const concepto = conceptos.find(c => c.clave_concepto === selectedRegistro.claveConcepto)
+      // Buscar concepto por clave y empresa
+      const concepto = conceptos.find(c =>
+        c.clave_concepto === selectedRegistro.claveConcepto &&
+        c.clave_empresa === selectedRegistro.claveEmpresa
+      )
+      console.log('🔍 Buscando concepto:', {
+        claveConcepto: selectedRegistro.claveConcepto,
+        claveEmpresa: selectedRegistro.claveEmpresa,
+        encontrado: concepto,
+        todosConceptos: conceptos
+      })
       if (concepto) {
-        setSelectedConcepto(concepto.id)
+        setSelectedConcepto(`${concepto.id}-${concepto.clave_empresa}`)
       }
       
       setObservaciones(selectedRegistro.observaciones || '')
