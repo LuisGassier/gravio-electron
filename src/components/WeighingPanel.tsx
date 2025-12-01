@@ -332,19 +332,23 @@ export function WeighingPanel() {
       ? selectedConcepto.substring(0, selectedConcepto.lastIndexOf('-')) 
       : undefined
 
+    // Detectar si es un vehículo personalizado
+    const isCustomVehiculo = selectedVehiculo?.startsWith('CUSTOM:')
+    const customNumeroEconomico = isCustomVehiculo ? selectedVehiculo.replace('CUSTOM:', '') : null
+    
     // Buscar datos completos de las entidades seleccionadas
-    const vehiculo = selectedVehiculo === 'NUEVO' ? null : vehiculos.find(v => v.id === selectedVehiculo)
+    const vehiculo = selectedVehiculo === 'NUEVO' || isCustomVehiculo ? null : vehiculos.find(v => v.id === selectedVehiculo)
     const operador = operadorId ? operadores.find(o => o.id === operadorId) : undefined
     const ruta = selectedRuta && selectedRuta !== 'NUEVO' ? rutas.find(r => r.id === Number(selectedRuta)) : undefined
     const concepto = conceptoId ? conceptos.find(c => c.id === conceptoId) : undefined
 
-    // Validar que si no es nuevo, exista el vehículo
-    if (selectedVehiculo !== 'NUEVO' && !vehiculo) {
+    // Validar que si no es nuevo ni personalizado, exista el vehículo
+    if (selectedVehiculo !== 'NUEVO' && !isCustomVehiculo && !vehiculo) {
       toast.error('No se encontró el vehículo seleccionado')
       return
     }
 
-    // Necesitamos clave_empresa de algún lado para "NUEVO"
+    // Necesitamos clave_empresa de algún lado para "NUEVO" o valores personalizados
     let claveEmpresaFinal = selectedEmpresa
     if (!claveEmpresaFinal) {
       toast.error('Debes seleccionar una empresa primero (selecciona cualquier otro campo)')
@@ -352,8 +356,8 @@ export function WeighingPanel() {
     }
 
     const result = await container.pesajeService.registrarEntrada({
-      placaVehiculo: vehiculo?.placas || 'NUEVO',
-      numeroEconomico: vehiculo?.no_economico || 'NUEVO',
+      placaVehiculo: vehiculo?.placas || customNumeroEconomico || 'NUEVO',
+      numeroEconomico: vehiculo?.no_economico || customNumeroEconomico || 'NUEVO',
       claveEmpresa: vehiculo?.clave_empresa || claveEmpresaFinal,
       claveOperador: operador?.clave_operador || 0,
       operador: selectedOperador === 'NUEVO' ? 'Nuevo' : (operador?.operador || 'Sin operador'),
@@ -830,12 +834,14 @@ export function WeighingPanel() {
                 options={vehiculoOptions}
                 value={selectedVehiculo}
                 onValueChange={handleVehiculoChange}
-                placeholder="Buscar por número económico o pl..."
+                placeholder="Buscar o escribir número económico..."
                 searchPlaceholder="Buscar..."
                 emptyText="No se encontraron vehículos"
                 icon={<Truck className="w-4 h-4" />}
                 showCount={true}
                 countLabel="Vehículo"
+                allowCustomValue={true}
+                customValueLabel="Crear vehículo"
                 disabled={isSalidaMode}
               />
             </div>

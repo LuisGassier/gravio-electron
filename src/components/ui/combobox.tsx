@@ -23,6 +23,8 @@ interface ComboboxProps {
   showCount?: boolean
   countLabel?: string
   disabled?: boolean
+  allowCustomValue?: boolean
+  customValueLabel?: string
 }
 
 // Function to generate avatar color based on text
@@ -62,6 +64,8 @@ export function Combobox({
   showCount = false,
   countLabel = "Resultados",
   disabled = false,
+  allowCustomValue = false,
+  customValueLabel = "Usar valor personalizado",
 }: ComboboxProps) {
   const [isOpen, setIsOpen] = React.useState(false)
   const [searchValue, setSearchValue] = React.useState("")
@@ -71,6 +75,9 @@ export function Combobox({
   const dropdownRef = React.useRef<HTMLDivElement>(null)
 
   const selectedOption = options.find((option) => option.value === value)
+  
+  // Si el valor no existe en las opciones y allowCustomValue está activo, es un valor personalizado
+  const isCustomValue = allowCustomValue && value && !selectedOption
 
   // Filter options based on search
   const filteredOptions = React.useMemo(() => {
@@ -154,8 +161,20 @@ export function Combobox({
       setIsOpen(true)
     }
   }
+  
+  const handleInputBlur = () => {
+    // Si allowCustomValue está activo y hay texto escrito, usarlo como valor personalizado
+    if (allowCustomValue && searchValue && !isOpen) {
+      const existingOption = options.find(opt => 
+        opt.label.toLowerCase() === searchValue.toLowerCase()
+      )
+      if (!existingOption) {
+        onValueChange(`CUSTOM:${searchValue}`)
+      }
+    }
+  }
 
-  const displayValue = selectedOption?.label || ""
+  const displayValue = isCustomValue ? value.replace('CUSTOM:', '') : (selectedOption?.label || "")
 
   return (
     <div ref={containerRef} className={cn("relative", className)}>
@@ -171,6 +190,7 @@ export function Combobox({
           value={isOpen ? searchValue : displayValue}
           onChange={(e) => setSearchValue(e.target.value)}
           onFocus={handleInputFocus}
+          onBlur={handleInputBlur}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
           disabled={disabled}
@@ -231,7 +251,27 @@ export function Combobox({
 
           {/* Options List */}
           <div className="overflow-y-auto max-h-[270px] scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent">
-            {filteredOptions.length === 0 ? (
+            {/* Opción para crear valor personalizado */}
+            {allowCustomValue && searchValue && filteredOptions.length === 0 && (
+              <div
+                onClick={() => handleSelect(`CUSTOM:${searchValue}`)}
+                className="flex items-center gap-3 px-3 py-3 cursor-pointer transition-all border-b border-border/50 bg-success/5 hover:bg-success/10"
+              >
+                <div className="w-10 h-10 rounded-md flex items-center justify-center bg-success text-white text-xs font-bold flex-shrink-0 shadow-sm">
+                  +
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-foreground">
+                    {customValueLabel}: <span className="font-bold text-success">"{searchValue}"</span>
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Vehículo no registrado
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {filteredOptions.length === 0 && (!allowCustomValue || !searchValue) ? (
               <div className="px-3 py-8 text-center text-sm text-muted-foreground">
                 {emptyText}
               </div>
