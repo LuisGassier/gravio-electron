@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Scale, AlertCircle, Truck, User, Route, FileText, X } from 'lucide-react'
+import { Scale, AlertCircle, Truck, Route, FileText, X } from 'lucide-react'
 import { Label } from '@/components/ui/label'
 import { Combobox } from '@/components/ui/combobox'
 import { container } from '@/application'
