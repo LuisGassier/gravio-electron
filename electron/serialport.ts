@@ -33,6 +33,7 @@ export async function listSerialPorts() {
   try {
     await loadModules()
     const ports = await SerialPort.list()
+    console.log('🔌 Puertos raw encontrados:', ports)
     return ports.map((port: any) => ({
       path: port.path,
       manufacturer: port.manufacturer,

@@ -32,6 +32,7 @@ export function SettingsPanel() {
   })
   const [loading, setLoading] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [manualPortEntry, setManualPortEntry] = useState(false)
 
   // Cargar configuración guardada
   useEffect(() => {
@@ -122,6 +123,30 @@ export function SettingsPanel() {
     }
   }
 
+  const testPrint = async () => {
+    if (!window.electron || !settings.printerName) return
+
+    setLoading(true)
+    try {
+      const success = await window.electron.printer.print({
+        type: 'test',
+        printerName: settings.printerName,
+        content: 'Prueba de impresión'
+      })
+      
+      if (success) {
+        console.log('✅ Impresión enviada a la cola')
+      } else {
+        alert('❌ Error al enviar impresión')
+      }
+    } catch (error) {
+      console.error('Error al probar impresión:', error)
+      alert('❌ Error al probar impresión')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-2">
@@ -151,9 +176,36 @@ export function SettingsPanel() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          {availablePorts.length === 0 ? (
+          <div className="flex items-center space-x-2 mb-4">
+            <input
+              type="checkbox"
+              id="manual-mode"
+              className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+              checked={manualPortEntry}
+              onChange={(e) => setManualPortEntry(e.target.checked)}
+            />
+            <label htmlFor="manual-mode" className="text-sm font-medium leading-none cursor-pointer">
+              Ingresar puerto manualmente (para puertos virtuales)
+            </label>
+          </div>
+
+          {manualPortEntry ? (
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Puerto COM (Manual):</label>
+              <input
+                type="text"
+                className="w-full p-2 border rounded-md bg-background"
+                value={settings.serialPort}
+                placeholder="Ej: COM3"
+                onChange={(e) => setSettings({ ...settings, serialPort: e.target.value })}
+              />
+              <p className="text-xs text-muted-foreground">
+                Escribe el nombre exacto del puerto (ej. COM1, COM2, /dev/ttyUSB0)
+              </p>
+            </div>
+          ) : availablePorts.length === 0 ? (
             <div className="text-sm text-muted-foreground">
-              No se detectaron puertos seriales. Conecta la báscula y presiona "Actualizar".
+              No se detectaron puertos seriales. Conecta la báscula y presiona "Actualizar", o activa la entrada manual.
             </div>
           ) : (
             <div className="space-y-2">
@@ -240,6 +292,12 @@ export function SettingsPanel() {
                 ))}
               </select>
             </div>
+          )}
+
+          {settings.printerName && (
+            <Button onClick={testPrint} disabled={loading} variant="secondary">
+              Probar Impresión
+            </Button>
           )}
         </CardContent>
       </Card>

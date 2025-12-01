@@ -16332,6 +16332,7 @@ async function listSerialPorts() {
   try {
     await loadModules();
     const ports = await SerialPort.list();
+    console.log("🔌 Puertos raw encontrados:", ports);
     return ports.map((port2) => ({
       path: port2.path,
       manufacturer: port2.manufacturer,
@@ -16431,7 +16432,7 @@ async function closeSerialPort() {
 function readCurrentWeight() {
   return currentWeight;
 }
-function listPrinters(mainWindow2) {
+async function listPrinters(mainWindow2) {
   console.log("📞 listPrinters() llamada - mainWindow:", mainWindow2 ? "disponible" : "NULL");
   try {
     if (!mainWindow2) {
@@ -16439,7 +16440,7 @@ function listPrinters(mainWindow2) {
       return [];
     }
     console.log("🔍 Obteniendo impresoras del sistema...");
-    const printers = mainWindow2.webContents.getPrinters();
+    const printers = await mainWindow2.webContents.getPrintersAsync();
     console.log("📋 Impresoras raw del sistema:", JSON.stringify(printers, null, 2));
     const formattedPrinters = printers.map((printer) => ({
       name: printer.name,
@@ -16460,12 +16461,94 @@ function listPrinters(mainWindow2) {
 }
 async function printThermal(mainWindow2, data) {
   try {
-    if (!mainWindow2) {
-      console.error("❌ No hay ventana principal disponible");
-      return false;
-    }
-    console.log("🖨️ Preparando impresión:", data);
-    return true;
+    console.log("🖨️ Preparando impresión térmica:", data);
+    const workerWindow = new BrowserWindow({
+      show: false,
+      width: 400,
+      // Ancho aproximado para 80mm
+      height: 600,
+      webPreferences: {
+        nodeIntegration: true,
+        contextIsolation: false
+      }
+    });
+    const htmlContent = `
+      <html>
+      <head>
+        <style>
+          body { 
+            font-family: 'Courier New', monospace; 
+            font-size: 14px; 
+            font-weight: 900;
+            width: 100%; 
+            margin: 0; 
+            padding: 5px; 
+            color: #000000;
+            background: white;
+          }
+          .header { 
+            text-align: center; 
+            font-weight: 900; 
+            font-size: 18px; 
+            margin-bottom: 10px; 
+          }
+          .divider { 
+            border-top: 2px dashed #000000; 
+            margin: 10px 0; 
+          }
+          .footer { 
+            text-align: center; 
+            margin-top: 20px; 
+            font-size: 12px; 
+            font-weight: 900;
+          }
+          .content {
+            white-space: pre-wrap;
+            font-weight: 900;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">GRAVIO</div>
+        <div style="text-align: center;">Prueba de Impresión</div>
+        <div class="divider"></div>
+        <div>Fecha: ${(/* @__PURE__ */ new Date()).toLocaleString()}</div>
+        <div>Impresora: ${data.printerName}</div>
+        <div class="divider"></div>
+        <div class="content" style="text-align: center; font-size: 14px;">
+          ¡Funciona Correctamente!
+          <br/>
+          Impresora Térmica Configurada
+        </div>
+        <div class="divider"></div>
+        <div class="footer">Sistema de Gestión de Relleno Sanitario</div>
+      </body>
+      </html>
+    `;
+    await workerWindow.loadURL("data:text/html;charset=utf-8," + encodeURIComponent(htmlContent));
+    return new Promise((resolve2) => {
+      workerWindow.webContents.print({
+        silent: true,
+        printBackground: false,
+        deviceName: data.printerName,
+        margins: {
+          marginType: "custom",
+          top: 0,
+          bottom: 0,
+          left: 0,
+          right: 0
+        }
+      }, (success, errorType) => {
+        if (!success) {
+          console.error("❌ Error de impresión:", errorType);
+          resolve2(false);
+        } else {
+          console.log("✅ Impresión enviada exitosamente");
+          resolve2(true);
+        }
+        setTimeout(() => workerWindow.close(), 1e3);
+      });
+    });
   } catch (error) {
     console.error("❌ Error al imprimir:", error);
     return false;
