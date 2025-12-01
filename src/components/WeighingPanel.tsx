@@ -84,6 +84,22 @@ export function WeighingPanel() {
         setIsScaleConnected(true)
       })
     }
+
+    // 🔄 Auto-refresh cada 5 segundos para obtener datos nuevos de Supabase
+    const refreshInterval = setInterval(() => {
+      console.log('🔄 Auto-refresh: Sincronizando datos...')
+      // Primero sincronizar con Supabase
+      syncDataFromSupabase()
+      // Luego recargar datos locales
+      loadFormData()
+    }, 5000) // 5 segundos
+
+    // Sincronización inicial inmediata
+    syncDataFromSupabase()
+
+    return () => {
+      clearInterval(refreshInterval)
+    }
   }, [])
 
   // Manejar selección de registro para salida
@@ -169,6 +185,30 @@ export function WeighingPanel() {
     } catch (error) {
       console.warn('⚠️ Báscula no disponible:', error)
       setIsScaleConnected(false)
+    }
+  }
+
+  const syncDataFromSupabase = async () => {
+    try {
+      // Sincronizar entidades maestras desde Supabase (silencioso en background)
+      const { syncAllEntities } = await import('@/lib/syncEntities')
+      const results = await syncAllEntities()
+      
+      const totalSynced = 
+        results.vehiculos.synced +
+        results.operadores.synced +
+        results.rutas.synced +
+        results.conceptos.synced +
+        results.empresas.synced
+      
+      if (totalSynced > 0) {
+        console.log(`🔄 Sincronizadas ${totalSynced} entidades desde Supabase`)
+      }
+      
+      // También sincronizar registros
+      await container.syncService.syncNow()
+    } catch (error) {
+      console.warn('⚠️ Error en sincronización automática:', error)
     }
   }
 
