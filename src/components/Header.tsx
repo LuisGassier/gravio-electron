@@ -1,19 +1,20 @@
 import { Settings, User, Clock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useState, useEffect } from 'react'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { SettingsPanel } from './SettingsPanel'
 
 interface HeaderProps {
   empresaName?: string
   userName?: string
-  onSettingsClick?: () => void
 }
 
 export function Header({
   empresaName = 'Organismo Operador de servicio...',
   userName = 'luis',
-  onSettingsClick
 }: HeaderProps) {
   const [currentTime, setCurrentTime] = useState(new Date())
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -69,14 +70,22 @@ export function Header({
           </div>
 
           {/* Settings */}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onSettingsClick}
-            className="hover:bg-secondary"
-          >
-            <Settings className="w-5 h-5 text-muted-foreground hover:text-foreground" />
-          </Button>
+          <Popover open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="hover:bg-secondary"
+              >
+                <Settings className="w-5 h-5 text-muted-foreground hover:text-foreground" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[450px] p-0 bg-card border-border" align="end" sideOffset={8}>
+              <div className="p-4 max-h-[85vh] overflow-y-auto scrollbar-thin">
+                <SettingsPanel onClose={() => setIsSettingsOpen(false)} />
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
     </header>

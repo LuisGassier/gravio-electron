@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Settings, Save, RefreshCw } from 'lucide-react'
+import { Switch } from '@/components/ui/switch'
+import { Printer, Scale, RefreshCw, Save, X } from 'lucide-react'
 
 type SerialPort = {
   path: string
@@ -12,7 +12,7 @@ type SerialPort = {
   productId?: string
 }
 
-type Printer = {
+type PrinterType = {
   name: string
   displayName: string
 }
@@ -21,15 +21,21 @@ type AppSettings = {
   serialPort: string
   baudRate: number
   printerName: string
+  autoPrint: boolean
 }
 
-export function SettingsPanel() {
+interface SettingsPanelProps {
+  onClose?: () => void
+}
+
+export function SettingsPanel({ onClose }: SettingsPanelProps) {
   const [availablePorts, setAvailablePorts] = useState<SerialPort[]>([])
-  const [availablePrinters, setAvailablePrinters] = useState<Printer[]>([])
+  const [availablePrinters, setAvailablePrinters] = useState<PrinterType[]>([])
   const [settings, setSettings] = useState<AppSettings>({
     serialPort: '',
     baudRate: 2400,
     printerName: '',
+    autoPrint: true
   })
   const [loading, setLoading] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -48,11 +54,13 @@ export function SettingsPanel() {
     const savedPort = await window.electron.storage.get('serialPort')
     const savedBaudRate = await window.electron.storage.get('baudRate')
     const savedPrinter = await window.electron.storage.get('printerName')
+    const savedAutoPrint = await window.electron.storage.get('autoPrint')
 
     setSettings({
       serialPort: savedPort || '',
       baudRate: savedBaudRate || 2400,
       printerName: savedPrinter || '',
+      autoPrint: savedAutoPrint !== undefined ? savedAutoPrint : true
     })
   }
 
@@ -90,6 +98,7 @@ export function SettingsPanel() {
       await window.electron.storage.set('serialPort', settings.serialPort)
       await window.electron.storage.set('baudRate', settings.baudRate)
       await window.electron.storage.set('printerName', settings.printerName)
+      await window.electron.storage.set('autoPrint', settings.autoPrint)
       
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
@@ -152,69 +161,101 @@ export function SettingsPanel() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-2">
-        <Settings className="w-6 h-6" />
-        <h2 className="text-2xl font-bold">Configuración de Hardware</h2>
+      {/* Header */}
+      <div className="flex items-center justify-between pb-4 border-b border-border/50">
+        <h2 className="text-lg font-semibold">Configuración de Hardware</h2>
+        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onClose}>
+          <X className="w-4 h-4" />
+        </Button>
       </div>
 
-      {/* Puerto Serial / Báscula */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Puerto Serial (Báscula Mettler Toledo)</CardTitle>
-              <CardDescription>
-                Selecciona el puerto COM donde está conectada la báscula
-              </CardDescription>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={refreshPorts}
-              disabled={loading}
-            >
-              <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-              Actualizar
-            </Button>
+      {/* Impresora */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2 text-lg font-medium">
+          <div className="p-2 bg-green-900/20 rounded-md text-green-500">
+            <Printer className="w-5 h-5" />
           </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center space-x-2 mb-4">
-            <input
-              type="checkbox"
-              id="manual-mode"
-              className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-              checked={manualPortEntry}
-              onChange={(e) => setManualPortEntry(e.target.checked)}
-            />
-            <label htmlFor="manual-mode" className="text-sm font-medium leading-none cursor-pointer">
-              Ingresar puerto manualmente (para puertos virtuales)
-            </label>
+          <h3>Impresora Térmica</h3>
+        </div>
+
+        <div className="space-y-4 pl-2">
+          <div className="space-y-2">
+            <select
+              className="w-full p-3 rounded-md bg-secondary/50 border-none focus:ring-2 focus:ring-green-500"
+              value={settings.printerName}
+              onChange={(e) => setSettings({ ...settings, printerName: e.target.value })}
+            >
+              <option value="">-- Seleccionar impresora --</option>
+              {availablePrinters.map((printer) => (
+                <option key={printer.name} value={printer.name}>
+                  {printer.displayName || printer.name}
+                </option>
+              ))}
+            </select>
+            
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-green-500">{availablePrinters.length} impresora(s) detectada(s)</span>
+              <button 
+                onClick={refreshPrinters}
+                className="flex items-center gap-1 text-green-500 hover:text-green-400 transition-colors"
+              >
+                <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
+                Refrescar
+              </button>
+            </div>
           </div>
 
-          {manualPortEntry ? (
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Puerto COM (Manual):</label>
+          {settings.printerName && (
+            <Button 
+              onClick={testPrint} 
+              disabled={loading} 
+              className="w-full bg-yellow-500 hover:bg-yellow-600 text-black font-medium"
+            >
+              <Printer className="w-4 h-4 mr-2" />
+              Probar Impresión
+            </Button>
+          )}
+
+          <div className="flex items-center justify-between p-4 bg-secondary/30 rounded-lg">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-green-900/20 rounded-md text-green-500">
+                <Printer className="w-4 h-4" />
+              </div>
+              <div>
+                <p className="font-medium">Impresión Automática</p>
+                <p className="text-xs text-muted-foreground">{settings.autoPrint ? 'Activada' : 'Desactivada'}</p>
+              </div>
+            </div>
+            <Switch 
+              checked={settings.autoPrint}
+              onCheckedChange={(checked) => setSettings({ ...settings, autoPrint: checked })}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Báscula */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2 text-lg font-medium">
+          <div className="p-2 bg-green-900/20 rounded-md text-green-500">
+            <Scale className="w-5 h-5" />
+          </div>
+          <h3>Configuración de Báscula</h3>
+        </div>
+
+        <div className="space-y-4 pl-2">
+          <div className="space-y-2">
+            {manualPortEntry ? (
               <input
                 type="text"
-                className="w-full p-2 border rounded-md bg-background"
+                className="w-full p-3 rounded-md bg-secondary/50 border-none focus:ring-2 focus:ring-green-500"
                 value={settings.serialPort}
                 placeholder="Ej: COM3"
                 onChange={(e) => setSettings({ ...settings, serialPort: e.target.value })}
               />
-              <p className="text-xs text-muted-foreground">
-                Escribe el nombre exacto del puerto (ej. COM1, COM2, /dev/ttyUSB0)
-              </p>
-            </div>
-          ) : availablePorts.length === 0 ? (
-            <div className="text-sm text-muted-foreground">
-              No se detectaron puertos seriales. Conecta la báscula y presiona "Actualizar", o activa la entrada manual.
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Puerto COM:</label>
+            ) : (
               <select
-                className="w-full p-2 border rounded-md bg-background"
+                className="w-full p-3 rounded-md bg-secondary/50 border-none focus:ring-2 focus:ring-green-500"
                 value={settings.serialPort}
                 onChange={(e) => setSettings({ ...settings, serialPort: e.target.value })}
               >
@@ -223,111 +264,64 @@ export function SettingsPanel() {
                   <option key={port.path} value={port.path}>
                     {port.path} 
                     {port.manufacturer && ` - ${port.manufacturer}`}
-                    {port.serialNumber && ` (SN: ${port.serialNumber})`}
                   </option>
                 ))}
               </select>
-            </div>
-          )}
+            )}
 
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Velocidad (Baud Rate):</label>
-            <select
-              className="w-full p-2 border rounded-md bg-background"
-              value={settings.baudRate}
-              onChange={(e) => setSettings({ ...settings, baudRate: parseInt(e.target.value) })}
-            >
-              <option value="1200">1200</option>
-              <option value="2400">2400</option>
-              <option value="4800">4800</option>
-              <option value="9600">9600</option>
-              <option value="19200">19200</option>
-            </select>
+            <div className="flex justify-between items-center text-sm">
+              <div className="flex items-center gap-2">
+                <span className="text-green-500">{availablePorts.length} puerto(s) detectado(s)</span>
+                <label className="flex items-center gap-1 text-xs text-muted-foreground cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="rounded border-gray-600 bg-transparent"
+                    checked={manualPortEntry}
+                    onChange={(e) => setManualPortEntry(e.target.checked)}
+                  />
+                  Manual
+                </label>
+              </div>
+              <button 
+                onClick={refreshPorts}
+                className="flex items-center gap-1 text-green-500 hover:text-green-400 transition-colors"
+              >
+                <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
+                Refrescar
+              </button>
+            </div>
           </div>
 
           {settings.serialPort && (
-            <Button onClick={testConnection} disabled={loading} variant="secondary">
+            <Button 
+              onClick={testConnection} 
+              disabled={loading} 
+              variant="outline"
+              className="w-full border-green-500/50 text-green-500 hover:bg-green-500/10"
+            >
               Probar Conexión
             </Button>
           )}
-        </CardContent>
-      </Card>
-
-      {/* Impresora */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Impresora Térmica</CardTitle>
-              <CardDescription>
-                Selecciona la impresora para imprimir recibos
-              </CardDescription>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={refreshPrinters}
-              disabled={loading}
-            >
-              <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-              Actualizar
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {availablePrinters.length === 0 ? (
-            <div className="text-sm text-muted-foreground">
-              No se detectaron impresoras. Conecta la impresora y presiona "Actualizar".
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Impresora:</label>
-              <select
-                className="w-full p-2 border rounded-md bg-background"
-                value={settings.printerName}
-                onChange={(e) => setSettings({ ...settings, printerName: e.target.value })}
-              >
-                <option value="">-- Seleccionar impresora --</option>
-                {availablePrinters.map((printer) => (
-                  <option key={printer.name} value={printer.name}>
-                    {printer.displayName || printer.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {settings.printerName && (
-            <Button onClick={testPrint} disabled={loading} variant="secondary">
-              Probar Impresión
-            </Button>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Botón Guardar */}
-      <div className="flex justify-end">
-        <Button onClick={saveSettings} size="lg" disabled={saved}>
-          <Save className="w-4 h-4 mr-2" />
-          {saved ? '✓ Guardado' : 'Guardar Configuración'}
-        </Button>
+        </div>
       </div>
 
-      {/* Info adicional */}
-      <Card className="bg-muted/50">
-        <CardContent className="pt-6">
-          <div className="text-sm space-y-2">
-            <p className="font-medium">💡 Notas importantes:</p>
-            <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-              <li>La configuración se guarda automáticamente en el dispositivo</li>
-              <li>Mettler Toledo típicamente usa 2400 baud</li>
-              <li>Si no aparecen puertos, verifica que el cable esté conectado</li>
-              <li>En Windows, verifica el puerto en "Administrador de dispositivos"</li>
-              <li>La impresora debe estar encendida y conectada</li>
-            </ul>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Footer Actions */}
+      <div className="flex justify-between pt-4 mt-8 border-t border-border/50">
+        <Button variant="outline" className="w-32" onClick={onClose}>
+          Cancelar
+        </Button>
+        <Button 
+          onClick={() => {
+            saveSettings()
+            onClose?.()
+          }} 
+          disabled={saved}
+          className="w-32 bg-green-600 hover:bg-green-700 text-white"
+        >
+          <Save className="w-4 h-4 mr-2" />
+          {saved ? 'Guardado' : 'Guardar'}
+        </Button>
+      </div>
     </div>
   )
 }

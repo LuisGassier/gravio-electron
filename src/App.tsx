@@ -1,13 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Toaster } from 'sonner'
 import { Dashboard } from './components/Dashboard'
-import { SettingsPanel } from './components/SettingsPanel'
 import { LoginPanel } from './components/LoginPanel'
 import { Header } from './components/Header'
 import { SplashScreen } from './components/SplashScreen'
 import { initSync, getSyncStatus, onSyncStatusChange } from './lib/sync'
 
-type View = 'dashboard' | 'settings' | 'login'
+type View = 'dashboard' | 'login'
 
 function App() {
   const [currentView, setCurrentView] = useState<View>('dashboard')
@@ -64,17 +63,12 @@ function App() {
       <Header
         empresaName={empresaName}
         userName={userName}
-        onSettingsClick={() => setCurrentView('settings')}
       />
 
       {/* Content */}
       <div className="flex-1 p-6">
         {currentView === 'dashboard' ? (
           <Dashboard />
-        ) : currentView === 'settings' ? (
-          <div className="max-w-4xl mx-auto">
-            <SettingsPanel />
-          </div>
         ) : (
           <div className="flex items-center justify-center min-h-[calc(100vh-200px)]">
             <LoginPanel />
