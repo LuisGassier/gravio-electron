@@ -64,7 +64,8 @@ export function Header({
         setLogoUrl(logo)
       }
     } catch (error) {
-    })
+      console.error('Error loading logo:', error)
+    }
   }
 
   const handleCheckUpdates = async () => {
@@ -96,7 +97,6 @@ export function Header({
     }
   }
 
-  const getGreeting = (date: Date) => {
   const getGreeting = (date: Date) => {
     const hour = date.getHours()
     if (hour >= 6 && hour < 12) return 'Buenos días'
