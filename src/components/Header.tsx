@@ -1,4 +1,4 @@
-import { Settings, User, Clock, Building2, History, LogOut, Sun, Moon, Sunset } from 'lucide-react'
+import { Settings, User, Clock, Building2, History, LogOut, Sun, Moon, Sunset, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useState, useEffect } from 'react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -30,6 +30,7 @@ export function Header({
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [shiftConfig, setShiftConfig] = useState({ nightStart: 23, nightEnd: 7 })
   const [logoUrl, setLogoUrl] = useState<string | null>(null)
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false)
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -63,10 +64,39 @@ export function Header({
         setLogoUrl(logo)
       }
     } catch (error) {
-      console.error('Error loading logo:', error)
+    })
+  }
+
+  const handleCheckUpdates = async () => {
+    if (!window.electron) {
+      toast.error('Función no disponible en modo web')
+      return
+    }
+
+    setIsCheckingUpdate(true)
+    try {
+      const result = await window.electron.updater.check()
+      
+      if (result) {
+        toast.success('Verificando actualizaciones...', {
+          description: 'Si hay una nueva versión, aparecerá una notificación.'
+        })
+      } else {
+        toast.success('¡Estás actualizado!', {
+          description: 'Ya tienes la última versión instalada.'
+        })
+      }
+    } catch (error) {
+      console.error('Error checking for updates:', error)
+      toast.info('Sin conexión', {
+        description: 'No se pudo conectar al servidor de actualizaciones.'
+      })
+    } finally {
+      setIsCheckingUpdate(false)
     }
   }
 
+  const getGreeting = (date: Date) => {
   const getGreeting = (date: Date) => {
     const hour = date.getHours()
     if (hour >= 6 && hour < 12) return 'Buenos días'
@@ -116,9 +146,22 @@ export function Header({
   return (
     <header className="bg-card border-b border-border px-6 py-3 shadow-sm">
       <div className="grid grid-cols-3 items-center">
-        {/* Left: Gravio Logo + Greeting Info */}
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-gradient-to-br from-primary to-primary/60 rounded-lg flex items-center justify-center shadow-md">
+        {/* Right: Time, User, Settings */}
+        <div className="flex items-center gap-4 justify-end">
+          {/* Check Updates Button */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleCheckUpdates}
+            disabled={isCheckingUpdate}
+            className="gap-2"
+            title="Buscar actualizaciones"
+          >
+            <RefreshCw className={`w-4 h-4 ${isCheckingUpdate ? 'animate-spin' : ''}`} />
+            {isCheckingUpdate ? 'Verificando...' : 'Actualizaciones'}
+          </Button>
+
+          {/* Date and Time */}h-10 bg-gradient-to-br from-primary to-primary/60 rounded-lg flex items-center justify-center shadow-md">
             <span className="text-white font-bold text-lg">G</span>
           </div>
           <div className="flex items-center gap-2 text-xs">
