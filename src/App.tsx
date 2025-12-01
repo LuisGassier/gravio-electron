@@ -43,10 +43,11 @@ function App() {
         setUserName(storedUser)
       }
 
-      // Get empresa info
-      const empresas = await window.electron.db.query('SELECT nombre FROM empresa LIMIT 1', [])
-      if (empresas.length > 0) {
-        setEmpresaName(empresas[0].nombre)
+      // Get empresa operadora del software (solo local, no DB)
+      const companyName = await window.electron.storage.get('empresaName') || 
+                          await window.electron.storage.get('companyName')
+      if (companyName) {
+        setEmpresaName(companyName)
       }
     } catch (error) {
       console.error('Error loading user info:', error)

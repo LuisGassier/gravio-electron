@@ -132,7 +132,7 @@ export function Header({
             <img 
               src={logoUrl} 
               alt="Logo Empresa" 
-              className="h-14 w-14 object-contain rounded-lg shadow-md border border-border/30"
+              className="max-h-14 max-w-[180px] object-contain rounded-lg shadow-md border border-border/30 p-1.5 bg-secondary/30"
             />
           ) : (
             <div className="h-14 w-14 rounded-lg border-2 border-dashed border-border/50 bg-secondary/30 flex items-center justify-center">

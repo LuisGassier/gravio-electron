@@ -35,23 +35,19 @@ export function CompanyConfigPanel({ onClose, onSave }: CompanyConfigPanelProps)
     if (!window.electron) return
 
     try {
-      // Obtener configuración de la empresa desde la base de datos
-      const empresas = await window.electron.db.query(
-        'SELECT nombre, direccion, logo FROM empresa LIMIT 1',
-        []
-      )
+      // Cargar configuración solo desde electron-store (local)
+      const nombre = await window.electron.storage.get('companyName')
+      const direccion = await window.electron.storage.get('companyAddress')
+      const logo = await window.electron.storage.get('companyLogo')
 
-      if (empresas.length > 0) {
-        const empresa = empresas[0]
-        setConfig({
-          nombre: empresa.nombre || '',
-          direccion: empresa.direccion || '',
-          logo: empresa.logo || ''
-        })
+      setConfig({
+        nombre: nombre || '',
+        direccion: direccion || '',
+        logo: logo || ''
+      })
 
-        if (empresa.logo) {
-          setLogoPreview(empresa.logo)
-        }
+      if (logo) {
+        setLogoPreview(logo)
       }
     } catch (error) {
       console.error('Error cargando configuración de empresa:', error)
@@ -91,7 +87,10 @@ export function CompanyConfigPanel({ onClose, onSave }: CompanyConfigPanelProps)
   }
 
   const saveConfig = async () => {
-    if (!window.electron) return
+    if (!window.electron) {
+      toast.error('No se puede guardar: window.electron no está disponible')
+      return
+    }
 
     if (!config.nombre.trim()) {
       toast.error('El nombre de la empresa es obligatorio')
@@ -99,38 +98,31 @@ export function CompanyConfigPanel({ onClose, onSave }: CompanyConfigPanelProps)
     }
 
     setSaving(true)
+    console.log('Guardando configuración del operador del software:', config)
 
     try {
-      // Verificar si ya existe una empresa configurada
-      const empresas = await window.electron.db.query(
-        'SELECT clave_empresa FROM empresa LIMIT 1',
-        []
-      )
+      // Guardar SOLO en electron-store (almacenamiento local)
+      // Esta es la empresa que OPERA el software, no las empresas recolectoras
+      await window.electron.storage.set('companyName', config.nombre)
+      await window.electron.storage.set('companyAddress', config.direccion)
+      await window.electron.storage.set('companyLogo', config.logo)
 
-      if (empresas.length > 0) {
-        // Actualizar empresa existente
-        await window.electron.db.query(
-          'UPDATE empresa SET nombre = ?, direccion = ?, logo = ? WHERE clave_empresa = ?',
-          [config.nombre, config.direccion, config.logo, empresas[0].clave_empresa]
-        )
-      } else {
-        // Insertar nueva empresa
-        await window.electron.db.query(
-          'INSERT INTO empresa (nombre, direccion, logo, prefijo) VALUES (?, ?, ?, ?)',
-          [config.nombre, config.direccion, config.logo, 'EMP']
-        )
-      }
-
-      // Guardar también en storage para acceso rápido
-      await window.electron.storage.set('empresaLogo', config.logo)
+      // También guardar en las keys legacy para compatibilidad con Header
       await window.electron.storage.set('empresaName', config.nombre)
+      await window.electron.storage.set('empresaLogo', config.logo)
 
-      toast.success('Configuración de empresa guardada correctamente')
-      onSave?.()
-      onClose?.()
+      console.log('✅ Configuración guardada en electron-store')
+      toast.success('Configuración guardada correctamente')
+      
+      // Pequeño delay para que se vea el toast
+      setTimeout(() => {
+        onSave?.()
+        onClose?.()
+      }, 500)
     } catch (error) {
-      console.error('Error guardando configuración:', error)
-      toast.error('Error al guardar la configuración')
+      console.error('❌ Error guardando configuración:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Error desconocido'
+      toast.error(`Error al guardar: ${errorMessage}`)
     } finally {
       setSaving(false)
     }
@@ -165,13 +157,13 @@ export function CompanyConfigPanel({ onClose, onSave }: CompanyConfigPanelProps)
           </div>
 
           <div className="flex items-start gap-6">
-            <div className="relative">
+            <div className="relative flex items-center justify-center">
               {logoPreview ? (
                 <div className="relative group">
                   <img 
                     src={logoPreview} 
                     alt="Logo empresa" 
-                    className="h-32 w-32 object-contain rounded-lg border-2 border-border bg-secondary/30 p-2"
+                    className="max-h-32 max-w-[280px] object-contain rounded-lg border-2 border-border bg-secondary/30 p-3"
                   />
                   <button
                     onClick={removeLogo}
@@ -181,7 +173,7 @@ export function CompanyConfigPanel({ onClose, onSave }: CompanyConfigPanelProps)
                   </button>
                 </div>
               ) : (
-                <div className="h-32 w-32 rounded-lg border-2 border-dashed border-border/50 bg-secondary/30 flex flex-col items-center justify-center gap-2">
+                <div className="h-32 w-[280px] rounded-lg border-2 border-dashed border-border/50 bg-secondary/30 flex flex-col items-center justify-center gap-2">
                   <ImageIcon className="w-10 h-10 text-muted-foreground" />
                   <span className="text-xs text-muted-foreground">Sin logo</span>
                 </div>
