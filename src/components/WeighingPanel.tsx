@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Scale, AlertCircle, Truck, User, Route, FileText } from 'lucide-react'
+import { Scale, AlertCircle, Truck, User, Route, FileText, X } from 'lucide-react'
 import { Label } from '@/components/ui/label'
 import { Combobox } from '@/components/ui/combobox'
 import { container } from '@/application'
 import { toast } from 'sonner'
+import { usePesaje } from '@/contexts/PesajeContext'
+import type { Registro } from '@/domain'
 
 interface Vehiculo {
   id: string
@@ -44,8 +46,11 @@ interface Concepto {
 }
 
 export function WeighingPanel() {
+  const { selectedRegistro, clearSelection } = usePesaje()
   const [weight, setWeight] = useState<string>('0')
   const [isScaleConnected, setIsScaleConnected] = useState(false)
+  const [isSalidaMode, setIsSalidaMode] = useState(false)
+  const [currentRegistro, setCurrentRegistro] = useState<Registro | null>(null)
   
   const [vehiculos, setVehiculos] = useState<Vehiculo[]>([])
   const [operadores, setOperadores] = useState<Operador[]>([])
@@ -71,6 +76,40 @@ export function WeighingPanel() {
       })
     }
   }, [])
+
+  // Manejar selección de registro para salida
+  useEffect(() => {
+    if (selectedRegistro) {
+      setIsSalidaMode(true)
+      setCurrentRegistro(selectedRegistro)
+      
+      // Prellenar datos del registro
+      console.log('📋 Prellenando datos:', selectedRegistro)
+      setSelectedVehiculo(selectedRegistro.id || '')
+      setObservaciones(selectedRegistro.observaciones || '')
+      
+      toast.info(`📥 Modo SALIDA: ${selectedRegistro.placaVehiculo}`, {
+        description: `Peso entrada: ${selectedRegistro.pesoEntrada?.toFixed(2)} kg`
+      })
+    }
+  }, [selectedRegistro])
+
+  const cancelarSalida = () => {
+    setIsSalidaMode(false)
+    setCurrentRegistro(null)
+    clearSelection()
+    limpiarFormulario()
+    toast.info('❌ Modo salida cancelado')
+  }
+
+  const limpiarFormulario = () => {
+    setSelectedVehiculo('')
+    setSelectedOperador('')
+    setSelectedRuta('')
+    setSelectedConcepto('')
+    setSelectedEmpresa(null)
+    setObservaciones('')
+  }
 
   const checkScaleConnection = () => {
     try {
@@ -248,14 +287,40 @@ export function WeighingPanel() {
     if (result.success) {
       const registro = result.value
       toast.success(`Entrada registrada - Folio: ${registro?.folio || 'Generando...'}`)
-      // Limpiar formulario
-      setSelectedVehiculo('')
-      setSelectedOperador('')
-      setSelectedRuta('')
-      setSelectedConcepto('')
-      setObservaciones('')
-      setSelectedEmpresa(null)
-      // Recargar datos
+      limpiarFormulario()
+      loadFormData()
+    } else {
+      toast.error(`Error: ${result.error}`)
+    }
+  }
+
+  const registrarSalida = async () => {
+    if (!isScaleConnected) {
+      toast.error('La báscula no está conectada')
+      return
+    }
+
+    if (!currentRegistro) {
+      toast.error('No hay registro de entrada seleccionado')
+      return
+    }
+
+    const result = await container.pesajeService.registrarSalida(
+      currentRegistro.placaVehiculo,
+      observaciones || undefined
+    )
+
+    if (result.success) {
+      const registro = result.value
+      const pesoNeto = registro.getPesoNeto()
+      toast.success(`✅ Salida registrada - Folio: ${registro.folio}`, {
+        description: `Peso neto: ${pesoNeto ? pesoNeto.toFixed(2) + ' kg' : 'N/A'}`
+      })
+      
+      // TODO: Imprimir ticket térmico aquí
+      console.log('🖨️ Imprimiendo ticket...', registro)
+      
+      cancelarSalida()
       loadFormData()
     } else {
       toast.error(`Error: ${result.error}`)
@@ -395,14 +460,33 @@ export function WeighingPanel() {
   return (
     <div className="space-y-4">
       {/* Title */}
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded bg-primary/10 flex items-center justify-center">
-          <Scale className="w-6 h-6 text-primary" />
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded bg-primary/10 flex items-center justify-center">
+            <Scale className="w-6 h-6 text-primary" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-foreground">
+              {isSalidaMode ? 'Registro de SALIDA' : 'Registro de Pesaje'}
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              {isSalidaMode 
+                ? `Vehículo: ${currentRegistro?.placaVehiculo}` 
+                : 'Sistema de báscula industrial'}
+            </p>
+          </div>
         </div>
-        <div>
-          <h2 className="text-xl font-bold text-foreground">Registro de Pesaje</h2>
-          <p className="text-sm text-muted-foreground">Sistema de báscula industrial</p>
-        </div>
+        {isSalidaMode && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={cancelarSalida}
+            className="border-destructive/30 text-destructive hover:bg-destructive/10"
+          >
+            <X className="w-4 h-4 mr-1" />
+            Cancelar
+          </Button>
+        )}
       </div>
 
       {/* Scale Connection Warning */}
@@ -553,15 +637,40 @@ export function WeighingPanel() {
             )}
           </div>
 
-          {/* Action Button */}
-          <Button
-            onClick={registrarEntrada}
-            className="w-full h-14 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-primary-foreground font-bold text-base shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-            disabled={!isScaleConnected || !selectedVehiculo}
-          >
-            <Scale className="w-5 h-5 mr-2" />
-            Registrar Entrada
-          </Button>
+          {/* Action Buttons */}
+          {isSalidaMode ? (
+            <div className="space-y-3">
+              {currentRegistro && (
+                <div className="bg-muted/30 rounded-lg p-3 text-sm">
+                  <div className="flex justify-between mb-1">
+                    <span className="text-muted-foreground">Peso Entrada:</span>
+                    <span className="font-bold">{currentRegistro.pesoEntrada?.toFixed(2)} kg</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Hora Entrada:</span>
+                    <span className="font-mono">{currentRegistro.fechaEntrada?.toLocaleTimeString('es-MX')}</span>
+                  </div>
+                </div>
+              )}
+              <Button
+                onClick={registrarSalida}
+                className="w-full h-14 bg-gradient-to-r from-success to-success/80 hover:from-success/90 hover:to-success/70 text-white font-bold text-base shadow-lg hover:shadow-xl transition-all duration-200"
+                disabled={!isScaleConnected}
+              >
+                <Scale className="w-5 h-5 mr-2" />
+                Registrar Salida e Imprimir
+              </Button>
+            </div>
+          ) : (
+            <Button
+              onClick={registrarEntrada}
+              className="w-full h-14 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-primary-foreground font-bold text-base shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={!isScaleConnected || !selectedVehiculo}
+            >
+              <Scale className="w-5 h-5 mr-2" />
+              Registrar Entrada
+            </Button>
+          )}
         </CardContent>
       </Card>
     </div>

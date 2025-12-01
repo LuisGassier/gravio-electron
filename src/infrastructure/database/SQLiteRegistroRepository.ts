@@ -203,12 +203,14 @@ export class SQLiteRegistroRepository implements IRegistroRepository {
     try {
       const query = `
         SELECT * FROM registros 
-        WHERE tipo_pesaje = 'entrada'
-        AND peso_salida IS NULL
+        WHERE peso_salida IS NULL
+        AND fecha_salida IS NULL
         ORDER BY fecha_entrada DESC
       `;
 
       const rows = await window.electron.db.all(query);
+
+      console.log(`🔍 Query encontró ${rows.length} registros pendientes`, rows);
 
       const registros: Registro[] = [];
 
@@ -216,6 +218,8 @@ export class SQLiteRegistroRepository implements IRegistroRepository {
         const registroResult = await this.mapRowToRegistro(row);
         if (registroResult.success && registroResult.value) {
           registros.push(registroResult.value);
+        } else {
+          console.warn('⚠️ Error al mapear registro:', row, registroResult);
         }
       }
 

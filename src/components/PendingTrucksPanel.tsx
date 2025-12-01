@@ -3,12 +3,29 @@ import { Card, CardContent } from '@/components/ui/card'
 import { CheckCircle2, Truck, Clock, User } from 'lucide-react'
 import { container } from '@/application'
 import type { Registro } from '@/domain'
+import { usePesaje } from '@/contexts/PesajeContext'
+import { toast } from 'sonner'
 
 export function PendingTrucksPanel() {
   const [pendingTrucks, setPendingTrucks] = useState<Registro[]>([])
+  const { selectRegistroForSalida } = usePesaje()
+
+  const handleSelectTruck = (truck: Registro) => {
+    selectRegistroForSalida(truck)
+    toast.success(`🚚 Vehículo ${truck.placaVehiculo} seleccionado para salida`)
+  }
 
   useEffect(() => {
+    // Cargar inmediatamente
     loadPendingTrucks()
+
+    // Recargar cada 5 segundos
+    const interval = setInterval(() => {
+      loadPendingTrucks()
+    }, 5000)
+
+    // Limpiar intervalo al desmontar
+    return () => clearInterval(interval)
   }, [])
 
   const loadPendingTrucks = async () => {
@@ -17,6 +34,7 @@ export function PendingTrucksPanel() {
     try {
       const result = await container.sqliteRegistroRepository.findAllPending()
       if (result.success && result.value) {
+        console.log(`🚚 Camiones pendientes: ${result.value.length}`, result.value)
         setPendingTrucks(result.value)
       } else {
         console.error('Error loading pending trucks:', result)
@@ -91,7 +109,8 @@ export function PendingTrucksPanel() {
             {pendingTrucks.map((truck) => (
               <Card
                 key={truck.id}
-                className="card-elevated border-border hover:border-primary/40 cursor-pointer group"
+                className="card-elevated border-border hover:border-primary/40 cursor-pointer group transition-all hover:scale-[1.02]"
+                onClick={() => handleSelectTruck(truck)}
               >
                 <CardContent className="p-3.5">
                   <div className="flex items-start gap-3">
