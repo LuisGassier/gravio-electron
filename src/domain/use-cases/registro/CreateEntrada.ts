@@ -15,6 +15,7 @@ export interface CreateEntradaInput {
   claveConcepto: number;
   conceptoId?: string;
   pesoEntrada: number;
+  folio?: string; // Folio generado offline (opcional)
   observaciones?: string;
 }
 
@@ -48,6 +49,7 @@ export class CreateEntradaUseCase {
         claveConcepto: input.claveConcepto,
         conceptoId: input.conceptoId,
         pesoEntrada: input.pesoEntrada,
+        folio: input.folio, // Folio generado offline (si existe)
         fechaEntrada: new Date(),
         tipoPesaje: 'entrada',
         observaciones: input.observaciones || 'Pesaje de entrada automático',

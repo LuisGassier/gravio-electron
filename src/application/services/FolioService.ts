@@ -31,12 +31,22 @@ import type { NetworkService } from './NetworkService'
  * - Marca como sincronizado=1
  */
 export class FolioService {
+  private readonly localRepository: IFolioSequenceRepository
+  private readonly remoteRepository: IFolioSequenceRepository
+  private readonly empresaRepository: IEmpresaRepository
+  private readonly networkService: NetworkService
+
   constructor(
-    private readonly localRepository: IFolioSequenceRepository,
-    private readonly remoteRepository: IFolioSequenceRepository,
-    private readonly empresaRepository: IEmpresaRepository,
-    private readonly networkService: NetworkService
-  ) {}
+    localRepository: IFolioSequenceRepository,
+    remoteRepository: IFolioSequenceRepository,
+    empresaRepository: IEmpresaRepository,
+    networkService: NetworkService
+  ) {
+    this.localRepository = localRepository
+    this.remoteRepository = remoteRepository
+    this.empresaRepository = empresaRepository
+    this.networkService = networkService
+  }
 
   /**
    * Genera el siguiente folio para una empresa

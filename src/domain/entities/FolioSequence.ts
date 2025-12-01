@@ -1,4 +1,5 @@
-import { Result, ResultFactory } from '../shared/Result'
+import type { Result } from '../shared/Result'
+import { ResultFactory } from '../shared/Result'
 
 /**
  * Props para crear una entidad FolioSequence
