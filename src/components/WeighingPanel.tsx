@@ -47,7 +47,7 @@ interface Concepto {
 }
 
 export function WeighingPanel() {
-  const { selectedRegistro, clearSelection } = usePesaje()
+  const { selectedRegistro, clearSelection, notifySalidaRegistrada } = usePesaje()
   const [weight, setWeight] = useState<string>('0')
   const [isScaleConnected, setIsScaleConnected] = useState(false)
   const [isSalidaMode, setIsSalidaMode] = useState(false)
@@ -152,6 +152,12 @@ export function WeighingPanel() {
       toast.success(`Vehículo seleccionado para salida`, {
         description: `${selectedRegistro.placaVehiculo} - Peso entrada: ${selectedRegistro.pesoEntrada?.toFixed(2)} kg`
       })
+    } else {
+      // Si se deseleccionó (selectedRegistro es null), limpiar formulario y salir de modo salida
+      console.log('🔄 Deselección detectada: limpiando formulario')
+      setIsSalidaMode(false)
+      setCurrentRegistro(null)
+      limpiarFormulario()
     }
   }, [selectedRegistro, vehiculos, operadores, rutas, conceptos])
 
@@ -559,6 +565,9 @@ export function WeighingPanel() {
         setShowCompletedModal(true)
         cancelarSalida()
       }
+
+      // Notificar que se registró una salida para actualizar lista de pendientes
+      notifySalidaRegistrada()
     } else {
       toast.error('Error al registrar salida', {
         description: result.error.message

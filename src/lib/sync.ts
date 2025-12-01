@@ -136,9 +136,27 @@ export async function downloadRegistros() {
     console.log('📋 Primeros 3 registros:', registros.slice(0, 3))
     
     let updated = 0
+    let skipped = 0
+    
     for (const reg of registros) {
       try {
-        // Usar INSERT OR REPLACE para crear o actualizar el registro
+        // 🛡️ PROTECCIÓN: Verificar si el registro local tiene MÁS datos que Supabase
+        const localResult = await window.electron.db.get(
+          'SELECT peso_salida, fecha_salida FROM registros WHERE id = ?',
+          [reg.id]
+        )
+        
+        // Si el registro local tiene salida completa y Supabase NO, NO sobrescribir
+        if (localResult && localResult.peso_salida && localResult.fecha_salida) {
+          if (!reg.peso_salida || !reg.fecha_salida) {
+            console.log(`🛡️ PROTEGIDO: Registro local tiene salida completa, Supabase incompleto - ${reg.placa_vehiculo}`)
+            skipped++
+            continue
+          }
+        }
+        
+        // ✅ REGLA: Solo actualizar si Supabase tiene datos IGUALES o SUPERIORES
+        // Usar INSERT OR REPLACE para sobrescribir con datos de Supabase
         await window.electron.db.run(
           `INSERT OR REPLACE INTO registros (
             id, folio, clave_ruta, ruta, placa_vehiculo, numero_economico,
@@ -164,7 +182,7 @@ export async function downloadRegistros() {
             reg.fecha_salida,
             reg.tipo_pesaje,
             reg.observaciones,
-            1, // sincronizado
+            reg.sincronizado !== undefined ? (reg.sincronizado ? 1 : 0) : 1,
             reg.fecha_registro || reg.created_at,
             reg.created_at,
             reg.updated_at || new Date().toISOString()
@@ -183,7 +201,13 @@ export async function downloadRegistros() {
     
     if (updated > 0) {
       console.log(`✅ Actualizados ${updated} registros desde Supabase`)
-    } else {
+    }
+    
+    if (skipped > 0) {
+      console.log(`🛡️ Protegidos ${skipped} registros locales con datos completos`)
+    }
+    
+    if (updated === 0 && skipped === 0) {
       console.warn('⚠️ No se actualizó ningún registro')
     }
   } catch (error) {

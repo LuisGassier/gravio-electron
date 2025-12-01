@@ -10,11 +10,17 @@ import { toast } from 'sonner'
 export function PendingTrucksPanel() {
   const [pendingTrucks, setPendingTrucks] = useState<Registro[]>([])
   const [isSyncing, setIsSyncing] = useState(false)
-  const { selectRegistroForSalida } = usePesaje()
+  const { selectedRegistro, toggleRegistroSelection, onSalidaRegistrada } = usePesaje()
 
   const handleSelectTruck = (truck: Registro) => {
-    selectRegistroForSalida(truck)
-    toast.success(`🚚 Vehículo ${truck.placaVehiculo} seleccionado para salida`)
+    const wasSelected = selectedRegistro?.id === truck.id
+    toggleRegistroSelection(truck)
+    
+    if (wasSelected) {
+      toast.info(`❌ Deseleccionado: ${truck.placaVehiculo}`)
+    } else {
+      toast.success(`✅ Seleccionado para salida: ${truck.placaVehiculo}`)
+    }
   }
 
   useEffect(() => {
@@ -26,9 +32,18 @@ export function PendingTrucksPanel() {
       loadPendingTrucks()
     }, 5000)
 
-    // Limpiar intervalo al desmontar
-    return () => clearInterval(interval)
-  }, [])
+    // Suscribirse a notificaciones de salida registrada para recarga inmediata
+    const unsubscribe = onSalidaRegistrada(() => {
+      console.log('🔔 Salida registrada detectada, recargando pendientes...')
+      loadPendingTrucks()
+    })
+
+    // Limpiar intervalo y suscripción al desmontar
+    return () => {
+      clearInterval(interval)
+      unsubscribe()
+    }
+  }, [onSalidaRegistrada])
 
   const loadPendingTrucks = async () => {
     if (!window.electron) return
@@ -140,10 +155,16 @@ export function PendingTrucksPanel() {
 
           {/* Pending Trucks List */}
           <div className="space-y-2.5 max-h-[calc(100vh-280px)] overflow-y-auto pr-2 scrollbar-thin">
-            {pendingTrucks.map((truck) => (
+            {pendingTrucks.map((truck) => {
+              const isSelected = selectedRegistro?.id === truck.id
+              return (
               <Card
                 key={truck.id}
-                className="card-elevated border-border hover:border-primary/40 cursor-pointer group transition-all hover:scale-[1.02]"
+                className={`card-elevated cursor-pointer group transition-all hover:scale-[1.02] ${
+                  isSelected 
+                    ? 'border-primary border-2 bg-primary/5 shadow-lg' 
+                    : 'border-border hover:border-primary/40'
+                }`}
                 onClick={() => handleSelectTruck(truck)}
               >
                 <CardContent className="p-3.5">
@@ -189,7 +210,7 @@ export function PendingTrucksPanel() {
                   </div>
                 </CardContent>
               </Card>
-            ))}
+            )})}
           </div>
         </>
       )}
