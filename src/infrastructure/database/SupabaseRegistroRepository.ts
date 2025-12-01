@@ -16,6 +16,14 @@ export class SupabaseRegistroRepository implements IRegistroRepository {
    */
   async saveEntrada(registro: Registro): Promise<Result<Registro>> {
     try {
+      console.log('🔵 SupabaseRegistroRepository.saveEntrada - Intentando guardar:', {
+        id: registro.id,
+        placaVehiculo: registro.placaVehiculo,
+        claveOperador: registro.claveOperador,
+        claveRuta: registro.claveRuta,
+        claveConcepto: registro.claveConcepto,
+      });
+
       const data = {
         id: registro.id,
         folio: registro.folio || null, // Dejar null para que Supabase genere el folio
@@ -38,11 +46,15 @@ export class SupabaseRegistroRepository implements IRegistroRepository {
         fecha_registro: registro.fechaRegistro.toISOString(),
       };
 
+      console.log('🔵 SupabaseRegistroRepository.saveEntrada - Datos a enviar:', data);
+
       const { data: savedData, error } = await supabase
         .from('registros')
         .upsert(data, { onConflict: 'id' })
         .select()
         .single();
+
+      console.log('🔵 SupabaseRegistroRepository.saveEntrada - Respuesta:', { savedData, error });
 
       if (error) {
         return ResultFactory.fail(new Error(`Error al guardar en Supabase: ${error.message}`));
