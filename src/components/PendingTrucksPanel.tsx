@@ -34,7 +34,6 @@ export function PendingTrucksPanel() {
 
     // Suscribirse a notificaciones de salida registrada para recarga inmediata
     const unsubscribe = onSalidaRegistrada(() => {
-      console.log('🔔 Salida registrada detectada, recargando pendientes...')
       loadPendingTrucks()
     })
 
@@ -51,7 +50,6 @@ export function PendingTrucksPanel() {
     try {
       const result = await container.sqliteRegistroRepository.findAllPending()
       if (result.success && result.value) {
-        console.log(`🚚 Vehículos pendientes: ${result.value.length}`, result.value)
         setPendingTrucks(result.value)
       } else {
         console.error('Error loading pending trucks:', result)
@@ -157,13 +155,6 @@ export function PendingTrucksPanel() {
           <div className="space-y-2.5 max-h-[calc(100vh-280px)] overflow-y-auto pr-2 scrollbar-thin">
             {pendingTrucks.map((truck) => {
               const isSelected = selectedRegistro?.id === truck.id
-              console.log('🔍 Comparando selección:', {
-                selectedId: selectedRegistro?.id,
-                truckId: truck.id,
-                isSelected,
-                selectedType: typeof selectedRegistro?.id,
-                truckType: typeof truck.id
-              })
               return (
               <Card
                 key={truck.id}

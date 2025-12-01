@@ -214,8 +214,6 @@ export class SQLiteRegistroRepository implements IRegistroRepository {
 
       const rows = await window.electron.db.all(query);
 
-      console.log(`🔍 Query encontró ${rows.length} registros pendientes`, rows);
-
       const registros: Registro[] = [];
 
       for (const row of rows) {

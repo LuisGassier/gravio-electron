@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, type ReactNode } from 'react'
+import { createContext, useContext, useState, useCallback, useRef, type ReactNode } from 'react'
 import type { Registro } from '@/domain'
 
 interface PesajeContextType {
@@ -14,42 +14,39 @@ const PesajeContext = createContext<PesajeContextType | undefined>(undefined)
 
 export function PesajeProvider({ children }: { children: ReactNode }) {
   const [selectedRegistro, setSelectedRegistro] = useState<Registro | null>(null)
-  const [salidaCallbacks, setSalidaCallbacks] = useState<Array<() => void>>([])
+  const salidaCallbacksRef = useRef<Array<() => void>>([])
 
-  const selectRegistroForSalida = (registro: Registro) => {
-    console.log('📋 Registro seleccionado para salida:', registro)
+  const selectRegistroForSalida = useCallback((registro: Registro) => {
     setSelectedRegistro(registro)
-  }
+  }, [])
 
-  const clearSelection = () => {
-    console.log('🔄 Limpiando selección')
+  const clearSelection = useCallback(() => {
     setSelectedRegistro(null)
-  }
+  }, [])
 
-  const toggleRegistroSelection = (registro: Registro) => {
+  const toggleRegistroSelection = useCallback((registro: Registro) => {
     // Si el mismo registro está seleccionado, deseleccionar
-    if (selectedRegistro?.id === registro.id) {
-      console.log('❌ Deseleccionando registro:', registro.placaVehiculo)
-      setSelectedRegistro(null)
-    } else {
-      console.log('✅ Seleccionando registro:', registro.placaVehiculo)
-      setSelectedRegistro(registro)
-    }
-  }
+    setSelectedRegistro(prev => {
+      if (prev?.id === registro.id) {
+        return null
+      } else {
+        return registro
+      }
+    })
+  }, [])
 
-  const notifySalidaRegistrada = () => {
-    console.log('🔔 Notificando salida registrada a', salidaCallbacks.length, 'listeners')
-    salidaCallbacks.forEach(callback => callback())
-  }
+  const notifySalidaRegistrada = useCallback(() => {
+    salidaCallbacksRef.current.forEach(callback => callback())
+  }, [])
 
-  const onSalidaRegistrada = (callback: () => void) => {
-    setSalidaCallbacks(prev => [...prev, callback])
-    
+  const onSalidaRegistrada = useCallback((callback: () => void) => {
+    salidaCallbacksRef.current.push(callback)
+
     // Retornar función para desuscribirse
     return () => {
-      setSalidaCallbacks(prev => prev.filter(cb => cb !== callback))
+      salidaCallbacksRef.current = salidaCallbacksRef.current.filter(cb => cb !== callback)
     }
-  }
+  }, [])
 
   return (
     <PesajeContext.Provider value={{ 

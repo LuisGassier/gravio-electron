@@ -325,10 +325,6 @@ export class FolioService {
         return ResultFactory.fail(saveResult.error)
       }
 
-      console.log(
-        `✅ Secuencia sincronizada - Empresa: ${claveEmpresa}, Local: ${sequence.ultimoNumero}, Remoto: ${maxRemote}, Final: ${updatedResult.value.ultimoNumero}`
-      )
-
       return ResultFactory.ok(updatedResult.value)
     } catch (error) {
       return ResultFactory.fromError(error)

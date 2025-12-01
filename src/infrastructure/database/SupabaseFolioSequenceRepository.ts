@@ -119,7 +119,7 @@ export class SupabaseFolioSequenceRepository implements IFolioSequenceRepository
       // Necesitamos el ÚLTIMO usado, así que restamos 1
       const ultimoNumero = Math.max(0, (data || 1) - 1)
 
-      console.log(`📊 Max folio en Supabase para empresa ${claveEmpresa}: ${ultimoNumero}`)
+
 
       return ResultFactory.ok(ultimoNumero)
     } catch (error) {

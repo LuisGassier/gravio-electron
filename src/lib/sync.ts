@@ -189,11 +189,6 @@ export async function downloadRegistros() {
           ]
         )
         updated++
-        
-        // Log detallado de registros con salida
-        if (reg.peso_salida && reg.fecha_salida) {
-          console.log(`✅ Registro con salida sincronizado: ${reg.placa_vehiculo} - Salida: ${reg.peso_salida}kg el ${reg.fecha_salida}`)
-        }
       } catch (err) {
         console.error(`❌ Error al actualizar registro ${reg.id}:`, err)
       }
