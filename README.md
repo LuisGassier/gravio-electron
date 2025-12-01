@@ -351,3 +351,13 @@ export default defineConfig([
   },
 ])
 ```
+## Instrucciones para release con auto-update
+```
+npm run build:electron
+```
+```
+subir release a GitHub con tag `vX.Y.Z`
+subir .exe a assets del release y latest.yml
+```
+C:\Users\Luis Gassier\Documents\GitHub\gravio-electron\dist-builder
+```

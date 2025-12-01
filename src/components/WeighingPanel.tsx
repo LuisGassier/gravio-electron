@@ -253,32 +253,56 @@ export function WeighingPanel() {
     : conceptos
 
   // Prepare options for comboboxes con formato mejorado
-  const vehiculoOptions = filteredVehiculos
-    .filter(v => v.clave_empresa && v.empresa) // Filtrar los que no tienen empresa
-    .map(v => ({
-      value: v.id,
-      label: `${v.no_economico} ${v.placas} (${v.prefijo || ''})`,
-      subtitle: v.empresa,
-      clave_empresa: v.clave_empresa
-    }))
+  const vehiculoOptions = [
+    {
+      value: 'NUEVO',
+      label: 'Nuevo (sin registrar)',
+      subtitle: 'Vehículo no registrado',
+      clave_empresa: selectedEmpresa || undefined
+    },
+    ...filteredVehiculos
+      .filter(v => v.clave_empresa && v.empresa) // Filtrar los que no tienen empresa
+      .map(v => ({
+        value: v.id,
+        label: `${v.no_economico} ${v.placas} (${v.prefijo || ''})`,
+        subtitle: v.empresa,
+        clave_empresa: v.clave_empresa
+      }))
+  ]
 
-  const operadorOptions = filteredOperadores
-    .filter(o => o.clave_empresa && o.empresa) // Filtrar los que no tienen empresa
-    .map(o => ({
-      value: `${o.id}-${o.clave_empresa}`,
-      label: `${o.clave_operador} ${o.operador}`,
-      subtitle: o.empresa,
-      clave_empresa: o.clave_empresa
-    }))
+  const operadorOptions = [
+    {
+      value: 'NUEVO',
+      label: 'Nuevo (sin registrar)',
+      subtitle: 'Operador no registrado',
+      clave_empresa: selectedEmpresa || undefined
+    },
+    ...filteredOperadores
+      .filter(o => o.clave_empresa && o.empresa) // Filtrar los que no tienen empresa
+      .map(o => ({
+        value: `${o.id}-${o.clave_empresa}`,
+        label: `${o.clave_operador} ${o.operador}`,
+        subtitle: o.empresa,
+        clave_empresa: o.clave_empresa
+      }))
+  ]
 
-  const rutaOptions = filteredRutas
-    .filter(r => r.clave_empresa && r.empresa) // Filtrar los que no tienen empresa
-    .map(r => ({
-      value: String(r.id),
-      label: `${r.clave_ruta} ${r.ruta}`,
-      subtitle: r.empresa,
-      clave_empresa: r.clave_empresa
-    }))
+  const rutaOptions = [
+    {
+      value: 'NUEVO',
+      label: 'Nuevo (sin registrar)',
+      subtitle: 'Ruta no registrada',
+      clave_empresa: selectedEmpresa || undefined
+    },
+    ...filteredRutas
+      .filter(r => r.clave_empresa && r.empresa) // Filtrar los que no tienen empresa
+      .map(r => ({
+        value: String(r.id),
+        label: `${r.clave_ruta} ${r.ruta}`,
+        subtitle: r.empresa,
+        clave_empresa: r.clave_empresa
+      }))
+  ]
 
   const conceptoOptions = filteredConceptos
     .filter(c => c.clave_empresa) // Solo verificar clave_empresa (empresa puede ser null temporalmente)
@@ -301,28 +325,40 @@ export function WeighingPanel() {
     }
 
     // Parsear IDs compuestos (UUID-empresa)
-    const operadorId = selectedOperador ? selectedOperador.substring(0, selectedOperador.lastIndexOf('-')) : undefined
-    const conceptoId = selectedConcepto ? selectedConcepto.substring(0, selectedConcepto.lastIndexOf('-')) : undefined
+    const operadorId = selectedOperador && selectedOperador !== 'NUEVO' 
+      ? selectedOperador.substring(0, selectedOperador.lastIndexOf('-')) 
+      : undefined
+    const conceptoId = selectedConcepto && selectedConcepto !== 'NUEVO'
+      ? selectedConcepto.substring(0, selectedConcepto.lastIndexOf('-')) 
+      : undefined
 
     // Buscar datos completos de las entidades seleccionadas
-    const vehiculo = vehiculos.find(v => v.id === selectedVehiculo)
+    const vehiculo = selectedVehiculo === 'NUEVO' ? null : vehiculos.find(v => v.id === selectedVehiculo)
     const operador = operadorId ? operadores.find(o => o.id === operadorId) : undefined
-    const ruta = selectedRuta ? rutas.find(r => r.id === Number(selectedRuta)) : undefined
+    const ruta = selectedRuta && selectedRuta !== 'NUEVO' ? rutas.find(r => r.id === Number(selectedRuta)) : undefined
     const concepto = conceptoId ? conceptos.find(c => c.id === conceptoId) : undefined
 
-    if (!vehiculo) {
+    // Validar que si no es nuevo, exista el vehículo
+    if (selectedVehiculo !== 'NUEVO' && !vehiculo) {
       toast.error('No se encontró el vehículo seleccionado')
       return
     }
 
+    // Necesitamos clave_empresa de algún lado para "NUEVO"
+    let claveEmpresaFinal = selectedEmpresa
+    if (!claveEmpresaFinal) {
+      toast.error('Debes seleccionar una empresa primero (selecciona cualquier otro campo)')
+      return
+    }
+
     const result = await container.pesajeService.registrarEntrada({
-      placaVehiculo: vehiculo.placas,
-      numeroEconomico: vehiculo.no_economico,
-      claveEmpresa: vehiculo.clave_empresa,
+      placaVehiculo: vehiculo?.placas || 'NUEVO',
+      numeroEconomico: vehiculo?.no_economico || 'NUEVO',
+      claveEmpresa: vehiculo?.clave_empresa || claveEmpresaFinal,
       claveOperador: operador?.clave_operador || 0,
-      operador: operador?.operador || 'Sin operador',
+      operador: selectedOperador === 'NUEVO' ? 'Nuevo' : (operador?.operador || 'Sin operador'),
       claveRuta: ruta?.clave_ruta || 0,
-      ruta: ruta?.ruta || 'Sin ruta',
+      ruta: selectedRuta === 'NUEVO' ? 'Nuevo' : (ruta?.ruta || 'Sin ruta'),
       claveConcepto: concepto?.clave_concepto || 0,
       conceptoId: conceptoId,
       observaciones: observaciones || undefined
@@ -527,17 +563,23 @@ export function WeighingPanel() {
       }
       return
     }
+    
+    // Si es NUEVO, no hacer validaciones de empresa
+    if (value === 'NUEVO') {
+      return
+    }
+    
     const vehiculo = vehiculos.find(v => v.id === value)
     if (vehiculo) {
       const nuevaEmpresa = vehiculo.clave_empresa
       setSelectedEmpresa(nuevaEmpresa)
-      // Limpiar campos que no pertenecen a esta empresa
-      if (selectedOperador) {
+      // Limpiar campos que no pertenecen a esta empresa (excepto NUEVO)
+      if (selectedOperador && selectedOperador !== 'NUEVO') {
         const lastDashIndex = selectedOperador.lastIndexOf('-')
         const opEmp = selectedOperador.substring(lastDashIndex + 1)
         if (Number(opEmp) !== nuevaEmpresa) setSelectedOperador('')
       }
-      if (selectedRuta) {
+      if (selectedRuta && selectedRuta !== 'NUEVO') {
         const ruta = rutas.find(r => r.id === Number(selectedRuta))
         if (ruta && ruta.clave_empresa !== nuevaEmpresa) setSelectedRuta('')
       }
@@ -557,6 +599,12 @@ export function WeighingPanel() {
       }
       return
     }
+    
+    // Si es NUEVO, no hacer validaciones de empresa
+    if (value === 'NUEVO') {
+      return
+    }
+    
     // Separar correctamente el UUID de la empresa (el UUID contiene guiones)
     const lastDashIndex = value.lastIndexOf('-')
     const id = value.substring(0, lastDashIndex)
@@ -566,12 +614,12 @@ export function WeighingPanel() {
     if (operador) {
       const nuevaEmpresa = operador.clave_empresa
       setSelectedEmpresa(nuevaEmpresa)
-      // Limpiar campos que no pertenecen a esta empresa
-      if (selectedVehiculo) {
+      // Limpiar campos que no pertenecen a esta empresa (excepto NUEVO)
+      if (selectedVehiculo && selectedVehiculo !== 'NUEVO') {
         const vehiculo = vehiculos.find(v => v.id === selectedVehiculo)
         if (vehiculo && vehiculo.clave_empresa !== nuevaEmpresa) setSelectedVehiculo('')
       }
-      if (selectedRuta) {
+      if (selectedRuta && selectedRuta !== 'NUEVO') {
         const ruta = rutas.find(r => r.id === Number(selectedRuta))
         if (ruta && ruta.clave_empresa !== nuevaEmpresa) setSelectedRuta('')
       }
@@ -591,16 +639,22 @@ export function WeighingPanel() {
       }
       return
     }
+    
+    // Si es NUEVO, no hacer validaciones de empresa
+    if (value === 'NUEVO') {
+      return
+    }
+    
     const ruta = rutas.find(r => r.id === Number(value))
     if (ruta) {
       const nuevaEmpresa = ruta.clave_empresa
       setSelectedEmpresa(nuevaEmpresa)
-      // Limpiar campos que no pertenecen a esta empresa
-      if (selectedVehiculo) {
+      // Limpiar campos que no pertenecen a esta empresa (excepto NUEVO)
+      if (selectedVehiculo && selectedVehiculo !== 'NUEVO') {
         const vehiculo = vehiculos.find(v => v.id === selectedVehiculo)
         if (vehiculo && vehiculo.clave_empresa !== nuevaEmpresa) setSelectedVehiculo('')
       }
-      if (selectedOperador) {
+      if (selectedOperador && selectedOperador !== 'NUEVO') {
         const lastDashIndex = selectedOperador.lastIndexOf('-')
         const opEmp = selectedOperador.substring(lastDashIndex + 1)
         if (Number(opEmp) !== nuevaEmpresa) setSelectedOperador('')
@@ -630,17 +684,17 @@ export function WeighingPanel() {
     if (concepto) {
       const nuevaEmpresa = concepto.clave_empresa
       setSelectedEmpresa(nuevaEmpresa)
-      // Limpiar campos que no pertenecen a esta empresa
-      if (selectedVehiculo) {
+      // Limpiar campos que no pertenecen a esta empresa (excepto NUEVO)
+      if (selectedVehiculo && selectedVehiculo !== 'NUEVO') {
         const vehiculo = vehiculos.find(v => v.id === selectedVehiculo)
         if (vehiculo && vehiculo.clave_empresa !== nuevaEmpresa) setSelectedVehiculo('')
       }
-      if (selectedOperador) {
+      if (selectedOperador && selectedOperador !== 'NUEVO') {
         const lastDashIndex = selectedOperador.lastIndexOf('-')
         const opEmp = selectedOperador.substring(lastDashIndex + 1)
         if (Number(opEmp) !== nuevaEmpresa) setSelectedOperador('')
       }
-      if (selectedRuta) {
+      if (selectedRuta && selectedRuta !== 'NUEVO') {
         const ruta = rutas.find(r => r.id === Number(selectedRuta))
         if (ruta && ruta.clave_empresa !== nuevaEmpresa) setSelectedRuta('')
       }
