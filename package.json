@@ -1,15 +1,46 @@
 {
   "name": "gravio-electron",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
+  "description": "Sistema de Gestión de Relleno Sanitario",
+  "author": "Gravio",
+  "main": "dist-electron/main.js",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:electron": "npm run build && electron-builder",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "type-check": "tsc --noEmit"
+  },
+  "build": {
+    "appId": "com.gravio.sanitario",
+    "productName": "Gravio",
+    "directories": {
+      "output": "dist-builder"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "public/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
   },
   "dependencies": {
+    "@radix-ui/react-slot": "^1.2.4",
+    "@serialport/parser-readline": "^13.0.0",
     "@supabase/supabase-js": "^2.86.0",
     "@tailwindcss/vite": "^4.1.17",
     "@tanstack/react-query": "^5.90.11",

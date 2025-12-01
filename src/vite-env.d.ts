@@ -1,0 +1,54 @@
+/// <reference types="vite/client" />
+
+// Electron API types
+export type ElectronAPI = {
+  getVersion: () => Promise<string>
+  getPlatform: () => Promise<string>
+  serialPort: {
+    list: () => Promise<Array<{ path: string; manufacturer?: string }>>
+    open: (port: string, baudRate: number) => Promise<boolean>
+    close: () => Promise<void>
+    read: () => Promise<string>
+    onData: (callback: (data: string) => void) => void
+  }
+  printer: {
+    list: () => Promise<Array<{ name: string; displayName: string }>>
+    print: (data: any) => Promise<boolean>
+  }
+  db: {
+    query: (sql: string, params?: any[]) => Promise<any[]>
+    exec: (sql: string) => Promise<void>
+    transaction: (queries: Array<{ sql: string; params?: any[] }>) => Promise<void>
+  }
+  sync: {
+    start: () => Promise<void>
+    stop: () => Promise<void>
+    getStatus: () => Promise<any>
+    onStatusChange: (callback: (status: any) => void) => void
+  }
+  storage: {
+    get: (key: string) => Promise<any>
+    set: (key: string, value: any) => Promise<void>
+    delete: (key: string) => Promise<void>
+    clear: () => Promise<void>
+  }
+}
+
+declare global {
+  interface Window {
+    electron: ElectronAPI
+  }
+}
+
+// Supabase Environment Variables
+interface ImportMetaEnv {
+  readonly VITE_SUPABASE_URL: string
+  readonly VITE_SUPABASE_ANON_KEY: string
+  readonly VITE_COM_PORT?: string
+  readonly VITE_COM_BAUDRATE?: string
+  readonly VITE_PRINTER_MODEL?: string
+}
+
+interface ImportMeta {
+  readonly env: ImportMetaEnv
+}
