@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
-import { Printer, Scale, RefreshCw, Save, X } from 'lucide-react'
+import { Printer, Scale, RefreshCw, Save, X, Download, CheckCircle } from 'lucide-react'
 import { container } from '@/application/DIContainer'
 
 type SerialPort = {
@@ -47,12 +47,36 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
   const [loading, setLoading] = useState(false)
   const [saved, setSaved] = useState(false)
   const [manualPortEntry, setManualPortEntry] = useState(false)
+  
+  // Estado de actualización
+  const [updateAvailable, setUpdateAvailable] = useState(false)
+  const [updateDownloaded, setUpdateDownloaded] = useState(false)
+  const [updateInfo, setUpdateInfo] = useState<any>(null)
+  const [checkingUpdate, setCheckingUpdate] = useState(false)
 
   // Cargar configuración guardada
   useEffect(() => {
     loadSettings()
     refreshPorts()
     refreshPrinters()
+    
+    // Suscribirse a eventos de actualización
+    if (window.electron) {
+      const unsubAvailable = window.electron.updater.onUpdateAvailable((info) => {
+        setUpdateAvailable(true)
+        setUpdateInfo(info)
+      })
+      
+      const unsubDownloaded = window.electron.updater.onUpdateDownloaded((info) => {
+        setUpdateDownloaded(true)
+        setUpdateInfo(info)
+      })
+      
+      return () => {
+        unsubAvailable()
+        unsubDownloaded()
+      }
+    }
   }, [])
 
   const loadSettings = async () => {
@@ -216,6 +240,35 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
       toast.error('Error al probar impresión')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const checkForUpdates = async () => {
+    if (!window.electron) return
+    
+    setCheckingUpdate(true)
+    try {
+      await window.electron.updater.check()
+      // Si no hay actualización, lo sabremos por los eventos
+      setTimeout(() => {
+        if (!updateAvailable && !updateDownloaded) {
+          toast.success('✅ La aplicación está actualizada')
+        }
+        setCheckingUpdate(false)
+      }, 2000)
+    } catch (error) {
+      toast.error('Error al buscar actualizaciones')
+      setCheckingUpdate(false)
+    }
+  }
+
+  const installUpdate = async () => {
+    if (!window.electron) return
+    
+    try {
+      await window.electron.updater.installAndRestart()
+    } catch (error) {
+      toast.error('Error al instalar actualización')
     }
   }
 
@@ -423,6 +476,63 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
             >
               Probar Conexión
             </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Actualizaciones */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2 text-lg font-medium">
+          <div className="p-2 bg-primary/10 rounded-md text-primary">
+            <Download className="w-5 h-5" />
+          </div>
+          <h3>Actualizaciones</h3>
+        </div>
+
+        <div className="space-y-4 pl-2">
+          <div className="flex items-center justify-between p-4 bg-secondary/30 rounded-lg">
+            <div className="flex items-center gap-3">
+              <div className={`p-2 rounded-md ${updateDownloaded ? 'bg-success/10 text-success' : 'bg-primary/10 text-primary'}`}>
+                {updateDownloaded ? <CheckCircle className="w-4 h-4" /> : <Download className="w-4 h-4" />}
+              </div>
+              <div>
+                <p className="font-medium">
+                  {updateDownloaded ? 'Actualización lista' : updateAvailable ? 'Descargando...' : 'Versión actual'}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {updateInfo ? `v${updateInfo.version}` : `v${import.meta.env.VITE_APP_VERSION || '1.0.0'}`}
+                </p>
+              </div>
+            </div>
+            
+            {updateDownloaded ? (
+              <Button 
+                onClick={installUpdate}
+                className="bg-success hover:bg-success/90 text-white"
+              >
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Instalar
+              </Button>
+            ) : (
+              <Button 
+                onClick={checkForUpdates}
+                disabled={checkingUpdate || updateAvailable}
+                variant="outline"
+                className="border-primary/50 text-primary hover:bg-primary/10"
+              >
+                <RefreshCw className={`w-4 h-4 mr-2 ${checkingUpdate ? 'animate-spin' : ''}`} />
+                {checkingUpdate ? 'Buscando...' : updateAvailable ? 'Descargando...' : 'Buscar'}
+              </Button>
+            )}
+          </div>
+
+          {updateInfo?.releaseNotes && (
+            <div className="bg-muted/30 rounded-lg p-3">
+              <h4 className="font-semibold text-sm mb-2">Novedades:</h4>
+              <p className="text-xs text-muted-foreground whitespace-pre-wrap">
+                {updateInfo.releaseNotes}
+              </p>
+            </div>
           )}
         </div>
       </div>

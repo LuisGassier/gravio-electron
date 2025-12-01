@@ -136,26 +136,68 @@ export async function downloadRegistros() {
     
     let updated = 0
     let skipped = 0
-    
+
     for (const reg of registros) {
       try {
-        // 🛡️ PROTECCIÓN: Verificar si el registro local tiene MÁS datos que Supabase
+        // 🛡️ PROTECCIÓN: Verificar registro local completo
         const localResult = await window.electron.db.get(
-          'SELECT peso_salida, fecha_salida FROM registros WHERE id = ?',
+          `SELECT * FROM registros WHERE id = ?`,
           [reg.id]
         )
-        
-        // Si el registro local tiene salida completa y Supabase NO, NO sobrescribir
-        if (localResult && localResult.peso_salida && localResult.fecha_salida) {
-          if (!reg.peso_salida || !reg.fecha_salida) {
-            console.log(`🛡️ PROTEGIDO: Registro local tiene salida completa, Supabase incompleto - ${reg.placa_vehiculo}`)
+
+        if (localResult) {
+          // Contar campos críticos llenos en cada versión
+          const localFilledFields = [
+            localResult.peso_entrada,
+            localResult.peso_salida,
+            localResult.fecha_entrada,
+            localResult.fecha_salida,
+            localResult.placa_vehiculo,
+            localResult.operador,
+            localResult.ruta
+          ].filter(field => field !== null && field !== undefined && field !== '').length
+
+          const remoteFilledFields = [
+            reg.peso_entrada,
+            reg.peso_salida,
+            reg.fecha_entrada,
+            reg.fecha_salida,
+            reg.placa_vehiculo,
+            reg.operador,
+            reg.ruta
+          ].filter(field => field !== null && field !== undefined && field !== '').length
+
+          // ✅ REGLA 1: Si local tiene MÁS campos llenos, proteger
+          if (localFilledFields > remoteFilledFields) {
+            console.log(`🛡️ PROTEGIDO: Registro local más completo (${localFilledFields} campos) que Supabase (${remoteFilledFields} campos) - ${reg.placa_vehiculo}`)
             skipped++
             continue
           }
+
+          // ✅ REGLA 2: Si tienen la misma cantidad de campos, verificar updated_at
+          if (localFilledFields === remoteFilledFields) {
+            const localUpdatedAt = new Date(localResult.updated_at).getTime()
+            const remoteUpdatedAt = new Date(reg.updated_at).getTime()
+
+            if (localUpdatedAt > remoteUpdatedAt) {
+              console.log(`🛡️ PROTEGIDO: Registro local más reciente (${new Date(localUpdatedAt).toISOString()}) - ${reg.placa_vehiculo}`)
+              skipped++
+              continue
+            }
+
+            // Si son iguales en fecha pero local tiene cambios sin sincronizar, proteger
+            if (localUpdatedAt === remoteUpdatedAt && localResult.sincronizado === 0) {
+              console.log(`🛡️ PROTEGIDO: Registro local con cambios pendientes de sincronizar - ${reg.placa_vehiculo}`)
+              skipped++
+              continue
+            }
+          }
+
+          // ✅ REGLA 3: Si Supabase tiene MÁS campos llenos, actualizar
+          console.log(`📥 Actualizando: Supabase más completo (${remoteFilledFields} campos) vs local (${localFilledFields} campos) - ${reg.placa_vehiculo}`)
         }
-        
-        // ✅ REGLA: Solo actualizar si Supabase tiene datos IGUALES o SUPERIORES
-        // Usar INSERT OR REPLACE para sobrescribir con datos de Supabase
+
+        // ✅ Actualizar con datos de Supabase (es más completo, más reciente, o no existe local)
         await window.electron.db.run(
           `INSERT OR REPLACE INTO registros (
             id, folio, clave_ruta, ruta, placa_vehiculo, numero_economico,

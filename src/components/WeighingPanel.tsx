@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Scale, AlertCircle, Truck, Route, FileText, X } from 'lucide-react'
@@ -52,6 +52,7 @@ export function WeighingPanel() {
   const [isScaleConnected, setIsScaleConnected] = useState(false)
   const [isSalidaMode, setIsSalidaMode] = useState(false)
   const [currentRegistro, setCurrentRegistro] = useState<Registro | null>(null)
+  const prevSelectedRegistroRef = useRef<Registro | null>(null)
 
   const [vehiculos, setVehiculos] = useState<Vehiculo[]>([])
   const [operadores, setOperadores] = useState<Operador[]>([])
@@ -104,12 +105,15 @@ export function WeighingPanel() {
 
   // Manejar selección de registro para salida
   useEffect(() => {
+    // Detectar si cambió de un registro a null (deselección intencional)
+    const wasSelected = prevSelectedRegistroRef.current !== null
+    const isNowNull = selectedRegistro === null
+    
     if (selectedRegistro) {
       setIsSalidaMode(true)
       setCurrentRegistro(selectedRegistro)
       
       // Prellenar TODOS los datos del registro
-      console.log('📋 Prellenando datos:', selectedRegistro)
       
       // Primero establecer la empresa (necesario para filtros)
       setSelectedEmpresa(selectedRegistro.claveEmpresa)
@@ -137,12 +141,6 @@ export function WeighingPanel() {
         c.clave_concepto === selectedRegistro.claveConcepto &&
         c.clave_empresa === selectedRegistro.claveEmpresa
       )
-      console.log('🔍 Buscando concepto:', {
-        claveConcepto: selectedRegistro.claveConcepto,
-        claveEmpresa: selectedRegistro.claveEmpresa,
-        encontrado: concepto,
-        todosConceptos: conceptos
-      })
       if (concepto) {
         setSelectedConcepto(`${concepto.id}-${concepto.clave_empresa}`)
       }
@@ -152,13 +150,15 @@ export function WeighingPanel() {
       toast.success(`Vehículo seleccionado para salida`, {
         description: `${selectedRegistro.placaVehiculo} - Peso entrada: ${selectedRegistro.pesoEntrada?.toFixed(2)} kg`
       })
-    } else {
-      // Si se deseleccionó (selectedRegistro es null), limpiar formulario y salir de modo salida
-
+    } else if (wasSelected && isNowNull) {
+      // Solo limpiar si realmente se deseleccionó (cambió de algo a null)
       setIsSalidaMode(false)
       setCurrentRegistro(null)
       limpiarFormulario()
     }
+    
+    // Actualizar referencia
+    prevSelectedRegistroRef.current = selectedRegistro
   }, [selectedRegistro, vehiculos, operadores, rutas, conceptos])
 
   const cancelarSalida = () => {
@@ -628,18 +628,11 @@ export function WeighingPanel() {
     const vehiculo = vehiculos.find(v => v.id === value)
     if (vehiculo) {
       const nuevaEmpresa = vehiculo.clave_empresa
-      setSelectedEmpresa(nuevaEmpresa)
-      // Limpiar campos que no pertenecen a esta empresa (excepto NUEVO y OPERADORES)
-      // Operadores ya NO se limpian - pueden ser de cualquier empresa
-      if (selectedRuta && selectedRuta !== 'NUEVO') {
-        const ruta = rutas.find(r => r.id === Number(selectedRuta))
-        if (ruta && ruta.clave_empresa !== nuevaEmpresa) setSelectedRuta('')
+      // Solo establecer la empresa si aún no está seleccionada
+      if (!selectedEmpresa) {
+        setSelectedEmpresa(nuevaEmpresa)
       }
-      if (selectedConcepto) {
-        const lastDashIndex = selectedConcepto.lastIndexOf('-')
-        const concEmp = selectedConcepto.substring(lastDashIndex + 1)
-        if (Number(concEmp) !== nuevaEmpresa) setSelectedConcepto('')
-      }
+      // NO limpiar otros campos - dejar que el usuario los maneje
     }
   }
 
@@ -676,18 +669,11 @@ export function WeighingPanel() {
     const ruta = rutas.find(r => r.id === Number(value))
     if (ruta) {
       const nuevaEmpresa = ruta.clave_empresa
-      setSelectedEmpresa(nuevaEmpresa)
-      // Limpiar campos que no pertenecen a esta empresa (excepto NUEVO y OPERADORES)
-      if (selectedVehiculo && selectedVehiculo !== 'NUEVO') {
-        const vehiculo = vehiculos.find(v => v.id === selectedVehiculo)
-        if (vehiculo && vehiculo.clave_empresa !== nuevaEmpresa) setSelectedVehiculo('')
+      // Solo establecer la empresa si aún no está seleccionada
+      if (!selectedEmpresa) {
+        setSelectedEmpresa(nuevaEmpresa)
       }
-      // Operadores ya NO se limpian - pueden ser de cualquier empresa
-      if (selectedConcepto) {
-        const lastDashIndex = selectedConcepto.lastIndexOf('-')
-        const concEmp = selectedConcepto.substring(lastDashIndex + 1)
-        if (Number(concEmp) !== nuevaEmpresa) setSelectedConcepto('')
-      }
+      // NO limpiar otros campos - dejar que el usuario los maneje
     }
   }
 
@@ -707,17 +693,11 @@ export function WeighingPanel() {
     const concepto = conceptos.find(c => c.id === id && c.clave_empresa === Number(empresa))
     if (concepto) {
       const nuevaEmpresa = Number(empresa)
-      setSelectedEmpresa(nuevaEmpresa)
-      // Limpiar campos que no pertenecen a esta empresa (excepto NUEVO y OPERADORES)
-      if (selectedVehiculo && selectedVehiculo !== 'NUEVO') {
-        const vehiculo = vehiculos.find(v => v.id === selectedVehiculo)
-        if (vehiculo && vehiculo.clave_empresa !== nuevaEmpresa) setSelectedVehiculo('')
+      // Solo establecer la empresa si aún no está seleccionada
+      if (!selectedEmpresa) {
+        setSelectedEmpresa(nuevaEmpresa)
       }
-      // Operadores ya NO se limpian - pueden ser de cualquier empresa
-      if (selectedRuta && selectedRuta !== 'NUEVO') {
-        const ruta = rutas.find(r => r.id === Number(selectedRuta))
-        if (ruta && ruta.clave_empresa !== nuevaEmpresa) setSelectedRuta('')
-      }
+      // NO limpiar otros campos - dejar que el usuario los maneje
     }
   }
 

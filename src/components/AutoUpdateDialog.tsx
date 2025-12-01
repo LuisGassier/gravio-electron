@@ -28,8 +28,11 @@ export function AutoUpdateDialog() {
         releaseNotes: info.releaseNotes,
         releaseDate: info.releaseDate,
       })
-      setIsOpen(true)
-      toast.info(`Nueva versión ${info.version} disponible`)
+      setIsDownloading(true) // Marcar como descargando (se hace automáticamente)
+      // NO abrimos el diálogo aquí, solo notificamos silenciosamente
+      toast.info(`📥 Descargando actualización ${info.version} en segundo plano...`, {
+        duration: 3000
+      })
     })
 
     // Escuchar progreso de descarga
@@ -42,7 +45,11 @@ export function AutoUpdateDialog() {
       console.log('✅ Actualización descargada:', info)
       setIsDownloading(false)
       setIsDownloaded(true)
-      toast.success('Actualización descargada. Reinicia para instalar.')
+      setDownloadProgress(100)
+      // Notificar que está lista para instalar
+      toast.success('✅ Actualización lista. Ve a Configuración para instalar.', {
+        duration: 5000
+      })
     })
 
     return () => {

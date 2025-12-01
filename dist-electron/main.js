@@ -31671,13 +31671,14 @@ function createWindow() {
     mainWindow = null;
   });
 }
-mainExports.autoUpdater.autoDownload = false;
+mainExports.autoUpdater.autoDownload = true;
 mainExports.autoUpdater.autoInstallOnAppQuit = true;
 mainExports.autoUpdater.on("checking-for-update", () => {
   console.log("🔍 Verificando actualizaciones...");
 });
 mainExports.autoUpdater.on("update-available", (info) => {
   console.log("✅ Actualización disponible:", info.version);
+  console.log("📥 Descargando actualización en segundo plano...");
   if (mainWindow) {
     mainWindow.webContents.send("update-available", info);
   }

@@ -87,7 +87,7 @@ function createWindow() {
 }
 
 // Configuración del auto-updater
-autoUpdater.autoDownload = false // No descargar automáticamente
+autoUpdater.autoDownload = true // ✅ DESCARGAR AUTOMÁTICAMENTE EN SEGUNDO PLANO
 autoUpdater.autoInstallOnAppQuit = true
 
 // Eventos del auto-updater
@@ -97,9 +97,11 @@ autoUpdater.on('checking-for-update', () => {
 
 autoUpdater.on('update-available', (info) => {
   console.log('✅ Actualización disponible:', info.version)
+  console.log('📥 Descargando actualización en segundo plano...')
   if (mainWindow) {
     mainWindow.webContents.send('update-available', info)
   }
+  // La descarga inicia automáticamente por autoDownload = true
 })
 
 autoUpdater.on('update-not-available', () => {
