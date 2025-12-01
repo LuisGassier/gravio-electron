@@ -780,6 +780,8 @@ export function WeighingPanel() {
                 searchPlaceholder="Buscar..."
                 emptyText="No se encontraron conceptos"
                 icon={<FileText className="w-4 h-4" />}
+                showCount={true}
+                countLabel="Concepto"
                 disabled={isSalidaMode}
               />
             </div>
@@ -795,6 +797,8 @@ export function WeighingPanel() {
                 searchPlaceholder="Buscar..."
                 emptyText="No se encontraron operadores"
                 icon={<User className="w-4 h-4" />}
+                showCount={true}
+                countLabel="Operador"
                 disabled={isSalidaMode}
               />
             </div>
@@ -813,6 +817,8 @@ export function WeighingPanel() {
                 searchPlaceholder="Buscar..."
                 emptyText="No se encontraron rutas"
                 icon={<Route className="w-4 h-4" />}
+                showCount={true}
+                countLabel="Ruta"
                 disabled={isSalidaMode}
               />
             </div>
@@ -829,6 +835,7 @@ export function WeighingPanel() {
                 emptyText="No se encontraron vehículos"
                 icon={<Truck className="w-4 h-4" />}
                 showCount={true}
+                countLabel="Vehículo"
                 disabled={isSalidaMode}
               />
             </div>

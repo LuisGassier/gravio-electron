@@ -21,6 +21,7 @@ interface ComboboxProps {
   icon?: React.ReactNode
   className?: string
   showCount?: boolean
+  countLabel?: string
   disabled?: boolean
 }
 
@@ -59,6 +60,7 @@ export function Combobox({
   icon,
   className,
   showCount = false,
+  countLabel = "Resultados",
   disabled = false,
 }: ComboboxProps) {
   const [isOpen, setIsOpen] = React.useState(false)
@@ -221,9 +223,9 @@ export function Combobox({
           className="absolute z-50 w-full mt-2 bg-popover border border-primary/20 rounded-lg shadow-2xl max-h-[320px] overflow-hidden animate-in fade-in-0 zoom-in-95"
         >
           {/* Count Header */}
-          {showCount && filteredOptions.length > 0 && (
+          {showCount && (
             <div className="px-4 py-2.5 text-xs font-medium text-primary border-b border-border bg-primary/5">
-              Vehículo ({filteredOptions.length})
+              {countLabel} ({filteredOptions.length})
             </div>
           )}
 
