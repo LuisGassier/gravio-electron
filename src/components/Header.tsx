@@ -261,7 +261,10 @@ export function Header({
                 <Building2 className="mr-2 h-4 w-4" />
                 <span>Configuración de Empresa</span>
               </DropdownMenuItem>
-              <DropdownMenuItem className="cursor-pointer">
+              <DropdownMenuItem 
+                className="cursor-pointer"
+                onSelect={() => onNavigate?.('historial')}
+              >
                 <History className="mr-2 h-4 w-4" />
                 <span>Historial de Registros</span>
               </DropdownMenuItem>

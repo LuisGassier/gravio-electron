@@ -5,9 +5,10 @@ import { LoginPanel } from './components/LoginPanel'
 import { Header } from './components/Header'
 import { SplashScreen } from './components/SplashScreen'
 import { CompanyConfigPanel } from './components/CompanyConfigPanel'
+import { HistorialPage } from './components/HistorialPage'
 import { initSync, getSyncStatus, onSyncStatusChange } from './lib/sync'
 
-type View = 'dashboard' | 'login' | 'company-config'
+type View = 'dashboard' | 'login' | 'company-config' | 'historial'
 
 function App() {
   const [currentView, setCurrentView] = useState<View>('dashboard')
@@ -152,6 +153,9 @@ function App() {
               }}
             />
           </div>
+        )}
+        {currentView === 'historial' && isAuthenticated && (
+          <HistorialPage />
         )}
       </div>
     </div>

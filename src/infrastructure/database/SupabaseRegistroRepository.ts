@@ -221,6 +221,35 @@ export class SupabaseRegistroRepository implements IRegistroRepository {
   }
 
   /**
+   * Obtiene todos los registros
+   */
+  async findAll(): Promise<Result<Registro[]>> {
+    try {
+      const { data, error } = await supabase
+        .from('registros')
+        .select('*')
+        .order('fecha_registro', { ascending: false });
+
+      if (error) {
+        return ResultFactory.fail(new Error(`Error al buscar registros: ${error.message}`));
+      }
+
+      const registros: Registro[] = [];
+
+      for (const row of data || []) {
+        const registroResult = await this.mapRowToRegistro(row);
+        if (registroResult.success && registroResult.value) {
+          registros.push(registroResult.value);
+        }
+      }
+
+      return ResultFactory.ok(registros);
+    } catch (error) {
+      return ResultFactory.fromError(error);
+    }
+  }
+
+  /**
    * No usado para Supabase - todos los registros están sincronizados
    */
   async findUnsynchronized(): Promise<Result<Registro[]>> {

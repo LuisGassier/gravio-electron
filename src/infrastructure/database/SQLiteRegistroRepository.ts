@@ -234,6 +234,33 @@ export class SQLiteRegistroRepository implements IRegistroRepository {
   }
 
   /**
+   * Obtiene todos los registros (completados y pendientes)
+   */
+  async findAll(): Promise<Result<Registro[]>> {
+    try {
+      const query = `
+        SELECT * FROM registros 
+        ORDER BY fecha_registro DESC
+      `;
+
+      const rows = await window.electron.db.all(query);
+
+      const registros: Registro[] = [];
+
+      for (const row of rows) {
+        const registroResult = await this.mapRowToRegistro(row);
+        if (registroResult.success && registroResult.value) {
+          registros.push(registroResult.value);
+        }
+      }
+
+      return ResultFactory.ok(registros);
+    } catch (error) {
+      return ResultFactory.fromError(error);
+    }
+  }
+
+  /**
    * Obtiene todos los registros no sincronizados
    */
   async findUnsynchronized(): Promise<Result<Registro[]>> {

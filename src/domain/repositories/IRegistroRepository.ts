@@ -42,6 +42,11 @@ export interface IRegistroRepository {
   findAllPending(): Promise<Result<Registro[]>>;
 
   /**
+   * Obtiene todos los registros (completados y pendientes)
+   */
+  findAll(): Promise<Result<Registro[]>>;
+
+  /**
    * Obtiene todos los registros no sincronizados
    */
   findUnsynchronized(): Promise<Result<Registro[]>>;

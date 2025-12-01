@@ -803,11 +803,11 @@ export function WeighingPanel() {
               <div className="status-indicator status-indicator-active" style={{ animationDelay: '0.2s' }}></div>
               <div className="status-indicator status-indicator-active" style={{ animationDelay: '0.4s' }}></div>
             </div>
-            <div className="relative">
+            <div className="relative flex items-baseline justify-center">
               <div className="text-7xl font-bold text-foreground mb-2 tracking-tight font-mono">
                 {weight}
               </div>
-              <div className="absolute -right-12 top-1/2 -translate-y-1/2 text-3xl font-bold text-muted-foreground/40">
+              <div className="ml-3 text-3xl font-bold text-muted-foreground/60">
                 kg
               </div>
             </div>
