@@ -280,9 +280,8 @@ export function WeighingPanel() {
     ? vehiculos.filter(v => v.clave_empresa === selectedEmpresa)
     : vehiculos
 
-  const filteredOperadores = selectedEmpresa
-    ? operadores.filter(o => o.clave_empresa === selectedEmpresa)
-    : operadores
+  // ⚠️ Operadores SIN filtrar - siempre mostrar lista completa
+  const filteredOperadores = operadores
 
   const filteredRutas = selectedEmpresa
     ? rutas.filter(r => r.clave_empresa === selectedEmpresa)
@@ -617,12 +616,8 @@ export function WeighingPanel() {
     if (vehiculo) {
       const nuevaEmpresa = vehiculo.clave_empresa
       setSelectedEmpresa(nuevaEmpresa)
-      // Limpiar campos que no pertenecen a esta empresa (excepto NUEVO)
-      if (selectedOperador && selectedOperador !== 'NUEVO') {
-        const lastDashIndex = selectedOperador.lastIndexOf('-')
-        const opEmp = selectedOperador.substring(lastDashIndex + 1)
-        if (Number(opEmp) !== nuevaEmpresa) setSelectedOperador('')
-      }
+      // Limpiar campos que no pertenecen a esta empresa (excepto NUEVO y OPERADORES)
+      // Operadores ya NO se limpian - pueden ser de cualquier empresa
       if (selectedRuta && selectedRuta !== 'NUEVO') {
         const ruta = rutas.find(r => r.id === Number(selectedRuta))
         if (ruta && ruta.clave_empresa !== nuevaEmpresa) setSelectedRuta('')
@@ -638,41 +633,17 @@ export function WeighingPanel() {
   const handleOperadorChange = (value: string) => {
     setSelectedOperador(value)
     if (!value) {
-      if (!selectedVehiculo && !selectedRuta && !selectedConcepto) {
-        setSelectedEmpresa(null)
-      }
+      // Si se limpia operador, no afectar empresa seleccionada
       return
     }
     
-    // Si es NUEVO, no hacer validaciones de empresa
+    // Si es NUEVO, no hacer nada más
     if (value === 'NUEVO') {
       return
     }
     
-    // Separar correctamente el UUID de la empresa (el UUID contiene guiones)
-    const lastDashIndex = value.lastIndexOf('-')
-    const id = value.substring(0, lastDashIndex)
-    const empresa = value.substring(lastDashIndex + 1)
-
-    const operador = operadores.find(o => o.id === id && o.clave_empresa === Number(empresa))
-    if (operador) {
-      const nuevaEmpresa = operador.clave_empresa
-      setSelectedEmpresa(nuevaEmpresa)
-      // Limpiar campos que no pertenecen a esta empresa (excepto NUEVO)
-      if (selectedVehiculo && selectedVehiculo !== 'NUEVO') {
-        const vehiculo = vehiculos.find(v => v.id === selectedVehiculo)
-        if (vehiculo && vehiculo.clave_empresa !== nuevaEmpresa) setSelectedVehiculo('')
-      }
-      if (selectedRuta && selectedRuta !== 'NUEVO') {
-        const ruta = rutas.find(r => r.id === Number(selectedRuta))
-        if (ruta && ruta.clave_empresa !== nuevaEmpresa) setSelectedRuta('')
-      }
-      if (selectedConcepto) {
-        const lastDashIndex = selectedConcepto.lastIndexOf('-')
-        const concEmp = selectedConcepto.substring(lastDashIndex + 1)
-        if (Number(concEmp) !== nuevaEmpresa) setSelectedConcepto('')
-      }
-    }
+    // Operador seleccionado - NO afecta filtros de otros campos
+    // Los operadores son independientes de la empresa
   }
 
   const handleRutaChange = (value: string) => {
@@ -693,16 +664,12 @@ export function WeighingPanel() {
     if (ruta) {
       const nuevaEmpresa = ruta.clave_empresa
       setSelectedEmpresa(nuevaEmpresa)
-      // Limpiar campos que no pertenecen a esta empresa (excepto NUEVO)
+      // Limpiar campos que no pertenecen a esta empresa (excepto NUEVO y OPERADORES)
       if (selectedVehiculo && selectedVehiculo !== 'NUEVO') {
         const vehiculo = vehiculos.find(v => v.id === selectedVehiculo)
         if (vehiculo && vehiculo.clave_empresa !== nuevaEmpresa) setSelectedVehiculo('')
       }
-      if (selectedOperador && selectedOperador !== 'NUEVO') {
-        const lastDashIndex = selectedOperador.lastIndexOf('-')
-        const opEmp = selectedOperador.substring(lastDashIndex + 1)
-        if (Number(opEmp) !== nuevaEmpresa) setSelectedOperador('')
-      }
+      // Operadores ya NO se limpian - pueden ser de cualquier empresa
       if (selectedConcepto) {
         const lastDashIndex = selectedConcepto.lastIndexOf('-')
         const concEmp = selectedConcepto.substring(lastDashIndex + 1)
@@ -726,18 +693,14 @@ export function WeighingPanel() {
 
     const concepto = conceptos.find(c => c.id === id && c.clave_empresa === Number(empresa))
     if (concepto) {
-      const nuevaEmpresa = concepto.clave_empresa
+      const nuevaEmpresa = Number(empresa)
       setSelectedEmpresa(nuevaEmpresa)
-      // Limpiar campos que no pertenecen a esta empresa (excepto NUEVO)
+      // Limpiar campos que no pertenecen a esta empresa (excepto NUEVO y OPERADORES)
       if (selectedVehiculo && selectedVehiculo !== 'NUEVO') {
         const vehiculo = vehiculos.find(v => v.id === selectedVehiculo)
         if (vehiculo && vehiculo.clave_empresa !== nuevaEmpresa) setSelectedVehiculo('')
       }
-      if (selectedOperador && selectedOperador !== 'NUEVO') {
-        const lastDashIndex = selectedOperador.lastIndexOf('-')
-        const opEmp = selectedOperador.substring(lastDashIndex + 1)
-        if (Number(opEmp) !== nuevaEmpresa) setSelectedOperador('')
-      }
+      // Operadores ya NO se limpian - pueden ser de cualquier empresa
       if (selectedRuta && selectedRuta !== 'NUEVO') {
         const ruta = rutas.find(r => r.id === Number(selectedRuta))
         if (ruta && ruta.clave_empresa !== nuevaEmpresa) setSelectedRuta('')
