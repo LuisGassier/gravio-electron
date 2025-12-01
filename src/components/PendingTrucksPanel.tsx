@@ -157,6 +157,13 @@ export function PendingTrucksPanel() {
           <div className="space-y-2.5 max-h-[calc(100vh-280px)] overflow-y-auto pr-2 scrollbar-thin">
             {pendingTrucks.map((truck) => {
               const isSelected = selectedRegistro?.id === truck.id
+              console.log('🔍 Comparando selección:', {
+                selectedId: selectedRegistro?.id,
+                truckId: truck.id,
+                isSelected,
+                selectedType: typeof selectedRegistro?.id,
+                truckType: typeof truck.id
+              })
               return (
               <Card
                 key={truck.id}
