@@ -27,6 +27,15 @@ interface ComboboxProps {
   customValueLabel?: string
 }
 
+// Function to normalize text (remove accents and convert to lowercase)
+const normalizeText = (text: string) => {
+  return text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+}
+
 // Function to generate avatar color based on text
 const getAvatarColor = (text: string) => {
   const colors = [
@@ -79,12 +88,16 @@ export function Combobox({
   // Si el valor no existe en las opciones y allowCustomValue está activo, es un valor personalizado
   const isCustomValue = allowCustomValue && value && !selectedOption
 
-  // Filter options based on search
+  // Filter options based on search (sin acentos, mayúsculas/minúsculas)
   const filteredOptions = React.useMemo(() => {
     if (!searchValue) return options
-    return options.filter((option) =>
-      option.label.toLowerCase().includes(searchValue.toLowerCase())
-    )
+    const normalizedSearch = normalizeText(searchValue)
+    return options.filter((option) => {
+      const normalizedLabel = normalizeText(option.label)
+      const normalizedSubtitle = option.subtitle ? normalizeText(option.subtitle) : ''
+      return normalizedLabel.includes(normalizedSearch) || 
+             normalizedSubtitle.includes(normalizedSearch)
+    })
   }, [options, searchValue])
 
   // Reset highlighted index when filtered options change

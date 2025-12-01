@@ -264,8 +264,8 @@ export function WeighingPanel() {
       .filter(v => v.clave_empresa && v.empresa) // Filtrar los que no tienen empresa
       .map(v => ({
         value: v.id,
-        label: `${v.no_economico} ${v.placas} (${v.prefijo || ''})`,
-        subtitle: v.empresa,
+        label: `${v.no_economico} - ${v.placas}`,
+        subtitle: `${v.empresa} (${v.prefijo || ''})`,
         clave_empresa: v.clave_empresa
       }))
   ]
@@ -281,8 +281,8 @@ export function WeighingPanel() {
       .filter(o => o.clave_empresa && o.empresa) // Filtrar los que no tienen empresa
       .map(o => ({
         value: `${o.id}-${o.clave_empresa}`,
-        label: `${o.clave_operador} ${o.operador}`,
-        subtitle: o.empresa,
+        label: `${o.operador}`,
+        subtitle: `${o.empresa} - Clave: ${o.clave_operador}`,
         clave_empresa: o.clave_empresa
       }))
   ]
@@ -298,8 +298,8 @@ export function WeighingPanel() {
       .filter(r => r.clave_empresa && r.empresa) // Filtrar los que no tienen empresa
       .map(r => ({
         value: String(r.id),
-        label: `${r.clave_ruta} ${r.ruta}`,
-        subtitle: r.empresa,
+        label: `${r.ruta}`,
+        subtitle: `${r.empresa} - Clave: ${r.clave_ruta}`,
         clave_empresa: r.clave_empresa
       }))
   ]
@@ -308,8 +308,8 @@ export function WeighingPanel() {
     .filter(c => c.clave_empresa) // Solo verificar clave_empresa (empresa puede ser null temporalmente)
     .map(c => ({
       value: `${c.id}-${c.clave_empresa}`,
-      label: `${c.clave_concepto || ''} ${c.nombre}`.trim(),
-      subtitle: c.empresa || c.prefijo || '(Sin empresa)',
+      label: `${c.nombre}`,
+      subtitle: `${c.empresa || c.prefijo || '(Sin empresa)'} - Clave: ${c.clave_concepto || 'N/A'}`,
       clave_empresa: c.clave_empresa
     }))
 
