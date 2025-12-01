@@ -493,7 +493,7 @@ if (!IS_WINDOWS) {
 if (IS_LINUX) {
   Signals.push("SIGIO", "SIGPOLL", "SIGPWR", "SIGSTKFLT");
 }
-class Interceptor {
+let Interceptor$1 = class Interceptor {
   /* CONSTRUCTOR */
   constructor() {
     this.callbacks = /* @__PURE__ */ new Set();
@@ -530,9 +530,9 @@ class Interceptor {
     };
     this.hook();
   }
-}
-const Interceptor$1 = new Interceptor();
-const whenExit = Interceptor$1.register;
+};
+const Interceptor2 = new Interceptor$1();
+const whenExit = Interceptor2.register;
 const Temp = {
   /* VARIABLES */
   store: {},
@@ -16099,34 +16099,117 @@ async function initDatabase() {
 function createTables() {
   if (!db) return;
   db.exec(`
-    CREATE TABLE IF NOT EXISTS transactions (
+    CREATE TABLE IF NOT EXISTS roles (
       id TEXT PRIMARY KEY,
-      type TEXT NOT NULL,
-      weight REAL NOT NULL,
-      vehicle_plate TEXT,
-      driver_name TEXT,
-      waste_type TEXT,
-      timestamp INTEGER NOT NULL,
-      synced INTEGER DEFAULT 0,
+      nombre TEXT UNIQUE NOT NULL,
       created_at INTEGER DEFAULT (strftime('%s', 'now'))
     )
   `);
   db.exec(`
-    CREATE TABLE IF NOT EXISTS vehicles (
+    CREATE TABLE IF NOT EXISTS usuarios (
       id TEXT PRIMARY KEY,
-      plate TEXT UNIQUE NOT NULL,
-      type TEXT,
-      owner TEXT,
-      last_updated INTEGER
+      nombre TEXT NOT NULL,
+      email TEXT UNIQUE NOT NULL,
+      telefono TEXT,
+      rol_id TEXT,
+      activo INTEGER DEFAULT 1,
+      password TEXT,
+      password_hash TEXT,
+      pin TEXT,
+      pin_expires_at INTEGER,
+      created_at INTEGER DEFAULT (strftime('%s', 'now')),
+      FOREIGN KEY (rol_id) REFERENCES roles(id)
     )
   `);
   db.exec(`
-    CREATE TABLE IF NOT EXISTS users (
+    CREATE TABLE IF NOT EXISTS empresa (
       id TEXT PRIMARY KEY,
-      email TEXT UNIQUE NOT NULL,
-      full_name TEXT,
-      role TEXT,
-      last_updated INTEGER
+      empresa TEXT NOT NULL,
+      clave_empresa INTEGER UNIQUE,
+      prefijo TEXT NOT NULL
+    )
+  `);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS rutas (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ruta TEXT NOT NULL,
+      clave_ruta INTEGER UNIQUE,
+      clave_empresa INTEGER,
+      FOREIGN KEY (clave_empresa) REFERENCES empresa(clave_empresa)
+    )
+  `);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS operadores (
+      id TEXT PRIMARY KEY,
+      operador TEXT NOT NULL,
+      clave_operador INTEGER UNIQUE NOT NULL,
+      created_at INTEGER DEFAULT (strftime('%s', 'now'))
+    )
+  `);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS vehiculos (
+      id TEXT PRIMARY KEY,
+      no_economico TEXT NOT NULL,
+      placas TEXT NOT NULL,
+      clave_empresa INTEGER,
+      created_at INTEGER DEFAULT (strftime('%s', 'now')),
+      FOREIGN KEY (clave_empresa) REFERENCES empresa(clave_empresa)
+    )
+  `);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS conceptos (
+      id TEXT PRIMARY KEY,
+      nombre TEXT UNIQUE NOT NULL,
+      clave_concepto INTEGER,
+      activo INTEGER DEFAULT 1,
+      created_at INTEGER DEFAULT (strftime('%s', 'now')),
+      updated_at INTEGER DEFAULT (strftime('%s', 'now'))
+    )
+  `);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS registros (
+      id TEXT PRIMARY KEY,
+      clave_ruta INTEGER,
+      placa_vehiculo TEXT NOT NULL,
+      numero_economico TEXT,
+      clave_operador INTEGER,
+      operador TEXT,
+      ruta TEXT,
+      peso REAL,
+      peso_entrada REAL,
+      peso_salida REAL,
+      fecha_entrada INTEGER,
+      fecha_salida INTEGER,
+      fecha_registro INTEGER DEFAULT (strftime('%s', 'now')),
+      tipo_pesaje TEXT DEFAULT 'entrada',
+      folio TEXT,
+      clave_concepto INTEGER,
+      concepto_id TEXT,
+      clave_empresa INTEGER,
+      observaciones TEXT,
+      sincronizado INTEGER DEFAULT 0,
+      created_at INTEGER DEFAULT (strftime('%s', 'now')),
+      updated_at INTEGER DEFAULT (strftime('%s', 'now')),
+      FOREIGN KEY (clave_ruta) REFERENCES rutas(clave_ruta),
+      FOREIGN KEY (clave_operador) REFERENCES operadores(clave_operador)
+    )
+  `);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS operadores_empresas (
+      operador_id TEXT NOT NULL,
+      clave_empresa INTEGER NOT NULL,
+      PRIMARY KEY (operador_id, clave_empresa),
+      FOREIGN KEY (operador_id) REFERENCES operadores(id),
+      FOREIGN KEY (clave_empresa) REFERENCES empresa(clave_empresa)
+    )
+  `);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS conceptos_empresas (
+      concepto_id TEXT NOT NULL,
+      clave_empresa INTEGER NOT NULL,
+      PRIMARY KEY (concepto_id, clave_empresa),
+      FOREIGN KEY (concepto_id) REFERENCES conceptos(id),
+      FOREIGN KEY (clave_empresa) REFERENCES empresa(clave_empresa)
     )
   `);
   db.exec(`
@@ -16148,9 +16231,14 @@ function createTables() {
     )
   `);
   db.exec(`
-    CREATE INDEX IF NOT EXISTS idx_transactions_synced ON transactions(synced);
-    CREATE INDEX IF NOT EXISTS idx_transactions_timestamp ON transactions(timestamp);
+    CREATE INDEX IF NOT EXISTS idx_registros_sincronizado ON registros(sincronizado);
+    CREATE INDEX IF NOT EXISTS idx_registros_fecha ON registros(fecha_registro);
+    CREATE INDEX IF NOT EXISTS idx_registros_placa ON registros(placa_vehiculo);
     CREATE INDEX IF NOT EXISTS idx_sync_queue_table ON sync_queue(table_name);
+    CREATE INDEX IF NOT EXISTS idx_usuarios_email ON usuarios(email);
+    CREATE INDEX IF NOT EXISTS idx_vehiculos_placas ON vehiculos(placas);
+    CREATE INDEX IF NOT EXISTS idx_operadores_clave ON operadores(clave_operador);
+    CREATE INDEX IF NOT EXISTS idx_rutas_clave ON rutas(clave_ruta);
   `);
   console.log("✅ Tablas de base de datos creadas");
 }
