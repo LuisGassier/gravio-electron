@@ -11,36 +11,63 @@ type View = 'dashboard' | 'login' | 'company-config'
 
 function App() {
   const [currentView, setCurrentView] = useState<View>('dashboard')
-  const [, setIsAuthenticated] = useState(false)
-  const [userName, setUserName] = useState<string>('luis')
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [userName, setUserName] = useState<string>('')
   const [empresaName, setEmpresaName] = useState<string>('Organismo Operador de servicio...')
   const [showSplash, setShowSplash] = useState(true)
+  const [checkingSession, setCheckingSession] = useState(true)
 
   useEffect(() => {
-    // Inicializar sistema de sincronización
-    initSync().then(() => {
-      setIsAuthenticated(getSyncStatus().isAuthenticated)
-    })
-
-    // Escuchar cambios en el estado de autenticación
-    const unsubscribe = onSyncStatusChange((status) => {
-      setIsAuthenticated(status.isAuthenticated)
-    })
-
-    // Cargar información de usuario y empresa
-    loadUserInfo()
-
-    return () => unsubscribe()
+    // Verificar sesión guardada y cargar información
+    checkSession()
   }, [])
+
+  const checkSession = async () => {
+    try {
+      // Inicializar sistema de sincronización (intenta restaurar sesión)
+      await initSync()
+      const syncStatus = getSyncStatus()
+      
+      setIsAuthenticated(syncStatus.isAuthenticated)
+      
+      // Si no hay sesión, ir a login
+      if (!syncStatus.isAuthenticated) {
+        setCurrentView('login')
+      }
+
+      // Escuchar cambios en el estado de autenticación
+      const unsubscribe = onSyncStatusChange((status) => {
+        setIsAuthenticated(status.isAuthenticated)
+        
+        // Si pierde la autenticación, ir a login
+        if (!status.isAuthenticated && currentView !== 'login') {
+          setCurrentView('login')
+        }
+      })
+
+      // Cargar información de usuario y empresa
+      await loadUserInfo()
+
+      return () => unsubscribe()
+    } finally {
+      setCheckingSession(false)
+    }
+  }
 
   const loadUserInfo = async () => {
     if (!window.electron) return
 
     try {
-      // Get user from local storage or database
-      const storedUser = await window.electron.storage.get('currentUser')
-      if (storedUser) {
-        setUserName(storedUser)
+      // Get user from Supabase session
+      const supabaseUser = await window.electron.storage.get('supabase_user')
+      if (supabaseUser && supabaseUser.nombre) {
+        setUserName(supabaseUser.nombre)
+      } else {
+        // Fallback a currentUser para compatibilidad
+        const storedUser = await window.electron.storage.get('currentUser')
+        if (storedUser) {
+          setUserName(storedUser)
+        }
       }
 
       // Get empresa operadora del software (solo local, no DB)
@@ -54,17 +81,37 @@ function App() {
     }
   }
 
+  // Mostrar splash mientras se carga
   if (showSplash) {
     return <SplashScreen onComplete={() => setShowSplash(false)} />
+  }
+
+  // Mostrar loading mientras se verifica sesión
+  if (checkingSession) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Verificando sesión...</p>
+        </div>
+      </div>
+    )
   }
 
   const handleLogout = async () => {
     if (!window.electron) return
     
     try {
-      await window.electron.storage.delete('currentUser')
+      // Importar signOut dinámicamente para evitar ciclos
+      const { signOut } = await import('./lib/sync')
+      await signOut()
+      
+      // Limpiar estado local
       setUserName('')
+      setIsAuthenticated(false)
       setCurrentView('login')
+      
+      console.log('✅ Sesión cerrada correctamente')
     } catch (error) {
       console.error('Error logging out:', error)
     }
@@ -73,23 +120,29 @@ function App() {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <Toaster position="top-center" richColors />
-      {/* Header */}
-      <Header
-        empresaName={empresaName}
-        userName={userName}
-        onLogout={handleLogout}
-        onNavigate={(view) => setCurrentView(view as View)}
-      />
+      {/* Header - Solo mostrar cuando está autenticado */}
+      {isAuthenticated && (
+        <Header
+          empresaName={empresaName}
+          userName={userName}
+          onLogout={handleLogout}
+          onNavigate={(view) => setCurrentView(view as View)}
+        />
+      )}
 
       {/* Content */}
       <div className="flex-1 p-6">
-        {currentView === 'dashboard' && <Dashboard />}
+        {currentView === 'dashboard' && isAuthenticated && <Dashboard />}
         {currentView === 'login' && (
-          <div className="flex items-center justify-center min-h-[calc(100vh-200px)]">
-            <LoginPanel />
+          <div className="flex items-center justify-center min-h-screen py-12 bg-gradient-to-br from-background via-background to-secondary/20">
+            <LoginPanel onLoginSuccess={() => {
+              setIsAuthenticated(true)
+              setCurrentView('dashboard')
+              loadUserInfo()
+            }} />
           </div>
         )}
-        {currentView === 'company-config' && (
+        {currentView === 'company-config' && isAuthenticated && (
           <div className="max-w-4xl mx-auto">
             <CompanyConfigPanel 
               onClose={() => setCurrentView('dashboard')}
