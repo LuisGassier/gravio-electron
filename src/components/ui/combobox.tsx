@@ -5,8 +5,10 @@ import { cn } from "@/lib/utils"
 interface ComboboxOption {
   value: string
   label: string
+  subtitle?: string
   avatar?: string
   color?: string
+  clave_empresa?: number
 }
 
 interface ComboboxProps {
@@ -152,9 +154,9 @@ export function Combobox({
   return (
     <div ref={containerRef} className={cn("relative", className)}>
       {/* Input Container */}
-      <div className="relative">
-        <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
-          {icon && <span className="text-primary">{icon}</span>}
+      <div className="relative group">
+        <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none z-10">
+          {icon && <span className="text-primary transition-transform group-focus-within:scale-110">{icon}</span>}
         </div>
         
         <input
@@ -166,8 +168,10 @@ export function Combobox({
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
           className={cn(
-            "w-full h-10 px-3 bg-input border border-border rounded-md text-foreground text-sm outline-none focus:ring-2 focus:ring-primary/50 transition-all",
-            icon && "pl-9",
+            "w-full h-11 px-3 bg-input border-2 border-border rounded-lg text-foreground text-sm outline-none transition-all",
+            "focus:border-primary focus:bg-background focus:shadow-sm",
+            "placeholder:text-muted-foreground/60",
+            icon && "pl-10",
             (value || isOpen) && "pr-16"
           )}
         />
@@ -178,22 +182,27 @@ export function Combobox({
             <button
               type="button"
               onClick={handleClear}
-              className="p-1 hover:bg-accent rounded transition-colors"
+              className="p-1.5 hover:bg-destructive/10 rounded-md transition-colors group"
             >
-              <X className="h-4 w-4 text-muted-foreground" />
+              <X className="h-4 w-4 text-muted-foreground group-hover:text-destructive" />
             </button>
           )}
-          <svg
-            className={cn(
-              "w-4 h-4 text-muted-foreground transition-transform",
-              isOpen && "rotate-180"
-            )}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-          </svg>
+          <div className={cn(
+            "p-1.5 rounded-md transition-all",
+            isOpen && "bg-primary/10"
+          )}>
+            <svg
+              className={cn(
+                "w-4 h-4 text-muted-foreground transition-transform duration-200",
+                isOpen && "rotate-180 text-primary"
+              )}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </div>
         </div>
       </div>
 
@@ -201,17 +210,17 @@ export function Combobox({
       {isOpen && (
         <div
           ref={dropdownRef}
-          className="absolute z-50 w-full mt-1 bg-popover border border-border rounded-md shadow-lg max-h-[300px] overflow-hidden"
+          className="absolute z-50 w-full mt-2 bg-popover border border-primary/20 rounded-lg shadow-2xl max-h-[320px] overflow-hidden animate-in fade-in-0 zoom-in-95"
         >
           {/* Count Header */}
           {showCount && filteredOptions.length > 0 && (
-            <div className="px-3 py-2 text-xs text-muted-foreground border-b border-border bg-muted/30">
+            <div className="px-4 py-2.5 text-xs font-medium text-primary border-b border-border bg-primary/5">
               Vehículo ({filteredOptions.length})
             </div>
           )}
 
           {/* Options List */}
-          <div className="overflow-y-auto max-h-[250px]">
+          <div className="overflow-y-auto max-h-[270px] scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent">
             {filteredOptions.length === 0 ? (
               <div className="px-3 py-8 text-center text-sm text-muted-foreground">
                 {emptyText}
@@ -223,27 +232,36 @@ export function Combobox({
                   onClick={() => handleSelect(option.value)}
                   onMouseEnter={() => setHighlightedIndex(index)}
                   className={cn(
-                    "flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors",
-                    highlightedIndex === index && "bg-accent",
-                    value === option.value && "bg-primary/10"
+                    "flex items-center gap-3 px-3 py-3 cursor-pointer transition-all border-b border-border/50 last:border-0",
+                    highlightedIndex === index && "bg-primary/5",
+                    value === option.value && "bg-primary/10 border-l-2 border-l-primary"
                   )}
                 >
                   {/* Avatar */}
                   <div
                     className={cn(
-                      "w-8 h-8 rounded flex items-center justify-center text-white text-xs font-semibold flex-shrink-0",
+                      "w-10 h-10 rounded-md flex items-center justify-center text-white text-xs font-bold flex-shrink-0 shadow-sm",
                       option.color || getAvatarColor(option.label)
                     )}
                   >
                     {option.avatar || getInitials(option.label)}
                   </div>
 
-                  {/* Label */}
-                  <span className="flex-1 text-sm">{option.label}</span>
+                  {/* Label y Subtitle */}
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-foreground truncate">
+                      {option.label}
+                    </div>
+                    {option.subtitle && (
+                      <div className="text-xs text-muted-foreground truncate">
+                        {option.subtitle}
+                      </div>
+                    )}
+                  </div>
 
                   {/* Check icon */}
                   {value === option.value && (
-                    <Check className="h-4 w-4 text-primary" />
+                    <Check className="h-5 w-5 text-primary flex-shrink-0" />
                   )}
                 </div>
               ))

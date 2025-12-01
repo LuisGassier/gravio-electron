@@ -220,6 +220,29 @@ async function downloadCacheData() {
   }
   
   try {
+    // Descargar empresas primero (requerido para las relaciones)
+    const { data: empresas, error: empresasError } = await supabase
+      .from('empresa')
+      .select('*')
+      .limit(1000)
+    
+    if (empresasError) {
+      if (empresasError.code === '42P01' || empresasError.code === 'PGRST116' || empresasError.message.includes('does not exist')) {
+        console.warn('⚠️ Tabla "empresa" no existe en Supabase.')
+      } else {
+        console.error('❌ Error al descargar empresas:', empresasError)
+      }
+    } else if (empresas && empresas.length > 0) {
+      for (const empresa of empresas) {
+        await window.electron.db.query(
+          `INSERT OR REPLACE INTO empresa (id, empresa, clave_empresa, prefijo) 
+           VALUES (?, ?, ?, ?)`,
+          [empresa.id, empresa.empresa, empresa.clave_empresa, empresa.prefijo]
+        )
+      }
+      console.log(`✅ Descargadas ${empresas.length} empresas`)
+    }
+
     // Descargar vehículos (tabla 'vehiculos' en Supabase)
     const { data: vehicles, error: vehiclesError } = await supabase
       .from('vehiculos')
@@ -266,6 +289,29 @@ async function downloadCacheData() {
       }
       console.log(`✅ Descargados ${operadores.length} operadores`)
     }
+
+    // Descargar relación operadores_empresas
+    const { data: operadoresEmpresas, error: oeError } = await supabase
+      .from('operadores_empresas')
+      .select('*')
+      .limit(5000)
+    
+    if (oeError) {
+      if (oeError.code === '42P01' || oeError.code === 'PGRST116' || oeError.message.includes('does not exist')) {
+        console.warn('⚠️ Tabla "operadores_empresas" no existe en Supabase.')
+      } else {
+        console.error('❌ Error al descargar operadores_empresas:', oeError)
+      }
+    } else if (operadoresEmpresas && operadoresEmpresas.length > 0) {
+      for (const oe of operadoresEmpresas) {
+        await window.electron.db.query(
+          `INSERT OR REPLACE INTO operadores_empresas (operador_id, clave_empresa) 
+           VALUES (?, ?)`,
+          [oe.operador_id, oe.clave_empresa]
+        )
+      }
+      console.log(`✅ Descargadas ${operadoresEmpresas.length} relaciones operadores-empresas`)
+    }
     
     // Descargar rutas (tabla 'rutas' en Supabase)
     const { data: rutas, error: rutasError } = await supabase
@@ -311,6 +357,29 @@ async function downloadCacheData() {
         )
       }
       console.log(`✅ Descargados ${conceptos.length} conceptos`)
+    }
+
+    // Descargar relación conceptos_empresas
+    const { data: conceptosEmpresas, error: ceError } = await supabase
+      .from('conceptos_empresas')
+      .select('*')
+      .limit(5000)
+    
+    if (ceError) {
+      if (ceError.code === '42P01' || ceError.code === 'PGRST116' || ceError.message.includes('does not exist')) {
+        console.warn('⚠️ Tabla "conceptos_empresas" no existe en Supabase.')
+      } else {
+        console.error('❌ Error al descargar conceptos_empresas:', ceError)
+      }
+    } else if (conceptosEmpresas && conceptosEmpresas.length > 0) {
+      for (const ce of conceptosEmpresas) {
+        await window.electron.db.query(
+          `INSERT OR REPLACE INTO conceptos_empresas (concepto_id, clave_empresa) 
+           VALUES (?, ?)`,
+          [ce.concepto_id, ce.clave_empresa]
+        )
+      }
+      console.log(`✅ Descargadas ${conceptosEmpresas.length} relaciones conceptos-empresas`)
     }
     
     // Descargar usuarios (tabla 'usuarios' en Supabase)

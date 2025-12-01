@@ -2,6 +2,12 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Instructions for Claude
+
+usa clean architecture principles when refactoring or adding new features. Follow the established patterns for IPC communication, offline-first data sync, and hardware integration. Ensure type safety with TypeScript and maintain separation of concerns between Electron main/preload and React renderer processes.
+
+When implementing new features, consider the domain layer, use cases, and repository interfaces. Avoid direct database or hardware access from UI components; instead, use the `window.electron` API.
+
 ## Project Overview
 
 **Gravio** is an Electron desktop application for Windows that manages sanitary landfill operations with offline-first capabilities. The system integrates with hardware (Mettler Toledo scale, Epson thermal printer) and synchronizes data between SQLite (local) and Supabase (cloud).

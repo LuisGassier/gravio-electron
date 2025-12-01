@@ -16431,6 +16431,46 @@ async function closeSerialPort() {
 function readCurrentWeight() {
   return currentWeight;
 }
+function listPrinters(mainWindow2) {
+  console.log("📞 listPrinters() llamada - mainWindow:", mainWindow2 ? "disponible" : "NULL");
+  try {
+    if (!mainWindow2) {
+      console.warn("⚠️ No hay ventana principal disponible");
+      return [];
+    }
+    console.log("🔍 Obteniendo impresoras del sistema...");
+    const printers = mainWindow2.webContents.getPrinters();
+    console.log("📋 Impresoras raw del sistema:", JSON.stringify(printers, null, 2));
+    const formattedPrinters = printers.map((printer) => ({
+      name: printer.name,
+      displayName: printer.displayName || printer.name,
+      description: printer.description || "",
+      status: printer.status || 0,
+      isDefault: printer.isDefault || false,
+      options: printer.options || {}
+    }));
+    console.log("✅ Impresoras detectadas:", formattedPrinters.length);
+    console.log("📄 Impresoras formateadas:", JSON.stringify(formattedPrinters, null, 2));
+    return formattedPrinters;
+  } catch (error) {
+    console.error("❌ Error al listar impresoras:", error);
+    console.error("📚 Stack trace:", error.stack);
+    return [];
+  }
+}
+async function printThermal(mainWindow2, data) {
+  try {
+    if (!mainWindow2) {
+      console.error("❌ No hay ventana principal disponible");
+      return false;
+    }
+    console.log("🖨️ Preparando impresión:", data);
+    return true;
+  } catch (error) {
+    console.error("❌ Error al imprimir:", error);
+    return false;
+  }
+}
 const __dirname$1 = path$1.dirname(fileURLToPath(import.meta.url));
 let mainWindow = null;
 const store = new ElectronStore();
@@ -16514,38 +16554,8 @@ function registerIpcHandlers() {
   ipcMain$1.handle("db:transaction", (_event, queries) => {
     return executeTransaction(queries);
   });
-  ipcMain$1.handle("printer:list", async () => {
-    try {
-      if (!mainWindow) return [];
-      const printers = await mainWindow.webContents.getPrinters();
-      const formattedPrinters = printers.map((printer) => ({
-        name: printer.name,
-        displayName: printer.displayName || printer.name,
-        description: printer.description || "",
-        status: printer.status || 0,
-        isDefault: printer.isDefault || false,
-        options: printer.options || {}
-      }));
-      console.log("🖨️ Impresoras detectadas:", formattedPrinters);
-      return formattedPrinters;
-    } catch (error) {
-      console.error("❌ Error listando impresoras:", error);
-      return [];
-    }
-  });
-  ipcMain$1.handle("printer:print", async (_event, data) => {
-    try {
-      if (!mainWindow) {
-        console.error("❌ No hay ventana principal disponible");
-        return false;
-      }
-      console.log("🖨️ Preparando impresión:", data);
-      return true;
-    } catch (error) {
-      console.error("❌ Error imprimiendo:", error);
-      return false;
-    }
-  });
+  ipcMain$1.handle("printer:list", () => listPrinters(mainWindow));
+  ipcMain$1.handle("printer:print", (_event, data) => printThermal(mainWindow, data));
   ipcMain$1.handle("sync:start", async () => {
     console.log("🔄 Iniciando sincronización...");
   });

@@ -9,24 +9,36 @@ interface Vehiculo {
   id: string
   no_economico: string
   placas: string
-  clave_empresa?: number
+  clave_empresa: number
+  empresa: string
+  prefijo: string
 }
 
 interface Operador {
   id: string
   operador: string
   clave_operador: number
+  clave_empresa: number
+  empresa: string
+  prefijo: string
 }
 
 interface Ruta {
   id: number
   ruta: string
   clave_ruta: number
+  clave_empresa: number
+  empresa: string
+  prefijo: string
 }
 
 interface Concepto {
   id: string
   nombre: string
+  clave_concepto: number
+  clave_empresa: number
+  empresa: string
+  prefijo: string
 }
 
 export function WeighingPanel() {
@@ -42,6 +54,7 @@ export function WeighingPanel() {
   const [selectedOperador, setSelectedOperador] = useState('')
   const [selectedRuta, setSelectedRuta] = useState('')
   const [selectedConcepto, setSelectedConcepto] = useState('')
+  const [selectedEmpresa, setSelectedEmpresa] = useState<number | null>(null)
   const [observaciones, setObservaciones] = useState('')
 
   useEffect(() => {
@@ -69,12 +82,45 @@ export function WeighingPanel() {
     if (!window.electron) return
 
     try {
-      const [vehiculosData, operadoresData, rutasData, conceptosData] = await Promise.all([
-        window.electron.db.query('SELECT * FROM vehiculos ORDER BY no_economico', []),
-        window.electron.db.query('SELECT * FROM operadores ORDER BY operador', []),
-        window.electron.db.query('SELECT * FROM rutas ORDER BY ruta', []),
-        window.electron.db.query('SELECT * FROM conceptos ORDER BY nombre', [])
-      ])
+      // Cargar vehículos con empresa
+      const vehiculosData = await window.electron.db.query(
+        `SELECT v.*, e.empresa, e.prefijo 
+         FROM vehiculos v 
+         LEFT JOIN empresa e ON v.clave_empresa = e.clave_empresa 
+         ORDER BY v.no_economico`,
+        []
+      )
+
+      // Cargar operadores con empresa (relación muchos a muchos)
+      const operadoresData = await window.electron.db.query(
+        `SELECT DISTINCT o.id, o.operador, o.clave_operador, 
+                oe.clave_empresa, e.empresa, e.prefijo
+         FROM operadores o
+         LEFT JOIN operadores_empresas oe ON o.id = oe.operador_id
+         LEFT JOIN empresa e ON oe.clave_empresa = e.clave_empresa
+         ORDER BY o.operador`,
+        []
+      )
+
+      // Cargar rutas con empresa
+      const rutasData = await window.electron.db.query(
+        `SELECT r.*, e.empresa, e.prefijo 
+         FROM rutas r 
+         LEFT JOIN empresa e ON r.clave_empresa = e.clave_empresa 
+         ORDER BY r.ruta`,
+        []
+      )
+
+      // Cargar conceptos con empresa (relación muchos a muchos)
+      const conceptosData = await window.electron.db.query(
+        `SELECT DISTINCT c.id, c.nombre, c.clave_concepto, 
+                ce.clave_empresa, e.empresa, e.prefijo
+         FROM conceptos c
+         LEFT JOIN conceptos_empresas ce ON c.id = ce.concepto_id
+         LEFT JOIN empresa e ON ce.clave_empresa = e.clave_empresa
+         ORDER BY c.nombre`,
+        []
+      )
 
       setVehiculos(vehiculosData)
       setOperadores(operadoresData)
@@ -100,26 +146,94 @@ export function WeighingPanel() {
     setIsScaleConnected(success)
   }
 
-  // Prepare options for comboboxes
-  const vehiculoOptions = vehiculos.map(v => ({
-    value: v.id,
-    label: `[${v.no_economico}] ${v.placas}`
-  }))
+  // Filtrar por empresa seleccionada
+  const filteredVehiculos = selectedEmpresa
+    ? vehiculos.filter(v => v.clave_empresa === selectedEmpresa)
+    : vehiculos
 
-  const operadorOptions = operadores.map(o => ({
-    value: o.id,
-    label: `${o.clave_operador} ${o.operador}`
-  }))
+  const filteredOperadores = selectedEmpresa
+    ? operadores.filter(o => o.clave_empresa === selectedEmpresa)
+    : operadores
 
-  const rutaOptions = rutas.map(r => ({
-    value: String(r.id),
-    label: r.ruta
-  }))
+  const filteredRutas = selectedEmpresa
+    ? rutas.filter(r => r.clave_empresa === selectedEmpresa)
+    : rutas
 
-  const conceptoOptions = conceptos.map(c => ({
-    value: c.id,
-    label: c.nombre
-  }))
+  const filteredConceptos = selectedEmpresa
+    ? conceptos.filter(c => c.clave_empresa === selectedEmpresa)
+    : conceptos
+
+  // Prepare options for comboboxes con formato mejorado
+  const vehiculoOptions = filteredVehiculos
+    .filter(v => v.clave_empresa && v.empresa) // Filtrar los que no tienen empresa
+    .map(v => ({
+      value: v.id,
+      label: `${v.no_economico} ${v.placas} (${v.prefijo || ''})`,
+      subtitle: v.empresa,
+      clave_empresa: v.clave_empresa
+    }))
+
+  const operadorOptions = filteredOperadores
+    .filter(o => o.clave_empresa && o.empresa) // Filtrar los que no tienen empresa
+    .map(o => ({
+      value: `${o.id}-${o.clave_empresa}`,
+      label: `${o.clave_operador} ${o.operador}`,
+      subtitle: o.empresa,
+      clave_empresa: o.clave_empresa
+    }))
+
+  const rutaOptions = filteredRutas
+    .filter(r => r.clave_empresa && r.empresa) // Filtrar los que no tienen empresa
+    .map(r => ({
+      value: String(r.id),
+      label: `${r.clave_ruta} ${r.ruta}`,
+      subtitle: `(${r.prefijo})`,
+      clave_empresa: r.clave_empresa
+    }))
+
+  const conceptoOptions = filteredConceptos
+    .filter(c => c.clave_empresa && c.empresa) // Filtrar los que no tienen empresa
+    .map(c => ({
+      value: `${c.id}-${c.clave_empresa}`,
+      label: `${c.clave_concepto || ''} ${c.nombre}`.trim(),
+      subtitle: c.empresa,
+      clave_empresa: c.clave_empresa
+    }))
+
+  // Handler para actualizar empresa cuando se selecciona un valor
+  const handleVehiculoChange = (value: string) => {
+    setSelectedVehiculo(value)
+    const vehiculo = vehiculos.find(v => v.id === value)
+    if (vehiculo && !selectedEmpresa) {
+      setSelectedEmpresa(vehiculo.clave_empresa)
+    }
+  }
+
+  const handleOperadorChange = (value: string) => {
+    setSelectedOperador(value)
+    const [id, empresa] = value.split('-')
+    const operador = operadores.find(o => o.id === id && o.clave_empresa === Number(empresa))
+    if (operador && !selectedEmpresa) {
+      setSelectedEmpresa(operador.clave_empresa)
+    }
+  }
+
+  const handleRutaChange = (value: string) => {
+    setSelectedRuta(value)
+    const ruta = rutas.find(r => r.id === Number(value))
+    if (ruta && !selectedEmpresa) {
+      setSelectedEmpresa(ruta.clave_empresa)
+    }
+  }
+
+  const handleConceptoChange = (value: string) => {
+    setSelectedConcepto(value)
+    const [id, empresa] = value.split('-')
+    const concepto = conceptos.find(c => c.id === id && c.clave_empresa === Number(empresa))
+    if (concepto && !selectedEmpresa) {
+      setSelectedEmpresa(concepto.clave_empresa)
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -175,7 +289,7 @@ export function WeighingPanel() {
               <Combobox
                 options={conceptoOptions}
                 value={selectedConcepto}
-                onValueChange={setSelectedConcepto}
+                onValueChange={handleConceptoChange}
                 placeholder="Buscar concepto..."
                 searchPlaceholder="Buscar..."
                 emptyText="No se encontraron conceptos"
@@ -188,7 +302,7 @@ export function WeighingPanel() {
               <Combobox
                 options={operadorOptions}
                 value={selectedOperador}
-                onValueChange={setSelectedOperador}
+                onValueChange={handleOperadorChange}
                 placeholder="Buscar operador..."
                 searchPlaceholder="Buscar..."
                 emptyText="No se encontraron operadores"
@@ -204,7 +318,7 @@ export function WeighingPanel() {
               <Combobox
                 options={rutaOptions}
                 value={selectedRuta}
-                onValueChange={setSelectedRuta}
+                onValueChange={handleRutaChange}
                 placeholder="Buscar ruta..."
                 searchPlaceholder="Buscar..."
                 emptyText="No se encontraron rutas"
@@ -217,7 +331,7 @@ export function WeighingPanel() {
               <Combobox
                 options={vehiculoOptions}
                 value={selectedVehiculo}
-                onValueChange={setSelectedVehiculo}
+                onValueChange={handleVehiculoChange}
                 placeholder="Buscar por número económico o pl..."
                 searchPlaceholder="Buscar..."
                 emptyText="No se encontraron vehículos"
