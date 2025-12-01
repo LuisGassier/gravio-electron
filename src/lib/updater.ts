@@ -1,6 +1,6 @@
 import { supabase } from './supabase'
 
-export interface AppVersion {
+export type AppVersion = {
   id: number
   version: string
   platform: string
@@ -15,7 +15,7 @@ export interface AppVersion {
   updated_at: string
 }
 
-export interface UpdateCheckResult {
+export type UpdateCheckResult = {
   hasUpdate: boolean
   latestVersion?: AppVersion
   currentVersion: string

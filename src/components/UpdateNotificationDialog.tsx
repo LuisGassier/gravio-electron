@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Download, AlertCircle, Calendar, FileDown, Package } from 'lucide-react'
-import { AppVersion, formatFileSize, formatReleaseDate, trackDownloadStart } from '@/lib/updater'
+import { type AppVersion, formatFileSize, formatReleaseDate, trackDownloadStart } from '@/lib/updater'
 
 interface UpdateNotificationDialogProps {
   open: boolean
