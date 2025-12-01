@@ -244,6 +244,75 @@ async function downloadCacheData() {
       console.log(`✅ Descargados ${vehicles.length} vehículos`)
     }
     
+    // Descargar operadores (tabla 'operadores' en Supabase)
+    const { data: operadores, error: operadoresError } = await supabase
+      .from('operadores')
+      .select('*')
+      .limit(1000)
+    
+    if (operadoresError) {
+      if (operadoresError.code === '42P01' || operadoresError.code === 'PGRST116' || operadoresError.message.includes('does not exist')) {
+        console.warn('⚠️ Tabla "operadores" no existe en Supabase.')
+      } else {
+        console.error('❌ Error al descargar operadores:', operadoresError)
+      }
+    } else if (operadores && operadores.length > 0) {
+      for (const operador of operadores) {
+        await window.electron.db.query(
+          `INSERT OR REPLACE INTO operadores (id, operador, clave_operador, created_at) 
+           VALUES (?, ?, ?, ?)`,
+          [operador.id, operador.operador, operador.clave_operador, operador.created_at || Date.now()]
+        )
+      }
+      console.log(`✅ Descargados ${operadores.length} operadores`)
+    }
+    
+    // Descargar rutas (tabla 'rutas' en Supabase)
+    const { data: rutas, error: rutasError } = await supabase
+      .from('rutas')
+      .select('*')
+      .limit(1000)
+    
+    if (rutasError) {
+      if (rutasError.code === '42P01' || rutasError.code === 'PGRST116' || rutasError.message.includes('does not exist')) {
+        console.warn('⚠️ Tabla "rutas" no existe en Supabase.')
+      } else {
+        console.error('❌ Error al descargar rutas:', rutasError)
+      }
+    } else if (rutas && rutas.length > 0) {
+      for (const ruta of rutas) {
+        await window.electron.db.query(
+          `INSERT OR REPLACE INTO rutas (id, ruta, clave_ruta, clave_empresa) 
+           VALUES (?, ?, ?, ?)`,
+          [ruta.id, ruta.ruta, ruta.clave_ruta, ruta.clave_empresa]
+        )
+      }
+      console.log(`✅ Descargadas ${rutas.length} rutas`)
+    }
+    
+    // Descargar conceptos (tabla 'conceptos' en Supabase)
+    const { data: conceptos, error: conceptosError } = await supabase
+      .from('conceptos')
+      .select('*')
+      .limit(1000)
+    
+    if (conceptosError) {
+      if (conceptosError.code === '42P01' || conceptosError.code === 'PGRST116' || conceptosError.message.includes('does not exist')) {
+        console.warn('⚠️ Tabla "conceptos" no existe en Supabase.')
+      } else {
+        console.error('❌ Error al descargar conceptos:', conceptosError)
+      }
+    } else if (conceptos && conceptos.length > 0) {
+      for (const concepto of conceptos) {
+        await window.electron.db.query(
+          `INSERT OR REPLACE INTO conceptos (id, nombre, clave_concepto, activo, created_at, updated_at) 
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [concepto.id, concepto.nombre, concepto.clave_concepto, concepto.activo ?? 1, concepto.created_at || Date.now(), concepto.updated_at || Date.now()]
+        )
+      }
+      console.log(`✅ Descargados ${conceptos.length} conceptos`)
+    }
+    
     // Descargar usuarios (tabla 'usuarios' en Supabase)
     const { data: users, error: usersError } = await supabase
       .from('usuarios')

@@ -16515,11 +16515,36 @@ function registerIpcHandlers() {
     return executeTransaction(queries);
   });
   ipcMain$1.handle("printer:list", async () => {
-    return [];
+    try {
+      if (!mainWindow) return [];
+      const printers = await mainWindow.webContents.getPrinters();
+      const formattedPrinters = printers.map((printer) => ({
+        name: printer.name,
+        displayName: printer.displayName || printer.name,
+        description: printer.description || "",
+        status: printer.status || 0,
+        isDefault: printer.isDefault || false,
+        options: printer.options || {}
+      }));
+      console.log("🖨️ Impresoras detectadas:", formattedPrinters);
+      return formattedPrinters;
+    } catch (error) {
+      console.error("❌ Error listando impresoras:", error);
+      return [];
+    }
   });
   ipcMain$1.handle("printer:print", async (_event, data) => {
-    console.log("🖨️ Imprimiendo:", data);
-    return true;
+    try {
+      if (!mainWindow) {
+        console.error("❌ No hay ventana principal disponible");
+        return false;
+      }
+      console.log("🖨️ Preparando impresión:", data);
+      return true;
+    } catch (error) {
+      console.error("❌ Error imprimiendo:", error);
+      return false;
+    }
   });
   ipcMain$1.handle("sync:start", async () => {
     console.log("🔄 Iniciando sincronización...");

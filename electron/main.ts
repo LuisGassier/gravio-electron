@@ -138,16 +138,51 @@ function registerIpcHandlers() {
     return executeTransaction(queries)
   })
 
-  // Printer (Impresora Térmica) - TODO: implementar
+  // Printer (Impresora Térmica)
   ipcMain.handle('printer:list', async () => {
-    // Por ahora retorna vacío, implementar según hardware
-    return []
+    try {
+      if (!mainWindow) return []
+
+      // Obtener impresoras del sistema
+      const printers = await mainWindow.webContents.getPrinters()
+
+      // Mapear a formato esperado por el frontend
+      const formattedPrinters = printers.map((printer) => ({
+        name: printer.name,
+        displayName: printer.displayName || printer.name,
+        description: printer.description || '',
+        status: printer.status || 0,
+        isDefault: printer.isDefault || false,
+        options: printer.options || {}
+      }))
+
+      console.log('🖨️ Impresoras detectadas:', formattedPrinters)
+      return formattedPrinters
+    } catch (error) {
+      console.error('❌ Error listando impresoras:', error)
+      return []
+    }
   })
-  
+
   ipcMain.handle('printer:print', async (_event, data: any) => {
-    // TODO: Implementar impresión térmica
-    console.log('🖨️ Imprimiendo:', data)
-    return true
+    try {
+      if (!mainWindow) {
+        console.error('❌ No hay ventana principal disponible')
+        return false
+      }
+
+      // TODO: Implementar impresión térmica con formato específico
+      // Por ahora solo registra los datos
+      console.log('🖨️ Preparando impresión:', data)
+
+      // Aquí se podría usar mainWindow.webContents.print() para impresión básica
+      // o implementar comandos ESC/POS para impresoras térmicas específicas
+
+      return true
+    } catch (error) {
+      console.error('❌ Error imprimiendo:', error)
+      return false
+    }
   })
 
   // Sync - TODO: implementar lógica completa

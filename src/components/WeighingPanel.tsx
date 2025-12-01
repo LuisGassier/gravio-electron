@@ -5,21 +5,38 @@ import { Scale, AlertCircle, Truck, User, Route, FileText } from 'lucide-react'
 import { Label } from '@/components/ui/label'
 import { Combobox } from '@/components/ui/combobox'
 
-interface SelectOption {
+interface Vehiculo {
+  id: string
+  no_economico: string
+  placas: string
+  clave_empresa?: number
+}
+
+interface Operador {
+  id: string
+  operador: string
+  clave_operador: number
+}
+
+interface Ruta {
+  id: number
+  ruta: string
+  clave_ruta: number
+}
+
+interface Concepto {
   id: string
   nombre: string
-  numero_economico?: string
-  placas?: string
-  [key: string]: any
 }
 
 export function WeighingPanel() {
   const [weight, setWeight] = useState<string>('0')
   const [isScaleConnected, setIsScaleConnected] = useState(false)
-  const [vehiculos, setVehiculos] = useState<SelectOption[]>([])
-  const [operadores, setOperadores] = useState<SelectOption[]>([])
-  const [rutas, setRutas] = useState<SelectOption[]>([])
-  const [conceptos, setConceptos] = useState<SelectOption[]>([])
+  
+  const [vehiculos, setVehiculos] = useState<Vehiculo[]>([])
+  const [operadores, setOperadores] = useState<Operador[]>([])
+  const [rutas, setRutas] = useState<Ruta[]>([])
+  const [conceptos, setConceptos] = useState<Concepto[]>([])
 
   const [selectedVehiculo, setSelectedVehiculo] = useState('')
   const [selectedOperador, setSelectedOperador] = useState('')
@@ -38,14 +55,24 @@ export function WeighingPanel() {
     }
   }, [])
 
+  // Log para debugging
+  useEffect(() => {
+    console.log('📊 Datos cargados:', {
+      vehiculos: vehiculos.length,
+      operadores: operadores.length,
+      rutas: rutas.length,
+      conceptos: conceptos.length
+    })
+  }, [vehiculos, operadores, rutas, conceptos])
+
   const loadFormData = async () => {
     if (!window.electron) return
 
     try {
       const [vehiculosData, operadoresData, rutasData, conceptosData] = await Promise.all([
-        window.electron.db.query('SELECT * FROM vehiculos ORDER BY numero_economico', []),
-        window.electron.db.query('SELECT * FROM operadores ORDER BY nombre', []),
-        window.electron.db.query('SELECT * FROM rutas ORDER BY nombre', []),
+        window.electron.db.query('SELECT * FROM vehiculos ORDER BY no_economico', []),
+        window.electron.db.query('SELECT * FROM operadores ORDER BY operador', []),
+        window.electron.db.query('SELECT * FROM rutas ORDER BY ruta', []),
         window.electron.db.query('SELECT * FROM conceptos ORDER BY nombre', [])
       ])
 
@@ -76,17 +103,17 @@ export function WeighingPanel() {
   // Prepare options for comboboxes
   const vehiculoOptions = vehiculos.map(v => ({
     value: v.id,
-    label: `${v.numero_economico} - ${v.placas}`
+    label: `[${v.no_economico}] ${v.placas}`
   }))
 
   const operadorOptions = operadores.map(o => ({
     value: o.id,
-    label: o.nombre
+    label: `${o.clave_operador} ${o.operador}`
   }))
 
   const rutaOptions = rutas.map(r => ({
-    value: r.id,
-    label: r.nombre
+    value: String(r.id),
+    label: r.ruta
   }))
 
   const conceptoOptions = conceptos.map(c => ({
@@ -157,14 +184,14 @@ export function WeighingPanel() {
             </div>
 
             <div className="space-y-2">
-              <Label className="text-sm font-medium">Conductor</Label>
+              <Label className="text-sm font-medium">Operador</Label>
               <Combobox
                 options={operadorOptions}
                 value={selectedOperador}
                 onValueChange={setSelectedOperador}
-                placeholder="Buscar conductor..."
+                placeholder="Buscar operador..."
                 searchPlaceholder="Buscar..."
-                emptyText="No se encontraron conductores"
+                emptyText="No se encontraron operadores"
                 icon={<User className="w-4 h-4" />}
               />
             </div>
@@ -195,6 +222,7 @@ export function WeighingPanel() {
                 searchPlaceholder="Buscar..."
                 emptyText="No se encontraron vehículos"
                 icon={<Truck className="w-4 h-4" />}
+                showCount={true}
               />
             </div>
           </div>
