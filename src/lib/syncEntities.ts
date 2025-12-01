@@ -58,7 +58,7 @@ export async function syncVehiculos(): Promise<SyncResult> {
       }
     }
 
-    console.log(`✅ Sincronizados ${result.synced} vehículos desde Supabase`)
+
   } catch (error) {
     result.success = false
     result.errors.push(`Error general: ${error}`)
@@ -132,7 +132,7 @@ export async function syncOperadores(): Promise<SyncResult> {
       }
     }
 
-    console.log(`✅ Sincronizados ${result.synced} operadores desde Supabase`)
+
   } catch (error) {
     result.success = false
     result.errors.push(`Error general: ${error}`)
@@ -182,7 +182,7 @@ export async function syncRutas(): Promise<SyncResult> {
       }
     }
 
-    console.log(`✅ Sincronizados ${result.synced} rutas desde Supabase`)
+
   } catch (error) {
     result.success = false
     result.errors.push(`Error general: ${error}`)
@@ -258,7 +258,7 @@ export async function syncConceptos(): Promise<SyncResult> {
       }
     }
 
-    console.log(`✅ Sincronizados ${result.synced} conceptos desde Supabase`)
+
   } catch (error) {
     result.success = false
     result.errors.push(`Error general: ${error}`)
@@ -308,7 +308,7 @@ export async function syncEmpresas(): Promise<SyncResult> {
       }
     }
 
-    console.log(`✅ Sincronizadas ${result.synced} empresas desde Supabase`)
+
   } catch (error) {
     result.success = false
     result.errors.push(`Error general: ${error}`)
@@ -327,7 +327,7 @@ export async function syncAllEntities(): Promise<{
   conceptos: SyncResult
   empresas: SyncResult
 }> {
-  console.log('🔄 Iniciando sincronización de entidades maestras...')
+
 
   const results = {
     vehiculos: await syncVehiculos(),
@@ -344,7 +344,7 @@ export async function syncAllEntities(): Promise<{
     results.conceptos.synced +
     results.empresas.synced
 
-  console.log(`✅ Sincronización completada: ${totalSynced} entidades`)
+
 
   return results
 }

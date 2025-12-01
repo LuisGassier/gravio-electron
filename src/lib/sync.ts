@@ -132,8 +132,7 @@ export async function downloadRegistros() {
       return
     }
     
-    console.log(`📥 Descargando ${registros.length} registros de Supabase...`)
-    console.log('📋 Primeros 3 registros:', registros.slice(0, 3))
+
     
     let updated = 0
     let skipped = 0

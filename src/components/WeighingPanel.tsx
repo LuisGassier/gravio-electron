@@ -87,7 +87,7 @@ export function WeighingPanel() {
 
     // 🔄 Auto-refresh cada 5 segundos para obtener datos nuevos de Supabase
     const refreshInterval = setInterval(() => {
-      console.log('🔄 Auto-refresh: Sincronizando datos...')
+
       // Primero sincronizar con Supabase
       syncDataFromSupabase()
       // Luego recargar datos locales
@@ -154,7 +154,7 @@ export function WeighingPanel() {
       })
     } else {
       // Si se deseleccionó (selectedRegistro es null), limpiar formulario y salir de modo salida
-      console.log('🔄 Deselección detectada: limpiando formulario')
+
       setIsSalidaMode(false)
       setCurrentRegistro(null)
       limpiarFormulario()
@@ -215,7 +215,7 @@ export function WeighingPanel() {
         results.empresas.synced
       
       if (totalSynced > 0) {
-        console.log(`🔄 Sincronizadas ${totalSynced} entidades desde Supabase`)
+
       }
     } catch (error) {
       console.warn('⚠️ Error en sincronización automática:', error)
