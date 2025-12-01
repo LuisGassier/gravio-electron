@@ -50,7 +50,7 @@ export class PrinterService implements IPrinterService {
 
       if (!printerName) {
         console.log('🔍 No se especificó impresora, buscando impresora por defecto...');
-        printerName = await this.getDefaultPrinter();
+        printerName = await this.getDefaultPrinter() ?? undefined;
         console.log('🖨️ Impresora por defecto recuperada:', printerName);
 
         if (!printerName) {
