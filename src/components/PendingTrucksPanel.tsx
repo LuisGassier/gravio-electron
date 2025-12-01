@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
-import { CheckCircle2, Truck, Clock, User } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { CheckCircle2, Truck, Clock, User, RefreshCw } from 'lucide-react'
 import { container } from '@/application'
 import type { Registro } from '@/domain'
 import { usePesaje } from '@/contexts/PesajeContext'
@@ -8,6 +9,7 @@ import { toast } from 'sonner'
 
 export function PendingTrucksPanel() {
   const [pendingTrucks, setPendingTrucks] = useState<Registro[]>([])
+  const [isSyncing, setIsSyncing] = useState(false)
   const { selectRegistroForSalida } = usePesaje()
 
   const handleSelectTruck = (truck: Registro) => {
@@ -34,7 +36,7 @@ export function PendingTrucksPanel() {
     try {
       const result = await container.sqliteRegistroRepository.findAllPending()
       if (result.success && result.value) {
-        console.log(`🚚 Camiones pendientes: ${result.value.length}`, result.value)
+        console.log(`🚚 Vehículos pendientes: ${result.value.length}`, result.value)
         setPendingTrucks(result.value)
       } else {
         console.error('Error loading pending trucks:', result)
@@ -43,6 +45,24 @@ export function PendingTrucksPanel() {
     } catch (error) {
       console.error('Error loading pending trucks:', error)
       setPendingTrucks([])
+    }
+  }
+
+  const handleSync = async () => {
+    setIsSyncing(true)
+    try {
+      toast.info('🔄 Sincronizando con servidor...')
+      const result = await container.syncService.syncNow()
+      if (result.success) {
+        toast.success('✅ Sincronización completada')
+        await loadPendingTrucks()
+      } else {
+        toast.error(`Error al sincronizar: ${result.error}`)
+      }
+    } catch (error) {
+      toast.error('Error de conexión. Verifique su internet.')
+    } finally {
+      setIsSyncing(false)
     }
   }
 
@@ -65,12 +85,23 @@ export function PendingTrucksPanel() {
             <CheckCircle2 className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h2 className="text-base font-semibold text-foreground">Camiones Pendientes</h2>
+            <h2 className="text-base font-semibold text-foreground">Vehículos Pendientes</h2>
             <p className="text-xs text-muted-foreground">Control de salida</p>
           </div>
         </div>
-        <div className="w-9 h-9 icon-wrapper bg-primary/10 border border-primary/20">
-          <span className="text-primary font-bold text-sm">{pendingTrucks.length}</span>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleSync}
+            disabled={isSyncing}
+            className="h-9 px-3"
+          >
+            <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
+          </Button>
+          <div className="w-9 h-9 icon-wrapper bg-primary/10 border border-primary/20">
+            <span className="text-primary font-bold text-sm">{pendingTrucks.length}</span>
+          </div>
         </div>
       </div>
 
@@ -83,7 +114,7 @@ export function PendingTrucksPanel() {
                 <CheckCircle2 className="w-10 h-10 text-success" />
               </div>
               <h3 className="text-base font-semibold text-success mb-1">
-                ¡Todos los camiones han salido!
+                ¡Todos los vehículos han salido!
               </h3>
               <p className="text-sm text-success/80">
                 No hay vehículos pendientes de salida

@@ -347,9 +347,24 @@ export function WeighingPanel() {
     )
 
     if (result.success) {
-      const registro = result.value
+      let registro = result.value
       const pesoNeto = registro.getPesoNeto()
-      toast.success(`✅ Salida registrada - Folio: ${registro.folio}`, {
+      
+      // Intentar sincronizar inmediatamente para obtener el folio de Supabase
+      try {
+        const syncResult = await container.syncService.syncNow()
+        if (syncResult.success) {
+          // Recargar el registro para obtener el folio actualizado
+          const updatedResult = await container.sqliteRegistroRepository.findById(registro.id!)
+          if (updatedResult.success && updatedResult.value) {
+            registro = updatedResult.value
+          }
+        }
+      } catch (error) {
+        console.warn('⚠️ No se pudo sincronizar inmediatamente (modo offline):', error)
+      }
+      
+      toast.success(`✅ Salida registrada - Folio: ${registro.folio || 'Pendiente de sincronización'}`, {
         description: `Peso neto: ${pesoNeto ? pesoNeto.toFixed(2) + ' kg' : 'N/A'}`
       })
       

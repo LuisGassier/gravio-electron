@@ -40,7 +40,7 @@ export class SupabaseRegistroRepository implements IRegistroRepository {
 
       const { data: savedData, error } = await supabase
         .from('registros')
-        .insert(data)
+        .upsert(data, { onConflict: 'id' })
         .select()
         .single();
 
