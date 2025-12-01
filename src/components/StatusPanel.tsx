@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { RefreshCw, Wifi, WifiOff, Database, Truck, Users, Building2 } from 'lucide-react'
+import { RefreshCw, Wifi, WifiOff, Database, Truck, Users, Building2, Scale, FileText } from 'lucide-react'
 import { getSyncStatus, onSyncStatusChange, syncNow } from '@/lib/sync'
 
 export function StatusPanel() {
@@ -96,11 +96,18 @@ export function StatusPanel() {
     return `Hace ${minutes} minutos`
   }
 
+  const getGreeting = () => {
+    const hour = new Date().getHours()
+    if (hour >= 6 && hour < 12) return 'Buenos días'
+    if (hour >= 12 && hour < 20) return 'Buenas tardes'
+    return 'Buenas noches'
+  }
+
   return (
     <div className="space-y-4">
       {/* Title */}
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-foreground">Buenas noches</h2>
+        <h2 className="text-lg font-semibold text-foreground">{getGreeting()}</h2>
         <Button
           variant="ghost"
           size="sm"
@@ -113,65 +120,52 @@ export function StatusPanel() {
       </div>
 
       {/* Online Status */}
-      <div className="flex items-center gap-2 text-sm">
-        {isOnline ? (
-          <Wifi className="w-4 h-4 text-success" />
-        ) : (
-          <WifiOff className="w-4 h-4 text-destructive" />
-        )}
-        <span className="text-success font-medium">Sistema Online</span>
-      </div>
-
-      {/* Version Info */}
-      {version && (
-        <div className="text-xs text-muted-foreground">
-          Turno: Diurno • v{version}
-        </div>
-      )}
-
-      {/* Update Notice */}
-      <Card className="bg-warning/10 border-warning/30 p-3">
-        <div className="flex items-start gap-2">
-          <div className="w-5 h-5 rounded-full bg-warning/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-            <span className="text-warning text-xs">!</span>
-          </div>
+      <Card className={`border ${isOnline ? 'bg-success/5 border-success/30' : 'bg-destructive/5 border-destructive/30'} p-3`}>
+        <div className="flex items-center gap-2.5">
+          {isOnline ? (
+            <Wifi className="w-5 h-5 text-success" />
+          ) : (
+            <WifiOff className="w-5 h-5 text-destructive" />
+          )}
           <div className="flex-1">
-            <p className="text-xs font-medium text-warning mb-1">Actualización requerida</p>
-            <p className="text-xs text-warning/80 mb-2">Versión 1.0.4</p>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-7 text-xs border-warning/30 text-warning hover:bg-warning/10"
-            >
-              Ver detalles
-            </Button>
+            <span className={`text-sm font-semibold ${isOnline ? 'text-success' : 'text-destructive'}`}>
+              {isOnline ? 'Sistema Online' : 'Sin Conexión'}
+            </span>
+            {version && (
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Versión {version}
+              </p>
+            )}
           </div>
+          <div className={`w-2.5 h-2.5 rounded-full ${isOnline ? 'bg-success' : 'bg-destructive'} ${isOnline ? 'animate-pulse' : ''}`}></div>
         </div>
       </Card>
 
       {/* Sync Status */}
-      <Card className="bg-card border-border p-4">
+      <Card className="bg-gradient-to-br from-card to-card/50 border-border p-4 shadow-sm">
         <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <Database className="w-4 h-4 text-success" />
-            <span className="text-sm font-medium text-foreground">Conectado</span>
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-success/10 flex items-center justify-center">
+              <Database className="w-4 h-4 text-success" />
+            </div>
+            <span className="text-sm font-semibold text-foreground">Base de Datos</span>
           </div>
-          <div className="w-2 h-2 rounded-full bg-success animate-pulse"></div>
+          <div className="w-2.5 h-2.5 rounded-full bg-success animate-pulse shadow-lg shadow-success/50"></div>
         </div>
-        <div className="space-y-2 text-xs text-muted-foreground">
-          <div className="flex justify-between">
-            <span>Conexión:</span>
-            <span className="text-foreground font-medium">En línea</span>
+        <div className="space-y-2.5 text-xs">
+          <div className="flex justify-between items-center py-1.5 px-2 bg-muted/30 rounded">
+            <span className="text-muted-foreground">Estado:</span>
+            <span className="text-foreground font-semibold">En línea</span>
           </div>
-          <div className="flex justify-between">
-            <span>Latencia:</span>
-            <span className="text-foreground font-medium">
+          <div className="flex justify-between items-center py-1.5 px-2 bg-muted/30 rounded">
+            <span className="text-muted-foreground">Latencia:</span>
+            <span className="text-foreground font-semibold">
               {syncStatus.isSyncing ? 'Sincronizando...' : '94ms'}
             </span>
           </div>
-          <div className="flex justify-between">
-            <span>Última sync:</span>
-            <span className="text-foreground font-medium">
+          <div className="flex justify-between items-center py-1.5 px-2 bg-muted/30 rounded">
+            <span className="text-muted-foreground">Última sync:</span>
+            <span className="text-foreground font-semibold">
               {formatLastSync(syncStatus.lastSync)}
             </span>
           </div>
@@ -189,56 +183,68 @@ export function StatusPanel() {
       </Button>
 
       {/* Hardware Status */}
-      <div className="space-y-2">
-        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-          <Database className="w-4 h-4" />
-          Hardware
+      <Card className="bg-card border-border p-4">
+        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2 mb-3">
+          <Database className="w-4 h-4 text-primary" />
+          Hardware Conectado
         </h3>
-        <div className="space-y-2">
-          <div className="flex justify-between items-center text-sm">
-            <span className="text-muted-foreground">Báscula</span>
-            <span className={scalePort ? "text-success" : "text-warning"}>
-              {scalePort || 'Desconectada'}
-            </span>
+        <div className="space-y-2.5">
+          <div className="flex items-center justify-between py-2 px-3 bg-muted/30 rounded-lg border border-border/50">
+            <div className="flex items-center gap-2">
+              <Scale className="w-4 h-4 text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">Báscula</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className={`w-2 h-2 rounded-full ${scalePort ? 'bg-success' : 'bg-warning'}`}></div>
+              <span className={`text-sm font-semibold ${scalePort ? "text-success" : "text-warning"}`}>
+                {scalePort || 'Desconectada'}
+              </span>
+            </div>
           </div>
-          <div className="flex justify-between items-center text-sm">
-            <span className="text-muted-foreground">Impresora</span>
-            <span className={printerCount > 0 ? "text-success" : "text-warning"}>
-              {printerCount} configurada(s)
-            </span>
+          <div className="flex items-center justify-between py-2 px-3 bg-muted/30 rounded-lg border border-border/50">
+            <div className="flex items-center gap-2">
+              <FileText className="w-4 h-4 text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">Impresora</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className={`w-2 h-2 rounded-full ${printerCount > 0 ? 'bg-success' : 'bg-warning'}`}></div>
+              <span className={`text-sm font-semibold ${printerCount > 0 ? "text-success" : "text-warning"}`}>
+                {printerCount} configurada(s)
+              </span>
+            </div>
           </div>
         </div>
-      </div>
+      </Card>
 
       {/* Data Statistics */}
       <div className="space-y-3">
-        <Card className="bg-card border-border p-3 flex items-center gap-3">
-          <div className="w-10 h-10 rounded bg-primary/10 flex items-center justify-center">
-            <Building2 className="w-5 h-5 text-primary" />
+        <Card className="bg-gradient-to-br from-blue-500/10 to-blue-500/5 border-blue-500/20 p-3.5 flex items-center gap-3 hover:shadow-md transition-shadow">
+          <div className="w-11 h-11 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-lg">
+            <Building2 className="w-5 h-5 text-white" />
           </div>
           <div className="flex-1">
             <p className="text-2xl font-bold text-foreground">{stats.empresas}</p>
-            <p className="text-xs text-muted-foreground">Empresas</p>
+            <p className="text-xs font-medium text-muted-foreground">Empresas</p>
           </div>
         </Card>
 
-        <Card className="bg-card border-border p-3 flex items-center gap-3">
-          <div className="w-10 h-10 rounded bg-primary/10 flex items-center justify-center">
-            <Truck className="w-5 h-5 text-primary" />
+        <Card className="bg-gradient-to-br from-green-500/10 to-green-500/5 border-green-500/20 p-3.5 flex items-center gap-3 hover:shadow-md transition-shadow">
+          <div className="w-11 h-11 rounded-lg bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center shadow-lg">
+            <Truck className="w-5 h-5 text-white" />
           </div>
           <div className="flex-1">
             <p className="text-2xl font-bold text-foreground">{stats.vehiculos}</p>
-            <p className="text-xs text-muted-foreground">Vehículos</p>
+            <p className="text-xs font-medium text-muted-foreground">Vehículos</p>
           </div>
         </Card>
 
-        <Card className="bg-card border-border p-3 flex items-center gap-3">
-          <div className="w-10 h-10 rounded bg-primary/10 flex items-center justify-center">
-            <Users className="w-5 h-5 text-primary" />
+        <Card className="bg-gradient-to-br from-purple-500/10 to-purple-500/5 border-purple-500/20 p-3.5 flex items-center gap-3 hover:shadow-md transition-shadow">
+          <div className="w-11 h-11 rounded-lg bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center shadow-lg">
+            <Users className="w-5 h-5 text-white" />
           </div>
           <div className="flex-1">
             <p className="text-2xl font-bold text-foreground">{stats.operadores}</p>
-            <p className="text-xs text-muted-foreground">Operadores</p>
+            <p className="text-xs font-medium text-muted-foreground">Operadores</p>
           </div>
         </Card>
       </div>

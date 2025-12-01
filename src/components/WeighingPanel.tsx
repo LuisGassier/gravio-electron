@@ -446,46 +446,54 @@ export function WeighingPanel() {
       </Card>
 
       {/* Weight Display */}
-      <Card className="bg-card border-border">
+      <Card className="bg-gradient-to-br from-card to-card/50 border-border shadow-lg">
         <CardContent className="p-6">
-          <div className="text-center mb-4">
-            <div className="inline-flex items-center gap-3 mb-3">
-              <div className="w-2.5 h-2.5 rounded-full bg-primary/20">
-                <div className="w-2.5 h-2.5 rounded-full bg-primary animate-pulse"></div>
+          <div className="text-center mb-6">
+            <div className="inline-flex items-center gap-3 mb-4">
+              <div className="w-3 h-3 rounded-full bg-primary/20">
+                <div className="w-3 h-3 rounded-full bg-primary animate-pulse"></div>
               </div>
-              <div className="w-2.5 h-2.5 rounded-full bg-primary/20">
-                <div className="w-2.5 h-2.5 rounded-full bg-primary animate-pulse" style={{ animationDelay: '0.2s' }}></div>
+              <div className="w-3 h-3 rounded-full bg-primary/20">
+                <div className="w-3 h-3 rounded-full bg-primary animate-pulse" style={{ animationDelay: '0.2s' }}></div>
               </div>
-              <div className="w-2.5 h-2.5 rounded-full bg-primary/20">
-                <div className="w-2.5 h-2.5 rounded-full bg-primary animate-pulse" style={{ animationDelay: '0.4s' }}></div>
+              <div className="w-3 h-3 rounded-full bg-primary/20">
+                <div className="w-3 h-3 rounded-full bg-primary animate-pulse" style={{ animationDelay: '0.4s' }}></div>
               </div>
             </div>
-            <div className="text-6xl font-bold text-foreground mb-1 tracking-tight">
-              {weight}
+            <div className="relative">
+              <div className="text-7xl font-bold text-foreground mb-2 tracking-tight font-mono">
+                {weight}
+              </div>
+              <div className="absolute -right-12 top-1/2 -translate-y-1/2 text-3xl font-bold text-muted-foreground/40">
+                kg
+              </div>
             </div>
-            <div className="text-lg text-muted-foreground">kilogramos</div>
+            <div className="text-sm text-muted-foreground mt-2 font-medium">
+              Peso en tiempo real
+            </div>
           </div>
 
           {/* Scale Status */}
-          <div className="flex items-center justify-center gap-2 mb-4 py-2 px-4 bg-muted/30 rounded-md">
+          <div className="flex items-center justify-center gap-2 mb-6 py-3 px-4 bg-muted/30 rounded-lg border border-border/50">
             {isScaleConnected ? (
               <>
-                <div className="w-2 h-2 rounded-full bg-success"></div>
-                <span className="text-sm text-success font-medium">Báscula conectada</span>
+                <div className="w-2.5 h-2.5 rounded-full bg-success shadow-lg shadow-success/50"></div>
+                <span className="text-sm text-success font-semibold">Báscula conectada y estable</span>
               </>
             ) : (
               <>
-                <div className="w-2 h-2 rounded-full bg-destructive"></div>
-                <span className="text-sm text-destructive font-medium">Báscula no disponible</span>
+                <div className="w-2.5 h-2.5 rounded-full bg-destructive animate-pulse"></div>
+                <span className="text-sm text-destructive font-semibold">Báscula desconectada</span>
               </>
             )}
           </div>
 
           {/* Action Button */}
           <Button
-            className="w-full h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-base"
+            className="w-full h-14 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-primary-foreground font-bold text-base shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
             disabled={!isScaleConnected}
           >
+            <Scale className="w-5 h-5 mr-2" />
             Registrar Entrada
           </Button>
         </CardContent>

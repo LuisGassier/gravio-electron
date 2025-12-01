@@ -56,6 +56,18 @@ function App() {
     return <SplashScreen onComplete={() => setShowSplash(false)} />
   }
 
+  const handleLogout = async () => {
+    if (!window.electron) return
+    
+    try {
+      await window.electron.storage.delete('currentUser')
+      setUserName('')
+      setCurrentView('login')
+    } catch (error) {
+      console.error('Error logging out:', error)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <Toaster position="top-center" richColors />
@@ -63,6 +75,7 @@ function App() {
       <Header
         empresaName={empresaName}
         userName={userName}
+        onLogout={handleLogout}
       />
 
       {/* Content */}

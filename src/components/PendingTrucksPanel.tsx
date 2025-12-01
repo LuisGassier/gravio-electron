@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
-import { CheckCircle2, Truck } from 'lucide-react'
+import { CheckCircle2, Truck, Clock, User } from 'lucide-react'
 
 interface PendingTruck {
   id: string
@@ -56,26 +56,33 @@ export function PendingTrucksPanel() {
     <div className="space-y-4">
       {/* Title */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <CheckCircle2 className="w-5 h-5 text-success" />
-          <h2 className="text-lg font-semibold text-foreground">Camiones Pendientes</h2>
+        <div className="flex items-center gap-2.5">
+          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-success to-success/60 flex items-center justify-center shadow-md">
+            <CheckCircle2 className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h2 className="text-base font-semibold text-foreground">Camiones Pendientes</h2>
+            <p className="text-xs text-muted-foreground">Control de salida</p>
+          </div>
         </div>
-        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+        <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center border border-primary/20">
           <span className="text-primary font-bold text-sm">{pendingTrucks.length}</span>
         </div>
       </div>
 
       {/* Status Message */}
       {pendingTrucks.length === 0 ? (
-        <Card className="bg-success/10 border-success/30">
+        <Card className="bg-gradient-to-br from-success/10 to-success/5 border-success/30 shadow-sm">
           <CardContent className="p-6">
             <div className="text-center">
-              <CheckCircle2 className="w-12 h-12 text-success mx-auto mb-3" />
-              <h3 className="text-lg font-semibold text-success mb-1">
+              <div className="w-16 h-16 rounded-full bg-success/20 flex items-center justify-center mx-auto mb-3">
+                <CheckCircle2 className="w-10 h-10 text-success" />
+              </div>
+              <h3 className="text-base font-semibold text-success mb-1">
                 ¡Todos los camiones han salido!
               </h3>
               <p className="text-sm text-success/80">
-                No hay vehículos pendientes
+                No hay vehículos pendientes de salida
               </p>
             </div>
           </CardContent>
@@ -83,53 +90,61 @@ export function PendingTrucksPanel() {
       ) : (
         <>
           {/* Subtitle */}
-          <p className="text-sm text-muted-foreground">
-            {pendingTrucks.length === 1
-              ? 'Hay 1 vehículo pendiente de salida'
-              : `Hay ${pendingTrucks.length} vehículos pendientes de salida`
-            }
-          </p>
+          <div className="flex items-center gap-2 px-3 py-2 bg-muted/30 rounded-lg border border-border/50">
+            <div className="w-2 h-2 rounded-full bg-warning animate-pulse"></div>
+            <p className="text-xs font-medium text-muted-foreground">
+              {pendingTrucks.length === 1
+                ? '1 vehículo esperando salida'
+                : `${pendingTrucks.length} vehículos esperando salida`
+              }
+            </p>
+          </div>
 
           {/* Pending Trucks List */}
-          <div className="space-y-2 max-h-[calc(100vh-280px)] overflow-y-auto pr-2">
+          <div className="space-y-2.5 max-h-[calc(100vh-280px)] overflow-y-auto pr-2 scrollbar-thin">
             {pendingTrucks.map((truck) => (
               <Card
                 key={truck.id}
-                className="bg-card border-border hover:border-primary/50 transition-colors"
+                className="bg-card border-border hover:border-primary/40 hover:shadow-md transition-all duration-200 cursor-pointer group"
               >
-                <CardContent className="p-4">
+                <CardContent className="p-3.5">
                   <div className="flex items-start gap-3">
                     {/* Truck Icon */}
-                    <div className="w-10 h-10 rounded bg-primary/10 flex items-center justify-center flex-shrink-0">
+                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center flex-shrink-0 group-hover:from-primary/20 group-hover:to-primary/10 transition-colors">
                       <Truck className="w-5 h-5 text-primary" />
                     </div>
 
                     {/* Truck Info */}
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-2 mb-1">
+                      <div className="flex items-start justify-between gap-2 mb-2">
                         <h3 className="font-semibold text-foreground text-sm">
                           {truck.numero_economico || 'N/A'}
                         </h3>
-                        <span className="text-xs text-muted-foreground whitespace-nowrap">
+                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground whitespace-nowrap bg-muted/30 px-2 py-1 rounded">
+                          <Clock className="w-3 h-3" />
                           {formatTime(truck.hora_entrada)}
-                        </span>
+                        </div>
                       </div>
 
-                      <div className="space-y-1">
-                        <p className="text-xs text-muted-foreground">
-                          Placas: <span className="text-foreground font-medium">{truck.placas || 'N/A'}</span>
-                        </p>
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground">Placas:</span>
+                          <span className="text-xs text-foreground font-semibold bg-muted/30 px-2 py-0.5 rounded">
+                            {truck.placas || 'N/A'}
+                          </span>
+                        </div>
                         {truck.operador_nombre && (
                           <p className="text-xs text-muted-foreground">
-                            Operador: <span className="text-foreground font-medium">{truck.operador_nombre}</span>
+                            <User className="w-3 h-3 inline mr-1" />
+                            <span className="text-foreground font-medium">{truck.operador_nombre}</span>
                           </p>
                         )}
                       </div>
 
                       {/* Status Badge */}
-                      <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-warning/10 border border-warning/30">
+                      <div className="mt-2.5 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-warning/10 border border-warning/30">
                         <div className="w-1.5 h-1.5 rounded-full bg-warning animate-pulse"></div>
-                        <span className="text-xs font-medium text-warning">Pendiente de salida</span>
+                        <span className="text-xs font-semibold text-warning">Pendiente de salida</span>
                       </div>
                     </div>
                   </div>
