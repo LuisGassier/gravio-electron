@@ -112,10 +112,6 @@ export function WeighingPanel() {
         []
       )
 
-      console.log('📦 Datos cargados:')
-      console.log('  Conceptos:', conceptosData)
-      console.log('  Operadores:', operadoresData)
-
       setVehiculos(vehiculosData)
       setOperadores(operadoresData)
       setRutas(rutasData)
@@ -157,16 +153,6 @@ export function WeighingPanel() {
     ? conceptos.filter(c => c.clave_empresa === selectedEmpresa)
     : conceptos
 
-  // Debug logs
-  console.log('📊 Estado actual:')
-  console.log('  selectedEmpresa:', selectedEmpresa)
-  console.log('  Total operadores:', operadores.length)
-  console.log('  Operadores filtrados:', filteredOperadores.length)
-  console.log('  Total conceptos:', conceptos.length)
-  console.log('  Conceptos filtrados:', filteredConceptos.length)
-
-
-
   // Prepare options for comboboxes con formato mejorado
   const vehiculoOptions = filteredVehiculos
     .filter(v => v.clave_empresa && v.empresa) // Filtrar los que no tienen empresa
@@ -197,16 +183,12 @@ export function WeighingPanel() {
 
   const conceptoOptions = filteredConceptos
     .filter(c => c.clave_empresa) // Solo verificar clave_empresa (empresa puede ser null temporalmente)
-    .map(c => {
-      const option = {
-        value: `${c.id}-${c.clave_empresa}`,
-        label: `${c.clave_concepto || ''} ${c.nombre}`.trim(),
-        subtitle: c.empresa || c.prefijo || '(Sin empresa)',
-        clave_empresa: c.clave_empresa
-      }
-      console.log('🎯 Concepto option:', option)
-      return option
-    })
+    .map(c => ({
+      value: `${c.id}-${c.clave_empresa}`,
+      label: `${c.clave_concepto || ''} ${c.nombre}`.trim(),
+      subtitle: c.empresa || c.prefijo || '(Sin empresa)',
+      clave_empresa: c.clave_empresa
+    }))
 
   // Handler para actualizar empresa cuando se selecciona un valor
   const handleVehiculoChange = (value: string) => {
@@ -306,7 +288,6 @@ export function WeighingPanel() {
   }
 
   const handleConceptoChange = (value: string) => {
-    console.log('🔍 handleConceptoChange called with value:', value)
     setSelectedConcepto(value)
     if (!value) {
       if (!selectedVehiculo && !selectedOperador && !selectedRuta) {
@@ -319,17 +300,9 @@ export function WeighingPanel() {
     const id = value.substring(0, lastDashIndex)
     const empresa = value.substring(lastDashIndex + 1)
 
-    console.log('🔍 Concepto ID:', id, 'Empresa:', empresa)
-    console.log('🔍 Todos los conceptos:', conceptos)
-    console.log('🔍 Buscando concepto con id:', id, 'y clave_empresa:', Number(empresa))
-    const concepto = conceptos.find(c => {
-      console.log('  Comparando:', c.id, '===', id, '&&', c.clave_empresa, '===', Number(empresa), '→', c.id === id && c.clave_empresa === Number(empresa))
-      return c.id === id && c.clave_empresa === Number(empresa)
-    })
-    console.log('🔍 Concepto encontrado:', concepto)
+    const concepto = conceptos.find(c => c.id === id && c.clave_empresa === Number(empresa))
     if (concepto) {
       const nuevaEmpresa = concepto.clave_empresa
-      console.log('🔍 Nueva empresa seleccionada:', nuevaEmpresa)
       setSelectedEmpresa(nuevaEmpresa)
       // Limpiar campos que no pertenecen a esta empresa
       if (selectedVehiculo) {
