@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Printer, Scale, RefreshCw, Save, X } from 'lucide-react'
+import { container } from '@/application/DIContainer'
 
 type SerialPort = {
   path: string
@@ -53,14 +54,14 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
 
     const savedPort = await window.electron.storage.get('serialPort')
     const savedBaudRate = await window.electron.storage.get('baudRate')
-    const savedPrinter = await window.electron.storage.get('printerName')
-    const savedAutoPrint = await window.electron.storage.get('autoPrint')
+    const savedPrinter = await container.printerService.getDefaultPrinter()
+    const savedAutoPrint = await container.printerService.isAutoPrintEnabled()
 
     setSettings({
       serialPort: savedPort || '',
       baudRate: savedBaudRate || 2400,
       printerName: savedPrinter || '',
-      autoPrint: savedAutoPrint !== undefined ? savedAutoPrint : true
+      autoPrint: savedAutoPrint
     })
   }
 
@@ -101,14 +102,28 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
     if (!window.electron) return
 
     try {
+      // Save serial port settings
       await window.electron.storage.set('serialPort', settings.serialPort)
       await window.electron.storage.set('baudRate', settings.baudRate)
-      await window.electron.storage.set('printerName', settings.printerName)
-      await window.electron.storage.set('autoPrint', settings.autoPrint)
-      
+
+      // Save printer settings using PrinterService
+      if (settings.printerName) {
+        const printerResult = await container.printerService.setDefaultPrinter(settings.printerName)
+        if (!printerResult.success) {
+          toast.error(`Error al guardar impresora: ${printerResult.error.message}`)
+          return
+        }
+      }
+
+      const autoPrintResult = await container.printerService.setAutoPrint(settings.autoPrint)
+      if (!autoPrintResult.success) {
+        toast.error(`Error al guardar configuración de impresión: ${autoPrintResult.error.message}`)
+        return
+      }
+
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
-      
+
       toast.success('Configuración guardada correctamente')
       console.log('✅ Configuración guardada:', settings)
     } catch (error) {

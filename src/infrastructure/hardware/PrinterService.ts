@@ -46,14 +46,26 @@ export class PrinterService implements IPrinterService {
 
       // Si no se especifica impresora, usar la configurada por defecto
       let printerName = data.printerName;
+      console.log('🖨️ printTicket llamado con printerName:', printerName);
+
       if (!printerName) {
+        console.log('🔍 No se especificó impresora, buscando impresora por defecto...');
         printerName = await this.getDefaultPrinter();
+        console.log('🖨️ Impresora por defecto recuperada:', printerName);
+
         if (!printerName) {
+          // Intentar listar impresoras para debug
+          const printersResult = await this.listPrinters();
+          console.error('❌ No hay impresora configurada');
+          console.log('📋 Impresoras disponibles:', printersResult.success ? printersResult.value : 'Error al listar');
+
           return ResultFactory.fail(
             new Error('No hay impresora configurada. Configure una impresora en Ajustes.')
           );
         }
       }
+
+      console.log('✅ Usando impresora:', printerName);
 
       const { registro, empresa } = data;
 
