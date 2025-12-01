@@ -1,9 +1,7 @@
-import { Settings, User, Clock, Building2, History, LogOut, Sun, Moon, Sunset, Download, RefreshCw } from 'lucide-react'
+import { Settings, User, Clock, Building2, History, LogOut, Sun, Moon, Sunset } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useState, useEffect } from 'react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { checkForUpdates, type AppVersion } from '@/lib/updater'
-import { UpdateNotificationDialog } from './UpdateNotificationDialog'
 import { toast } from 'sonner'
 import {
   DropdownMenu,
@@ -32,11 +30,6 @@ export function Header({
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [shiftConfig, setShiftConfig] = useState({ nightStart: 23, nightEnd: 7 })
   const [logoUrl, setLogoUrl] = useState<string | null>(null)
-  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false)
-  const [updateAvailable, setUpdateAvailable] = useState(false)
-  const [updateInfo, setUpdateInfo] = useState<AppVersion | null>(null)
-  const [showUpdateDialog, setShowUpdateDialog] = useState(false)
-  const [currentVersion, setCurrentVersion] = useState<string>('')
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -46,7 +39,6 @@ export function Header({
     // Cargar configuración de turnos y logo
     loadShiftConfig()
     loadLogo()
-    loadVersion()
 
     return () => clearInterval(timer)
   }, [])
@@ -72,42 +64,6 @@ export function Header({
       }
     } catch (error) {
       console.error('Error loading logo:', error)
-    }
-  }
-
-  const loadVersion = async () => {
-    if (!window.electron) return
-    try {
-      const version = await window.electron.getVersion()
-      setCurrentVersion(version)
-    } catch (error) {
-      console.error('Error loading version:', error)
-    }
-  }
-
-  const handleCheckUpdates = async () => {
-    setIsCheckingUpdate(true)
-    try {
-      const result = await checkForUpdates()
-      if (result.hasUpdate && result.latestVersion) {
-        setUpdateAvailable(true)
-        setUpdateInfo(result.latestVersion)
-        setShowUpdateDialog(true)
-        toast.success('¡Actualización disponible!', {
-          description: `Nueva versión ${result.latestVersion.version} lista para instalar.`
-        })
-      } else {
-        toast.success('Sistema actualizado', {
-          description: `Ya tienes la última versión (${result.currentVersion}) instalada.`
-        })
-      }
-    } catch (error) {
-      console.error('Error checking for updates:', error)
-      toast.error('Error al verificar actualizaciones', {
-        description: 'No se pudo conectar con el servidor. Intenta nuevamente.'
-      })
-    } finally {
-      setIsCheckingUpdate(false)
     }
   }
 
@@ -191,42 +147,6 @@ export function Header({
 
         {/* Right: Time, User, Settings */}
         <div className="flex items-center gap-4 justify-end">
-          {/* Update Dialog */}
-          {updateInfo && (
-            <UpdateNotificationDialog
-              open={showUpdateDialog}
-              onOpenChange={setShowUpdateDialog}
-              updateInfo={updateInfo}
-              currentVersion={currentVersion}
-            />
-          )}
-
-          {/* Update Button */}
-          <Button
-            variant={updateAvailable ? "default" : "outline"}
-            size="sm"
-            onClick={updateAvailable ? () => setShowUpdateDialog(true) : handleCheckUpdates}
-            disabled={isCheckingUpdate}
-            className={updateAvailable ? "bg-warning hover:bg-warning/90 text-white border-warning" : ""}
-          >
-            {isCheckingUpdate ? (
-              <>
-                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                Verificando...
-              </>
-            ) : updateAvailable ? (
-              <>
-                <Download className="w-4 h-4 mr-2" />
-                Actualizar
-              </>
-            ) : (
-              <>
-                <RefreshCw className="w-4 h-4 mr-2" />
-                Buscar actualizaciones
-              </>
-            )}
-          </Button>
-
           {/* Date and Time */}
           <div className="flex items-center gap-2.5 px-3 py-2 bg-secondary/50 rounded-lg border border-border/50">
             <Clock className="w-4 h-4 text-primary" />
