@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
-import { Printer, Scale, RefreshCw, Save, X } from 'lucide-react'
+import { Printer, Scale, RefreshCw, Save, X, Image as ImageIcon, Upload } from 'lucide-react'
 
 type SerialPort = {
   path: string
@@ -22,6 +22,7 @@ type AppSettings = {
   baudRate: number
   printerName: string
   autoPrint: boolean
+  empresaLogo?: string
 }
 
 interface SettingsPanelProps {
@@ -35,11 +36,13 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
     serialPort: '',
     baudRate: 2400,
     printerName: '',
-    autoPrint: true
+    autoPrint: true,
+    empresaLogo: ''
   })
   const [loading, setLoading] = useState(false)
   const [saved, setSaved] = useState(false)
   const [manualPortEntry, setManualPortEntry] = useState(false)
+  const [logoPreview, setLogoPreview] = useState<string | null>(null)
 
   // Cargar configuración guardada
   useEffect(() => {
@@ -55,13 +58,19 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
     const savedBaudRate = await window.electron.storage.get('baudRate')
     const savedPrinter = await window.electron.storage.get('printerName')
     const savedAutoPrint = await window.electron.storage.get('autoPrint')
+    const savedLogo = await window.electron.storage.get('empresaLogo')
 
     setSettings({
       serialPort: savedPort || '',
       baudRate: savedBaudRate || 2400,
       printerName: savedPrinter || '',
-      autoPrint: savedAutoPrint !== undefined ? savedAutoPrint : true
+      autoPrint: savedAutoPrint !== undefined ? savedAutoPrint : true,
+      empresaLogo: savedLogo || ''
     })
+
+    if (savedLogo) {
+      setLogoPreview(savedLogo)
+    }
   }
 
   const refreshPorts = async () => {
@@ -100,6 +109,10 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
       await window.electron.storage.set('printerName', settings.printerName)
       await window.electron.storage.set('autoPrint', settings.autoPrint)
       
+      if (settings.empresaLogo) {
+        await window.electron.storage.set('empresaLogo', settings.empresaLogo)
+      }
+      
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
       
@@ -109,6 +122,41 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
       console.error('Error al guardar configuración:', error)
       toast.error('Error al guardar la configuración')
     }
+  }
+
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Validar tipo de archivo
+    if (!file.type.startsWith('image/')) {
+      toast.error('Por favor selecciona una imagen válida')
+      return
+    }
+
+    // Validar tamaño (máximo 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('La imagen no debe superar 2MB')
+      return
+    }
+
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string
+      setLogoPreview(dataUrl)
+      setSettings({ ...settings, empresaLogo: dataUrl })
+      toast.success('Logo cargado correctamente')
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const removeLogo = async () => {
+    setLogoPreview(null)
+    setSettings({ ...settings, empresaLogo: '' })
+    if (window.electron) {
+      await window.electron.storage.delete('empresaLogo')
+    }
+    toast.success('Logo eliminado')
   }
 
   const testConnection = async () => {
@@ -163,10 +211,64 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between pb-4 border-b border-border/50">
-        <h2 className="text-lg font-semibold">Configuración de Hardware</h2>
+        <h2 className="text-lg font-semibold">Configuración del Sistema</h2>
         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onClose}>
           <X className="w-4 h-4" />
         </Button>
+      </div>
+
+      {/* Logo de Empresa */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2 text-lg font-medium">
+          <div className="p-2 bg-primary/10 rounded-md text-primary">
+            <ImageIcon className="w-5 h-5" />
+          </div>
+          <h3>Logo de la Empresa</h3>
+        </div>
+
+        <div className="space-y-4 pl-2">
+          <div className="flex items-center gap-4">
+            {logoPreview ? (
+              <div className="relative">
+                <img 
+                  src={logoPreview} 
+                  alt="Logo preview" 
+                  className="h-24 w-24 object-contain rounded-lg border-2 border-border bg-secondary/30"
+                />
+                <button
+                  onClick={removeLogo}
+                  className="absolute -top-2 -right-2 p-1 bg-destructive rounded-full hover:bg-destructive/80 transition-colors"
+                >
+                  <X className="w-3 h-3 text-white" />
+                </button>
+              </div>
+            ) : (
+              <div className="h-24 w-24 rounded-lg border-2 border-dashed border-border bg-secondary/30 flex items-center justify-center">
+                <ImageIcon className="w-8 h-8 text-muted-foreground" />
+              </div>
+            )}
+
+            <div className="flex-1">
+              <label 
+                htmlFor="logo-upload" 
+                className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg cursor-pointer transition-colors border border-primary/30"
+              >
+                <Upload className="w-4 h-4" />
+                <span className="font-medium">Cargar Logo</span>
+              </label>
+              <input
+                id="logo-upload"
+                type="file"
+                accept="image/*"
+                onChange={handleLogoUpload}
+                className="hidden"
+              />
+              <p className="text-xs text-muted-foreground mt-2">
+                Formatos: PNG, JPG, SVG (máx. 2MB)
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Impresora */}

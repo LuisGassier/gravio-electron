@@ -142,15 +142,15 @@ export function StatusPanel() {
       </Card>
 
       {/* Sync Status */}
-      <Card className="bg-gradient-to-br from-card to-card/50 border-border p-4 shadow-sm">
+      <Card className="card-elevated border-border p-4">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-success/10 flex items-center justify-center">
+            <div className="w-8 h-8 icon-wrapper bg-success/10">
               <Database className="w-4 h-4 text-success" />
             </div>
             <span className="text-sm font-semibold text-foreground">Base de Datos</span>
           </div>
-          <div className="w-2.5 h-2.5 rounded-full bg-success animate-pulse shadow-lg shadow-success/50"></div>
+          <div className="status-indicator status-indicator-active"></div>
         </div>
         <div className="space-y-2.5 text-xs">
           <div className="flex justify-between items-center py-1.5 px-2 bg-muted/30 rounded">
@@ -218,8 +218,8 @@ export function StatusPanel() {
 
       {/* Data Statistics */}
       <div className="space-y-3">
-        <Card className="bg-gradient-to-br from-blue-500/10 to-blue-500/5 border-blue-500/20 p-3.5 flex items-center gap-3 hover:shadow-md transition-shadow">
-          <div className="w-11 h-11 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-lg">
+        <Card className="card-elevated p-3.5 flex items-center gap-3 border-blue-500/20">
+          <div className="w-11 h-11 icon-wrapper bg-gradient-to-br from-blue-500 to-blue-600">
             <Building2 className="w-5 h-5 text-white" />
           </div>
           <div className="flex-1">
@@ -228,8 +228,8 @@ export function StatusPanel() {
           </div>
         </Card>
 
-        <Card className="bg-gradient-to-br from-green-500/10 to-green-500/5 border-green-500/20 p-3.5 flex items-center gap-3 hover:shadow-md transition-shadow">
-          <div className="w-11 h-11 rounded-lg bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center shadow-lg">
+        <Card className="card-elevated p-3.5 flex items-center gap-3 border-green-500/20">
+          <div className="w-11 h-11 icon-wrapper bg-gradient-to-br from-green-500 to-green-600">
             <Truck className="w-5 h-5 text-white" />
           </div>
           <div className="flex-1">
@@ -238,8 +238,8 @@ export function StatusPanel() {
           </div>
         </Card>
 
-        <Card className="bg-gradient-to-br from-purple-500/10 to-purple-500/5 border-purple-500/20 p-3.5 flex items-center gap-3 hover:shadow-md transition-shadow">
-          <div className="w-11 h-11 rounded-lg bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center shadow-lg">
+        <Card className="card-elevated p-3.5 flex items-center gap-3 border-purple-500/20">
+          <div className="w-11 h-11 icon-wrapper bg-gradient-to-br from-purple-500 to-purple-600">
             <Users className="w-5 h-5 text-white" />
           </div>
           <div className="flex-1">

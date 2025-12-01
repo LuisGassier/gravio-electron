@@ -25,7 +25,28 @@
     --ring: 160 100% 50%;
     --success: 160 100% 50%;
     --warning: 45 100% 55%;
-    --radius: 0.375rem;
+    --radius: 0.5rem;
+    
+    /* Espaciado consistente */
+    --spacing-xs: 0.5rem;
+    --spacing-sm: 0.75rem;
+    --spacing-md: 1rem;
+    --spacing-lg: 1.5rem;
+    --spacing-xl: 2rem;
+    
+    /* Tamaños de tarjeta */
+    --card-padding: 1rem;
+    --card-gap: 0.75rem;
+    
+    /* Sombras */
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+    
+    /* Transiciones */
+    --transition-fast: 150ms;
+    --transition-base: 200ms;
+    --transition-slow: 300ms;
   }
 }
 
@@ -72,5 +93,71 @@
 
   .scrollbar-thin:hover {
     scrollbar-color: hsl(var(--border) / 0.3) transparent;
+  }
+  
+  /* Estilos de tarjeta consistentes */
+  .card-elevated {
+    @apply bg-gradient-to-br from-card to-card/50 border-border shadow-md;
+    transition: all var(--transition-base) ease;
+  }
+  
+  .card-elevated:hover {
+    @apply shadow-lg;
+  }
+  
+  /* Estilos de iconos consistentes */
+  .icon-wrapper {
+    @apply rounded-lg flex items-center justify-center shadow-md;
+    transition: all var(--transition-base) ease;
+  }
+  
+  .icon-wrapper-primary {
+    @apply bg-gradient-to-br from-primary to-primary/60;
+  }
+  
+  .icon-wrapper-secondary {
+    @apply bg-gradient-to-br from-secondary to-secondary/60;
+  }
+  
+  /* Badges de estado */
+  .badge-status {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold;
+    transition: all var(--transition-fast) ease;
+  }
+  
+  .badge-success {
+    @apply bg-success/10 border border-success/30 text-success;
+  }
+  
+  .badge-warning {
+    @apply bg-warning/10 border border-warning/30 text-warning;
+  }
+  
+  .badge-error {
+    @apply bg-destructive/10 border border-destructive/30 text-destructive;
+  }
+  
+  /* Indicadores animados */
+  .status-indicator {
+    @apply w-2.5 h-2.5 rounded-full;
+  }
+  
+  .status-indicator-active {
+    @apply bg-success shadow-lg shadow-success/50;
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+  
+  .status-indicator-inactive {
+    @apply bg-destructive;
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+  
+  /* Botones de acción */
+  .btn-action {
+    @apply rounded-lg border border-transparent transition-all duration-200;
+  }
+  
+  .btn-action:hover {
+    @apply border-border/50 shadow-md;
   }
 }

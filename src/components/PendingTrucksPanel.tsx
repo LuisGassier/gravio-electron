@@ -57,7 +57,7 @@ export function PendingTrucksPanel() {
       {/* Title */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-success to-success/60 flex items-center justify-center shadow-md">
+          <div className="w-9 h-9 icon-wrapper bg-gradient-to-br from-success to-success/60">
             <CheckCircle2 className="w-5 h-5 text-white" />
           </div>
           <div>
@@ -65,7 +65,7 @@ export function PendingTrucksPanel() {
             <p className="text-xs text-muted-foreground">Control de salida</p>
           </div>
         </div>
-        <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center border border-primary/20">
+        <div className="w-9 h-9 icon-wrapper bg-primary/10 border border-primary/20">
           <span className="text-primary font-bold text-sm">{pendingTrucks.length}</span>
         </div>
       </div>
@@ -105,12 +105,12 @@ export function PendingTrucksPanel() {
             {pendingTrucks.map((truck) => (
               <Card
                 key={truck.id}
-                className="bg-card border-border hover:border-primary/40 hover:shadow-md transition-all duration-200 cursor-pointer group"
+                className="card-elevated border-border hover:border-primary/40 cursor-pointer group"
               >
                 <CardContent className="p-3.5">
                   <div className="flex items-start gap-3">
                     {/* Truck Icon */}
-                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center flex-shrink-0 group-hover:from-primary/20 group-hover:to-primary/10 transition-colors">
+                    <div className="w-10 h-10 icon-wrapper bg-gradient-to-br from-primary/10 to-primary/5 flex-shrink-0 group-hover:from-primary/20 group-hover:to-primary/10">
                       <Truck className="w-5 h-5 text-primary" />
                     </div>
 
@@ -142,9 +142,9 @@ export function PendingTrucksPanel() {
                       </div>
 
                       {/* Status Badge */}
-                      <div className="mt-2.5 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-warning/10 border border-warning/30">
+                      <div className="mt-2.5 badge-status badge-warning">
                         <div className="w-1.5 h-1.5 rounded-full bg-warning animate-pulse"></div>
-                        <span className="text-xs font-semibold text-warning">Pendiente de salida</span>
+                        <span>Pendiente de salida</span>
                       </div>
                     </div>
                   </div>

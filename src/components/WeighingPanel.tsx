@@ -446,19 +446,13 @@ export function WeighingPanel() {
       </Card>
 
       {/* Weight Display */}
-      <Card className="bg-gradient-to-br from-card to-card/50 border-border shadow-lg">
+      <Card className="card-elevated border-border">
         <CardContent className="p-6">
           <div className="text-center mb-6">
             <div className="inline-flex items-center gap-3 mb-4">
-              <div className="w-3 h-3 rounded-full bg-primary/20">
-                <div className="w-3 h-3 rounded-full bg-primary animate-pulse"></div>
-              </div>
-              <div className="w-3 h-3 rounded-full bg-primary/20">
-                <div className="w-3 h-3 rounded-full bg-primary animate-pulse" style={{ animationDelay: '0.2s' }}></div>
-              </div>
-              <div className="w-3 h-3 rounded-full bg-primary/20">
-                <div className="w-3 h-3 rounded-full bg-primary animate-pulse" style={{ animationDelay: '0.4s' }}></div>
-              </div>
+              <div className="status-indicator status-indicator-active"></div>
+              <div className="status-indicator status-indicator-active" style={{ animationDelay: '0.2s' }}></div>
+              <div className="status-indicator status-indicator-active" style={{ animationDelay: '0.4s' }}></div>
             </div>
             <div className="relative">
               <div className="text-7xl font-bold text-foreground mb-2 tracking-tight font-mono">
@@ -474,17 +468,17 @@ export function WeighingPanel() {
           </div>
 
           {/* Scale Status */}
-          <div className="flex items-center justify-center gap-2 mb-6 py-3 px-4 bg-muted/30 rounded-lg border border-border/50">
+          <div className="flex items-center justify-center gap-2 mb-6">
             {isScaleConnected ? (
-              <>
-                <div className="w-2.5 h-2.5 rounded-full bg-success shadow-lg shadow-success/50"></div>
-                <span className="text-sm text-success font-semibold">Báscula conectada y estable</span>
-              </>
+              <div className="badge-status badge-success">
+                <div className="status-indicator status-indicator-active"></div>
+                <span>Báscula conectada y estable</span>
+              </div>
             ) : (
-              <>
-                <div className="w-2.5 h-2.5 rounded-full bg-destructive animate-pulse"></div>
-                <span className="text-sm text-destructive font-semibold">Báscula desconectada</span>
-              </>
+              <div className="badge-status badge-error">
+                <div className="status-indicator status-indicator-inactive"></div>
+                <span>Báscula desconectada</span>
+              </div>
             )}
           </div>
 

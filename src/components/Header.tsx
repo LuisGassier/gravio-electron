@@ -26,14 +26,16 @@ export function Header({
   const [currentTime, setCurrentTime] = useState(new Date())
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [shiftConfig, setShiftConfig] = useState({ nightStart: 23, nightEnd: 7 })
+  const [logoUrl, setLogoUrl] = useState<string | null>(null)
 
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date())
     }, 1000)
 
-    // Cargar configuración de turnos
+    // Cargar configuración de turnos y logo
     loadShiftConfig()
+    loadLogo()
 
     return () => clearInterval(timer)
   }, [])
@@ -47,6 +49,18 @@ export function Header({
       }
     } catch (error) {
       console.error('Error loading shift config:', error)
+    }
+  }
+
+  const loadLogo = async () => {
+    if (!window.electron) return
+    try {
+      const logo = await window.electron.storage.get('empresaLogo')
+      if (logo) {
+        setLogoUrl(logo)
+      }
+    } catch (error) {
+      console.error('Error loading logo:', error)
     }
   }
 
@@ -98,23 +112,33 @@ export function Header({
 
   return (
     <header className="bg-card border-b border-border px-6 py-3 shadow-sm">
-      <div className="flex items-center justify-between">
-        {/* Left: Logo and Company Name */}
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-gradient-to-br from-primary to-primary/60 rounded-lg flex items-center justify-center shadow-md">
-            <span className="text-white font-bold text-lg">G</span>
-          </div>
-          <div className="flex flex-col">
-            <span className="text-foreground font-semibold text-sm">{empresaName}</span>
-            <div className="flex items-center gap-2 text-xs">
-              {getGreetingIcon(currentTime)}
-              <span className="text-muted-foreground">{getGreeting(currentTime)} • Turno {getShift(currentTime)}</span>
+      <div className="grid grid-cols-3 items-center">
+        {/* Left: Greeting Info */}
+        <div className="flex items-center gap-2 text-xs">
+          {getGreetingIcon(currentTime)}
+          <span className="text-muted-foreground">{getGreeting(currentTime)} • Turno {getShift(currentTime)}</span>
+        </div>
+
+        {/* Center: Logo and Company Name */}
+        <div className="flex items-center justify-center gap-3">
+          {logoUrl ? (
+            <img 
+              src={logoUrl} 
+              alt="Logo Empresa" 
+              className="h-12 w-12 object-contain rounded-lg shadow-md"
+            />
+          ) : (
+            <div className="w-12 h-12 bg-gradient-to-br from-primary to-primary/60 rounded-lg flex items-center justify-center shadow-md">
+              <span className="text-white font-bold text-xl">G</span>
             </div>
+          )}
+          <div className="flex flex-col items-center">
+            <span className="text-foreground font-semibold text-base">{empresaName}</span>
           </div>
         </div>
 
         {/* Right: Time, User, Settings */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 justify-end">
           {/* Date and Time */}
           <div className="flex items-center gap-2.5 px-3 py-2 bg-secondary/50 rounded-lg border border-border/50">
             <Clock className="w-4 h-4 text-primary" />
