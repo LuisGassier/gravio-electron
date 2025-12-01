@@ -18,6 +18,7 @@ import {
   closeSerialPort,
   readCurrentWeight,
   isPortOpen,
+  getPortInfo,
 } from './serialport'
 
 import {
@@ -129,6 +130,7 @@ function registerIpcHandlers() {
   
   ipcMain.handle('serial:close', closeSerialPort)
   ipcMain.handle('serial:read', readCurrentWeight)
+  ipcMain.handle('serial:getPortInfo', getPortInfo)
 
   // Database (SQLite)
   ipcMain.handle('db:query', (_event, sql: string, params?: any[]) => {

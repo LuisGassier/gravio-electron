@@ -9,6 +9,7 @@ export type ElectronAPI = {
     open: (port: string, baudRate: number) => Promise<boolean>
     close: () => Promise<void>
     read: () => Promise<string>
+    getPortInfo: () => Promise<{ path: string; baudRate: number; isOpen: boolean } | null>
     onData: (callback: (data: string) => void) => void
   }
   printer: {

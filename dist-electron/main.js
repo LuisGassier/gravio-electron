@@ -16463,6 +16463,14 @@ async function closeSerialPort() {
 function readCurrentWeight() {
   return currentWeight;
 }
+function getPortInfo() {
+  if (!port) return null;
+  return {
+    path: port.path,
+    baudRate: port.baudRate,
+    isOpen: port.isOpen
+  };
+}
 async function listPrinters(mainWindow2) {
   console.log("📞 listPrinters() llamada - mainWindow:", mainWindow2 ? "disponible" : "NULL");
   try {
@@ -16659,6 +16667,7 @@ function registerIpcHandlers() {
   });
   ipcMain$1.handle("serial:close", closeSerialPort);
   ipcMain$1.handle("serial:read", readCurrentWeight);
+  ipcMain$1.handle("serial:getPortInfo", getPortInfo);
   ipcMain$1.handle("db:query", (_event, sql, params) => {
     return executeQuery(sql, params);
   });

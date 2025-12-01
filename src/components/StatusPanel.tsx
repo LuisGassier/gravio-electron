@@ -15,6 +15,8 @@ export function StatusPanel() {
   })
   const [isSyncing, setIsSyncing] = useState(false)
   const [version, setVersion] = useState<string>('')
+  const [printerCount, setPrinterCount] = useState(0)
+  const [scalePort, setScalePort] = useState<string | null>(null)
 
   useEffect(() => {
     // Online/Offline listeners
@@ -26,10 +28,23 @@ export function StatusPanel() {
     // Sync status listener
     const unsubscribe = onSyncStatusChange(setSyncStatus)
 
-    // Get version
+    // Get version and hardware info
     if (window.electron) {
       window.electron.getVersion().then(setVersion)
       loadStats()
+      
+      // Load hardware status
+      window.electron.printer.list().then(printers => {
+        setPrinterCount(printers.length)
+      })
+      
+      window.electron.serialPort.getPortInfo().then(info => {
+        if (info && info.isOpen) {
+          setScalePort(info.path)
+        } else {
+          setScalePort(null)
+        }
+      })
     }
 
     return () => {
@@ -182,11 +197,15 @@ export function StatusPanel() {
         <div className="space-y-2">
           <div className="flex justify-between items-center text-sm">
             <span className="text-muted-foreground">Báscula</span>
-            <span className="text-warning">COM8</span>
+            <span className={scalePort ? "text-success" : "text-warning"}>
+              {scalePort || 'Desconectada'}
+            </span>
           </div>
           <div className="flex justify-between items-center text-sm">
             <span className="text-muted-foreground">Impresora</span>
-            <span className="text-success">1 configurada(s)</span>
+            <span className={printerCount > 0 ? "text-success" : "text-warning"}>
+              {printerCount} configurada(s)
+            </span>
           </div>
         </div>
       </div>

@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('electron', {
       ipcRenderer.invoke('serial:open', port, baudRate),
     close: () => ipcRenderer.invoke('serial:close'),
     read: () => ipcRenderer.invoke('serial:read'),
+    getPortInfo: () => ipcRenderer.invoke('serial:getPortInfo'),
     onData: (callback: (data: string) => void) => {
       ipcRenderer.on('serial:data', (_event, data) => callback(data))
     },
