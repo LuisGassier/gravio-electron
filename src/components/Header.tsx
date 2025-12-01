@@ -161,12 +161,19 @@ export function Header({
             {isCheckingUpdate ? 'Verificando...' : 'Actualizaciones'}
           </Button>
 
-          {/* Date and Time */}h-10 bg-gradient-to-br from-primary to-primary/60 rounded-lg flex items-center justify-center shadow-md">
-            <span className="text-white font-bold text-lg">G</span>
-          </div>
-          <div className="flex items-center gap-2 text-xs">
-            {getGreetingIcon(currentTime)}
-            <span className="text-muted-foreground">{getGreeting(currentTime)} • Turno {getShift(currentTime)}</span>
+          {/* Date and Time */}
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-gradient-to-br from-primary to-primary/60 rounded-lg flex items-center justify-center shadow-md">
+              <Clock className="w-5 h-5 text-white" />
+            </div>
+            <div className="flex flex-col">
+              <div className="text-sm font-semibold text-foreground">
+                {currentTime.toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit' })}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {currentTime.toLocaleDateString('es-DO', { weekday: 'short', day: 'numeric', month: 'short' })}
+              </div>
+            </div>
           </div>
         </div>
 
