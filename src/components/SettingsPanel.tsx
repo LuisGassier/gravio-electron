@@ -21,6 +21,9 @@ type PrinterType = {
 type AppSettings = {
   serialPort: string
   baudRate: number
+  dataBits: 5 | 6 | 7 | 8
+  stopBits: 1 | 2
+  parity: 'none' | 'even' | 'odd' | 'mark' | 'space'
   printerName: string
   autoPrint: boolean
 }
@@ -35,6 +38,9 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
   const [settings, setSettings] = useState<AppSettings>({
     serialPort: '',
     baudRate: 2400,
+    dataBits: 8,
+    stopBits: 1,
+    parity: 'none',
     printerName: '',
     autoPrint: true
   })
@@ -54,12 +60,18 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
 
     const savedPort = await window.electron.storage.get('serialPort')
     const savedBaudRate = await window.electron.storage.get('baudRate')
+    const savedDataBits = await window.electron.storage.get('dataBits')
+    const savedStopBits = await window.electron.storage.get('stopBits')
+    const savedParity = await window.electron.storage.get('parity')
     const savedPrinter = await container.printerService.getDefaultPrinter()
     const savedAutoPrint = await container.printerService.isAutoPrintEnabled()
 
     setSettings({
       serialPort: savedPort || '',
       baudRate: savedBaudRate || 2400,
+      dataBits: savedDataBits || 8,
+      stopBits: savedStopBits || 1,
+      parity: savedParity || 'none',
       printerName: savedPrinter || '',
       autoPrint: savedAutoPrint
     })
@@ -102,9 +114,22 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
     if (!window.electron) return
 
     try {
-      // Save serial port settings
-      await window.electron.storage.set('serialPort', settings.serialPort)
-      await window.electron.storage.set('baudRate', settings.baudRate)
+      // Save serial port settings (solo si tienen valor)
+      if (settings.serialPort) {
+        await window.electron.storage.set('serialPort', settings.serialPort)
+      }
+      if (settings.baudRate) {
+        await window.electron.storage.set('baudRate', settings.baudRate)
+      }
+      if (settings.dataBits) {
+        await window.electron.storage.set('dataBits', settings.dataBits)
+      }
+      if (settings.stopBits) {
+        await window.electron.storage.set('stopBits', settings.stopBits)
+      }
+      if (settings.parity) {
+        await window.electron.storage.set('parity', settings.parity)
+      }
 
       // Save printer settings using PrinterService
       if (settings.printerName) {
@@ -325,6 +350,68 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
                 Refrescar
               </button>
             </div>
+          </div>
+
+          {/* Configuración Serial */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="space-y-2">
+              <label className="text-sm text-muted-foreground">Baudios</label>
+              <select
+                className="w-full p-2.5 rounded-md bg-secondary/50 border-none focus:ring-2 focus:ring-primary text-sm"
+                value={settings.baudRate}
+                onChange={(e) => setSettings({ ...settings, baudRate: Number(e.target.value) })}
+              >
+                <option value={1200}>1200</option>
+                <option value={2400}>2400</option>
+                <option value={4800}>4800</option>
+                <option value={9600}>9600</option>
+                <option value={19200}>19200</option>
+                <option value={38400}>38400</option>
+                <option value={57600}>57600</option>
+                <option value={115200}>115200</option>
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm text-muted-foreground">Data Bits</label>
+              <select
+                className="w-full p-2.5 rounded-md bg-secondary/50 border-none focus:ring-2 focus:ring-primary text-sm"
+                value={settings.dataBits}
+                onChange={(e) => setSettings({ ...settings, dataBits: Number(e.target.value) as 5 | 6 | 7 | 8 })}
+              >
+                <option value={5}>5</option>
+                <option value={6}>6</option>
+                <option value={7}>7</option>
+                <option value={8}>8</option>
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm text-muted-foreground">Stop Bits</label>
+              <select
+                className="w-full p-2.5 rounded-md bg-secondary/50 border-none focus:ring-2 focus:ring-primary text-sm"
+                value={settings.stopBits}
+                onChange={(e) => setSettings({ ...settings, stopBits: Number(e.target.value) as 1 | 2 })}
+              >
+                <option value={1}>1</option>
+                <option value={2}>2</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm text-muted-foreground">Paridad</label>
+            <select
+              className="w-full p-2.5 rounded-md bg-secondary/50 border-none focus:ring-2 focus:ring-primary text-sm"
+              value={settings.parity}
+              onChange={(e) => setSettings({ ...settings, parity: e.target.value as 'none' | 'even' | 'odd' | 'mark' | 'space' })}
+            >
+              <option value="none">Ninguna (N)</option>
+              <option value="even">Par (E)</option>
+              <option value="odd">Impar (O)</option>
+              <option value="mark">Mark (M)</option>
+              <option value="space">Space (S)</option>
+            </select>
           </div>
 
           {settings.serialPort && (
