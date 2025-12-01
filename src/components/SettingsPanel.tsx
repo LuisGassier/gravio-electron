@@ -172,7 +172,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
       {/* Impresora */}
       <div className="space-y-4">
         <div className="flex items-center gap-2 text-lg font-medium">
-          <div className="p-2 bg-green-900/20 rounded-md text-green-500">
+          <div className="p-2 bg-primary/10 rounded-md text-primary">
             <Printer className="w-5 h-5" />
           </div>
           <h3>Impresora Térmica</h3>
@@ -181,7 +181,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
         <div className="space-y-4 pl-2">
           <div className="space-y-2">
             <select
-              className="w-full p-3 rounded-md bg-secondary/50 border-none focus:ring-2 focus:ring-green-500"
+              className="w-full p-3 rounded-md bg-secondary/50 border-none focus:ring-2 focus:ring-primary"
               value={settings.printerName}
               onChange={(e) => setSettings({ ...settings, printerName: e.target.value })}
             >
@@ -194,10 +194,10 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
             </select>
             
             <div className="flex justify-between items-center text-sm">
-              <span className="text-green-500">{availablePrinters.length} impresora(s) detectada(s)</span>
+              <span className="text-primary">{availablePrinters.length} impresora(s) detectada(s)</span>
               <button 
                 onClick={refreshPrinters}
-                className="flex items-center gap-1 text-green-500 hover:text-green-400 transition-colors"
+                className="flex items-center gap-1 text-primary hover:text-primary/80 transition-colors"
               >
                 <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
                 Refrescar
@@ -209,7 +209,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
             <Button 
               onClick={testPrint} 
               disabled={loading} 
-              className="w-full bg-yellow-500 hover:bg-yellow-600 text-black font-medium"
+              className="w-full bg-warning hover:bg-warning/90 text-black font-medium"
             >
               <Printer className="w-4 h-4 mr-2" />
               Probar Impresión
@@ -218,7 +218,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
 
           <div className="flex items-center justify-between p-4 bg-secondary/30 rounded-lg">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-green-900/20 rounded-md text-green-500">
+              <div className="p-2 bg-primary/10 rounded-md text-primary">
                 <Printer className="w-4 h-4" />
               </div>
               <div>
@@ -237,7 +237,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
       {/* Báscula */}
       <div className="space-y-4">
         <div className="flex items-center gap-2 text-lg font-medium">
-          <div className="p-2 bg-green-900/20 rounded-md text-green-500">
+          <div className="p-2 bg-primary/10 rounded-md text-primary">
             <Scale className="w-5 h-5" />
           </div>
           <h3>Configuración de Báscula</h3>
@@ -248,14 +248,14 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
             {manualPortEntry ? (
               <input
                 type="text"
-                className="w-full p-3 rounded-md bg-secondary/50 border-none focus:ring-2 focus:ring-green-500"
+                className="w-full p-3 rounded-md bg-secondary/50 border-none focus:ring-2 focus:ring-primary"
                 value={settings.serialPort}
                 placeholder="Ej: COM3"
                 onChange={(e) => setSettings({ ...settings, serialPort: e.target.value })}
               />
             ) : (
               <select
-                className="w-full p-3 rounded-md bg-secondary/50 border-none focus:ring-2 focus:ring-green-500"
+                className="w-full p-3 rounded-md bg-secondary/50 border-none focus:ring-2 focus:ring-primary"
                 value={settings.serialPort}
                 onChange={(e) => setSettings({ ...settings, serialPort: e.target.value })}
               >
@@ -271,7 +271,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
 
             <div className="flex justify-between items-center text-sm">
               <div className="flex items-center gap-2">
-                <span className="text-green-500">{availablePorts.length} puerto(s) detectado(s)</span>
+                <span className="text-primary">{availablePorts.length} puerto(s) detectado(s)</span>
                 <label className="flex items-center gap-1 text-xs text-muted-foreground cursor-pointer">
                   <input
                     type="checkbox"
@@ -284,7 +284,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
               </div>
               <button 
                 onClick={refreshPorts}
-                className="flex items-center gap-1 text-green-500 hover:text-green-400 transition-colors"
+                className="flex items-center gap-1 text-primary hover:text-primary/80 transition-colors"
               >
                 <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
                 Refrescar
@@ -297,7 +297,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
               onClick={testConnection} 
               disabled={loading} 
               variant="outline"
-              className="w-full border-green-500/50 text-green-500 hover:bg-green-500/10"
+              className="w-full border-primary/50 text-primary hover:bg-primary/10"
             >
               Probar Conexión
             </Button>
@@ -316,7 +316,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
             onClose?.()
           }} 
           disabled={saved}
-          className="w-32 bg-green-600 hover:bg-green-700 text-white"
+          className="w-32 bg-primary hover:bg-primary/90 text-primary-foreground"
         >
           <Save className="w-4 h-4 mr-2" />
           {saved ? 'Guardado' : 'Guardar'}
