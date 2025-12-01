@@ -729,13 +729,13 @@ export function WeighingPanel() {
         </div>
         {isSalidaMode && (
           <Button
-            variant="outline"
-            size="sm"
+            variant="destructive"
+            size="default"
             onClick={cancelarSalida}
-            className="border-destructive/30 text-destructive hover:bg-destructive/10"
+            className="bg-destructive hover:bg-destructive/90 font-semibold shadow-lg"
           >
-            <X className="w-4 h-4 mr-1" />
-            Cancelar
+            <X className="w-5 h-5 mr-2" />
+            Cancelar Salida
           </Button>
         )}
       </div>
@@ -789,7 +789,6 @@ export function WeighingPanel() {
                 icon={<Route className="w-4 h-4" />}
                 showCount={true}
                 countLabel="Ruta"
-                disabled={isSalidaMode}
               />
             </div>
 
@@ -808,7 +807,6 @@ export function WeighingPanel() {
                 countLabel="Vehículo"
                 allowCustomValue={true}
                 customValueLabel="Usar número económico"
-                disabled={isSalidaMode}
               />
             </div>
           </div>
@@ -828,7 +826,6 @@ export function WeighingPanel() {
                 icon={<FileText className="w-4 h-4" />}
                 showCount={true}
                 countLabel="Concepto"
-                disabled={isSalidaMode}
               />
             </div>
 
@@ -841,11 +838,10 @@ export function WeighingPanel() {
                 onValueChange={handleOperadorChange}
                 placeholder="Buscar operador..."
                 searchPlaceholder="Buscar..."
-                emptyText="No se encontraron rutas"
-                icon={<Route className="w-4 h-4" />}
+                emptyText="No se encontraron operadores"
+                icon={<FileText className="w-4 h-4" />}
                 showCount={true}
-                countLabel="Ruta"
-                disabled={isSalidaMode}
+                countLabel="Operador"
               />
             </div>
           </div>
