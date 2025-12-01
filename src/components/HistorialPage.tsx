@@ -146,39 +146,34 @@ export function HistorialPage({ onNavigate }: HistorialPageProps) {
   const handlePrint = async (registro: RegistroConNombres) => {
     setIsPrinting(true)
     try {
-      // Obtener usuario actual
-      const supabaseUser = await window.electron.storage.get('supabase_user')
-      const usuario = supabaseUser?.nombre || 'Sistema'
-
-      const fechaSalida = registro.fechaSalida ? new Date(registro.fechaSalida) : new Date(registro.fechaEntrada)
-      
       console.log('🖨️ Imprimiendo ticket para registro:', registro.folio)
       
-      const printResult = await window.electron.printer.print({
-        folio: registro.folio || 'SIN FOLIO',
-        fecha: fechaSalida.toLocaleString('es-MX', {
-          year: 'numeric',
-          month: '2-digit',
-          day: '2-digit',
-          hour: '2-digit',
-          minute: '2-digit',
-        }),
-        placa: registro.placa,
-        operador: registro.claveOperador,
-        nombreOperador: registro.nombreOperador,
-        ruta: registro.claveRuta,
-        nombreRuta: registro.nombreRuta,
-        pesoEntrada: registro.pesoEntrada,
-        pesoSalida: registro.pesoSalida,
-        pesoNeto: registro.pesoNeto,
-        concepto: registro.nombreConcepto,
+      // Obtener el registro completo desde el repositorio
+      const registroResult = await container.sqliteRegistroRepository.findById(registro.id)
+      
+      if (!registroResult.success || !registroResult.value) {
+        toast.error('No se pudo obtener el registro completo')
+        return
+      }
+
+      const registroCompleto = registroResult.value
+
+      // Usar el servicio de impresión con el formato correcto
+      const printResult = await container.printerService.printTicket({
+        registro: registroCompleto,
         empresa: registro.nombreEmpresa,
-        observaciones: registro.observaciones || '',
-        usuario,
+        empresaClave: registro.claveEmpresa,
+        conceptoClave: registro.claveConcepto,
+        conceptoNombre: registro.nombreConcepto,
       })
 
-      console.log('✅ Resultado de impresión:', printResult)
-      toast.success('Ticket impreso correctamente')
+      if (printResult.success) {
+        console.log('✅ Ticket impreso correctamente')
+        toast.success('Ticket impreso correctamente')
+      } else {
+        console.error('❌ Error al imprimir:', printResult.error)
+        toast.error(printResult.error?.message || 'Error al imprimir ticket')
+      }
     } catch (error) {
       console.error('❌ Error printing:', error)
       toast.error('Error al imprimir ticket')
