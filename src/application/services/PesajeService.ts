@@ -7,6 +7,7 @@ import { CompleteWithSalidaUseCase } from '../../domain/use-cases/registro/Compl
 import type { CompleteWithSalidaInput } from '../../domain/use-cases/registro/CompleteWithSalida';
 import { FindPendingRegistrosUseCase } from '../../domain/use-cases/registro/FindPendingRegistros';
 import type { IWeightReader } from '../../domain/hardware/IWeightReader';
+import type { FolioService } from './FolioService';
 
 /**
  * Servicio de aplicación para gestión de pesajes
@@ -17,17 +18,20 @@ export class PesajeService {
   private readonly completeWithSalidaUseCase: CompleteWithSalidaUseCase;
   private readonly findPendingUseCase: FindPendingRegistrosUseCase;
   private readonly weightReader: IWeightReader;
+  private readonly folioService: FolioService;
 
   constructor(
     createEntradaUseCase: CreateEntradaUseCase,
     completeWithSalidaUseCase: CompleteWithSalidaUseCase,
     findPendingUseCase: FindPendingRegistrosUseCase,
-    weightReader: IWeightReader
+    weightReader: IWeightReader,
+    folioService: FolioService
   ) {
     this.createEntradaUseCase = createEntradaUseCase;
     this.completeWithSalidaUseCase = completeWithSalidaUseCase;
     this.findPendingUseCase = findPendingUseCase;
     this.weightReader = weightReader;
+    this.folioService = folioService;
   }
 
   /**
@@ -57,10 +61,27 @@ export class PesajeService {
         );
       }
 
-      // Crear el registro de entrada
+      // 🎯 Generar folio offline usando FolioService
+      let folioGenerado: string | undefined;
+      try {
+        const folioResult = await this.folioService.getNextFolio(input.claveEmpresa);
+        if (folioResult.success) {
+          folioGenerado = folioResult.value;
+          console.log(`📋 Folio generado offline: ${folioGenerado} para empresa ${input.claveEmpresa}`);
+        } else {
+          console.warn(`⚠️ No se pudo generar folio offline:`, folioResult.error?.message);
+          // Continuar sin folio - Supabase lo generará al sincronizar
+        }
+      } catch (error) {
+        console.warn(`⚠️ Error al generar folio offline:`, error);
+        // Continuar sin folio
+      }
+
+      // Crear el registro de entrada con el folio generado (o undefined si hubo error)
       const result = await this.createEntradaUseCase.execute({
         ...input,
         pesoEntrada: pesoActual,
+        folio: folioGenerado,
       });
 
       return result;

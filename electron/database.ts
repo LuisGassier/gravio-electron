@@ -197,6 +197,18 @@ function createTables() {
     )
   `)
 
+  // Tabla de secuencias de folios (para generación offline)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS folio_sequences (
+      id TEXT PRIMARY KEY,
+      clave_empresa INTEGER UNIQUE NOT NULL,
+      prefijo_empresa TEXT NOT NULL,
+      ultimo_numero INTEGER NOT NULL DEFAULT 0,
+      sincronizado INTEGER DEFAULT 0,
+      updated_at TEXT NOT NULL
+    )
+  `)
+
   // Índices para mejor performance
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_registros_sincronizado ON registros(sincronizado);

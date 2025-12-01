@@ -1,4 +1,5 @@
 import { SyncRegistrosUseCase } from '../../domain/use-cases/sync/SyncRegistros';
+import type { FolioService } from './FolioService';
 
 export interface SyncResult {
   success: boolean;
@@ -6,6 +7,7 @@ export interface SyncResult {
   failed: number;
   errors: Array<{ registroId: string; error: string }>;
   timestamp: Date;
+  foliosSynced?: number;
 }
 
 /**
@@ -17,13 +19,16 @@ export class SyncService {
   private lastSyncResult: SyncResult | null = null;
   private syncInterval: ReturnType<typeof setInterval> | null = null;
   private readonly syncRegistrosUseCase: SyncRegistrosUseCase;
+  private readonly folioService: FolioService;
   private readonly autoSyncIntervalMs: number;
 
   constructor(
     syncRegistrosUseCase: SyncRegistrosUseCase,
+    folioService: FolioService,
     autoSyncIntervalMs: number = 5 * 60 * 1000 // 5 minutos por defecto
   ) {
     this.syncRegistrosUseCase = syncRegistrosUseCase;
+    this.folioService = folioService;
     this.autoSyncIntervalMs = autoSyncIntervalMs;
   }
 
@@ -79,7 +84,20 @@ export class SyncService {
     this.isSyncing = true;
 
     try {
+      // 1. Sincronizar registros
       const result = await this.syncRegistrosUseCase.execute();
+
+      // 2. Sincronizar secuencias de folios
+      let foliosSynced = 0;
+      try {
+        const foliosResult = await this.folioService.syncSequences();
+        if (foliosResult.success) {
+          foliosSynced = foliosResult.value.synced;
+          console.log(`✅ Secuencias de folios sincronizadas: ${foliosSynced}`);
+        }
+      } catch (error) {
+        console.warn('⚠️ Error al sincronizar secuencias de folios:', error);
+      }
 
       const syncResult: SyncResult = {
         success: result.success,
@@ -87,6 +105,7 @@ export class SyncService {
         failed: result.success ? result.value.failed : 1,
         errors: result.success ? result.value.errors : [{ registroId: 'unknown', error: result.error.message }],
         timestamp: new Date(),
+        foliosSynced,
       };
 
       this.lastSyncResult = syncResult;

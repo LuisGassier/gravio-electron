@@ -12,6 +12,7 @@ export * from './entities/Vehiculo';
 export * from './entities/Operador';
 export * from './entities/Ruta';
 export * from './entities/Empresa';
+export * from './entities/FolioSequence';
 
 // Repositories
 export * from './repositories/IRegistroRepository';
@@ -19,6 +20,7 @@ export * from './repositories/IVehiculoRepository';
 export * from './repositories/IOperadorRepository';
 export * from './repositories/IRutaRepository';
 export * from './repositories/IEmpresaRepository';
+export * from './repositories/IFolioSequenceRepository';
 
 // Use Cases
 export * from './use-cases/registro/CreateEntrada';

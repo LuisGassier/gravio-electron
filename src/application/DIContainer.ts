@@ -13,6 +13,8 @@ import { SQLiteRutaRepository } from '../infrastructure/database/SQLiteRutaRepos
 import { SupabaseRutaRepository } from '../infrastructure/database/SupabaseRutaRepository';
 import { SQLiteEmpresaRepository } from '../infrastructure/database/SQLiteEmpresaRepository';
 import { SupabaseEmpresaRepository } from '../infrastructure/database/SupabaseEmpresaRepository';
+import { SQLiteFolioSequenceRepository } from '../infrastructure/database/SQLiteFolioSequenceRepository';
+import { SupabaseFolioSequenceRepository } from '../infrastructure/database/SupabaseFolioSequenceRepository';
 import { MettlerToledoScale } from '../infrastructure/hardware/MettlerToledoScale';
 import { PrinterService } from '../infrastructure/hardware/PrinterService';
 
@@ -23,6 +25,8 @@ import { SyncRegistrosUseCase } from '../domain/use-cases/sync/SyncRegistros';
 
 import { PesajeService } from '../application/services/PesajeService';
 import { SyncService } from '../application/services/SyncService';
+import { FolioService } from '../application/services/FolioService';
+import { NetworkService } from '../application/services/NetworkService';
 
 /**
  * Singleton container para toda la aplicación
@@ -48,6 +52,10 @@ class DIContainer {
   private _sqliteEmpresaRepository?: SQLiteEmpresaRepository;
   private _supabaseEmpresaRepository?: SupabaseEmpresaRepository;
 
+  // Repositories - FolioSequence
+  private _sqliteFolioSequenceRepository?: SQLiteFolioSequenceRepository;
+  private _supabaseFolioSequenceRepository?: SupabaseFolioSequenceRepository;
+
   // Hardware
   private _mettlerToledoScale?: MettlerToledoScale;
   private _printerService?: PrinterService;
@@ -61,6 +69,8 @@ class DIContainer {
   // Services
   private _pesajeService?: PesajeService;
   private _syncService?: SyncService;
+  private _folioService?: FolioService;
+  private _networkService?: NetworkService;
 
   // Repositories - Registro
   get sqliteRegistroRepository(): SQLiteRegistroRepository {
@@ -137,6 +147,21 @@ class DIContainer {
     return this._supabaseEmpresaRepository;
   }
 
+  // Repositories - FolioSequence
+  get sqliteFolioSequenceRepository(): SQLiteFolioSequenceRepository {
+    if (!this._sqliteFolioSequenceRepository) {
+      this._sqliteFolioSequenceRepository = new SQLiteFolioSequenceRepository();
+    }
+    return this._sqliteFolioSequenceRepository;
+  }
+
+  get supabaseFolioSequenceRepository(): SupabaseFolioSequenceRepository {
+    if (!this._supabaseFolioSequenceRepository) {
+      this._supabaseFolioSequenceRepository = new SupabaseFolioSequenceRepository();
+    }
+    return this._supabaseFolioSequenceRepository;
+  }
+
   // Hardware
   get mettlerToledoScale(): MettlerToledoScale {
     if (!this._mettlerToledoScale) {
@@ -197,7 +222,8 @@ class DIContainer {
         this.createEntradaUseCase,
         this.completeWithSalidaUseCase,
         this.findPendingRegistrosUseCase,
-        this.mettlerToledoScale
+        this.mettlerToledoScale,
+        this.folioService
       );
     }
     return this._pesajeService;
@@ -207,10 +233,30 @@ class DIContainer {
     if (!this._syncService) {
       this._syncService = new SyncService(
         this.syncRegistrosUseCase,
+        this.folioService,
         5 * 60 * 1000 // 5 minutos
       );
     }
     return this._syncService;
+  }
+
+  get folioService(): FolioService {
+    if (!this._folioService) {
+      this._folioService = new FolioService(
+        this.sqliteFolioSequenceRepository,
+        this.supabaseFolioSequenceRepository,
+        this.sqliteEmpresaRepository,
+        this.networkService
+      );
+    }
+    return this._folioService;
+  }
+
+  get networkService(): NetworkService {
+    if (!this._networkService) {
+      this._networkService = new NetworkService();
+    }
+    return this._networkService;
   }
 
   /**
@@ -236,6 +282,16 @@ class DIContainer {
       console.warn(`⚠️ Báscula no disponible: ${errorMsg}`);
       console.warn('ℹ️ La aplicación funcionará sin báscula (usar peso manual)');
       console.warn('💡 Configura el puerto serial en el panel de Configuración');
+    }
+
+    // Inicializar secuencias de folios (no bloqueante)
+    try {
+      console.log('🔄 Inicializando secuencias de folios...');
+      await this.folioService.initializeSequences();
+      console.log('✅ Secuencias de folios inicializadas');
+    } catch (error) {
+      console.warn('⚠️ Error al inicializar secuencias de folios:', error);
+      console.warn('ℹ️ Se generarán folios offline cuando sea necesario');
     }
 
     // Iniciar sincronización automática (no bloqueante)

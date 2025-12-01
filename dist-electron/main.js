@@ -15303,7 +15303,7 @@ if (!IS_WINDOWS) {
 if (IS_LINUX) {
   Signals.push("SIGIO", "SIGPOLL", "SIGPWR", "SIGSTKFLT");
 }
-class Interceptor {
+let Interceptor$1 = class Interceptor {
   /* CONSTRUCTOR */
   constructor() {
     this.callbacks = /* @__PURE__ */ new Set();
@@ -15340,9 +15340,9 @@ class Interceptor {
     };
     this.hook();
   }
-}
-const Interceptor$1 = new Interceptor();
-const whenExit = Interceptor$1.register;
+};
+const Interceptor2 = new Interceptor$1();
+const whenExit = Interceptor2.register;
 const Temp = {
   /* VARIABLES */
   store: {},
@@ -31027,6 +31027,16 @@ function createTables() {
       key TEXT PRIMARY KEY,
       value TEXT,
       updated_at INTEGER DEFAULT (strftime('%s', 'now'))
+    )
+  `);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS folio_sequences (
+      id TEXT PRIMARY KEY,
+      clave_empresa INTEGER UNIQUE NOT NULL,
+      prefijo_empresa TEXT NOT NULL,
+      ultimo_numero INTEGER NOT NULL DEFAULT 0,
+      sincronizado INTEGER DEFAULT 0,
+      updated_at TEXT NOT NULL
     )
   `);
   db.exec(`

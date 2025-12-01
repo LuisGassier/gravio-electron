@@ -22,6 +22,10 @@ export * from './database/SupabaseRutaRepository';
 export * from './database/SQLiteEmpresaRepository';
 export * from './database/SupabaseEmpresaRepository';
 
+// Database - FolioSequence
+export * from './database/SQLiteFolioSequenceRepository';
+export * from './database/SupabaseFolioSequenceRepository';
+
 // Hardware
 export * from './hardware/MettlerToledoScale';
 export * from './hardware/PrinterService';
