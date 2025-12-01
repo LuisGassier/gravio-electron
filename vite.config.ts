@@ -22,9 +22,12 @@ export default defineConfig({
         input: path.join(__dirname, 'electron/preload.ts'),
         vite: {
           build: {
+            outDir: 'dist-electron',
             rollupOptions: {
+              external: ['electron'],
               output: {
                 format: 'cjs',
+                entryFileNames: '[name].cjs',
               },
             },
           },

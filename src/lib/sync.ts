@@ -107,7 +107,14 @@ async function syncTransaction(transaction: any) {
         timestamp: new Date(transaction.timestamp * 1000).toISOString(),
       })
     
-    if (error) throw error
+    if (error) {
+      // Si la tabla no existe (404), advertir pero continuar
+      if (error.code === 'PGRST116' || (error as any).message?.includes('404')) {
+        console.warn('⚠️ Tabla "transactions" no existe en Supabase. Mantiendo transacción en local.')
+        return true // No reintentar si la tabla no existe
+      }
+      throw error
+    }
     
     // Marcar como sincronizado en SQLite
     await window.electron.db.query(
@@ -171,7 +178,14 @@ async function downloadCacheData() {
       .select('*')
       .limit(1000)
     
-    if (!vehiclesError && vehicles) {
+    if (vehiclesError) {
+      // Si la tabla no existe (404), solo advertir sin error
+      if (vehiclesError.code === 'PGRST116' || vehiclesError.message.includes('404')) {
+        console.warn('⚠️ Tabla "vehicles" no existe en Supabase. Crea la tabla o ignora esta advertencia.')
+      } else {
+        console.error('❌ Error al descargar vehículos:', vehiclesError)
+      }
+    } else if (vehicles && vehicles.length > 0) {
       for (const vehicle of vehicles) {
         await window.electron.db.query(
           `INSERT OR REPLACE INTO vehicles (id, plate, type, owner, last_updated) 
@@ -188,7 +202,14 @@ async function downloadCacheData() {
       .select('*')
       .limit(1000)
     
-    if (!usersError && users) {
+    if (usersError) {
+      // Si la tabla no existe (404), solo advertir sin error
+      if (usersError.code === 'PGRST116' || usersError.message.includes('404')) {
+        console.warn('⚠️ Tabla "users" no existe en Supabase. Crea la tabla o ignora esta advertencia.')
+      } else {
+        console.error('❌ Error al descargar usuarios:', usersError)
+      }
+    } else if (users && users.length > 0) {
       for (const user of users) {
         await window.electron.db.query(
           `INSERT OR REPLACE INTO users (id, email, full_name, role, last_updated) 
