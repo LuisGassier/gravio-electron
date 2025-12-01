@@ -84,6 +84,16 @@ async function getPendingTransactions() {
  * Sincronizar una transacción a Supabase
  */
 async function syncTransaction(transaction: any) {
+  // Si no hay supabase configurado, marcar como sincronizado localmente
+  if (!supabase) {
+    console.warn('⚠️ Supabase no configurado, transacción solo en local')
+    await window.electron.db.query(
+      'UPDATE transactions SET synced = 1 WHERE id = ?',
+      [transaction.id]
+    )
+    return true
+  }
+  
   try {
     const { error } = await supabase
       .from('transactions')
@@ -148,6 +158,12 @@ async function syncTransactions() {
  * Descargar datos de Supabase a cache local (vehículos, usuarios, etc.)
  */
 async function downloadCacheData() {
+  // Si no hay supabase configurado, skip
+  if (!supabase) {
+    console.log('⚠️ Supabase no configurado, omitiendo descarga de cache')
+    return
+  }
+  
   try {
     // Descargar vehículos
     const { data: vehicles, error: vehiclesError } = await supabase

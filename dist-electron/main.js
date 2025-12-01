@@ -16340,7 +16340,7 @@ function createWindow() {
     minWidth: 1024,
     minHeight: 768,
     webPreferences: {
-      preload: path$1.join(__dirname$1, "preload.js"),
+      preload: path$1.join(__dirname$1, "preload.mjs"),
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: false
@@ -16349,6 +16349,16 @@ function createWindow() {
     title: "Gravio - Sistema de Relleno Sanitario",
     icon: path$1.join(__dirname$1, "../public/icon.png"),
     autoHideMenuBar: !isDev
+  });
+  mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        "Content-Security-Policy": [
+          isDev ? "default-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:* ws://localhost:*; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co wss://*.supabase.co http://localhost:*;" : "default-src 'self'; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co wss://*.supabase.co; style-src 'self' 'unsafe-inline';"
+        ]
+      }
+    });
   });
   if (isDev) {
     mainWindow.loadURL("http://localhost:5173");

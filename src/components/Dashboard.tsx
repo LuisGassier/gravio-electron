@@ -36,12 +36,24 @@ export function Dashboard() {
 
   const connectScale = async () => {
     if (window.electron) {
-      const success = await window.electron.serialPort.open('COM2', 2400)
+      // Leer configuración guardada
+      const savedPort = await window.electron.storage.get('serialPort')
+      const savedBaudRate = await window.electron.storage.get('baudRate')
+
+      if (!savedPort) {
+        alert('⚠️ Por favor configura el puerto serial en Configuración')
+        return
+      }
+
+      const success = await window.electron.serialPort.open(
+        savedPort, 
+        savedBaudRate || 2400
+      )
       setIsConnected(success)
       if (success) {
         alert('✅ Báscula conectada correctamente')
       } else {
-        alert('❌ Error al conectar báscula')
+        alert('❌ Error al conectar báscula. Verifica el puerto en Configuración.')
       }
     }
   }
@@ -62,30 +74,26 @@ export function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-background p-8">
-      <div className="max-w-6xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-bold">Gravio - Relleno Sanitario</h1>
-            <p className="text-muted-foreground">Sistema de gestión de pesaje</p>
+    <div className="max-w-6xl mx-auto space-y-6">
+      {/* Status Bar */}
+      <div className="flex justify-between items-center">
+        <p className="text-muted-foreground">Sistema de gestión de pesaje</p>
+        <div className="flex items-center gap-4">
+          <div className={`flex items-center gap-2 px-3 py-1 rounded-full ${
+            isOnline ? 'bg-green-500/20 text-green-700' : 'bg-red-500/20 text-red-700'
+          }`}>
+            <div className={`w-2 h-2 rounded-full ${
+              isOnline ? 'bg-green-500' : 'bg-red-500'
+            }`} />
+            <span className="text-sm font-medium">
+              {isOnline ? 'Online' : 'Offline'}
+            </span>
           </div>
-          <div className="flex items-center gap-4">
-            <div className={`flex items-center gap-2 px-3 py-1 rounded-full ${
-              isOnline ? 'bg-green-500/20 text-green-700' : 'bg-red-500/20 text-red-700'
-            }`}>
-              <div className={`w-2 h-2 rounded-full ${
-                isOnline ? 'bg-green-500' : 'bg-red-500'
-              }`} />
-              <span className="text-sm font-medium">
-                {isOnline ? 'Online' : 'Offline'}
-              </span>
-            </div>
-            {version && (
-              <span className="text-sm text-muted-foreground">v{version}</span>
-            )}
-          </div>
+          {version && (
+            <span className="text-sm text-muted-foreground">v{version}</span>
+          )}
         </div>
+      </div>
 
         {/* Weight Display */}
         <Card>
@@ -194,7 +202,6 @@ export function Dashboard() {
             </CardContent>
           </Card>
         </div>
-      </div>
     </div>
   )
 }

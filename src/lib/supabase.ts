@@ -3,17 +3,27 @@ import { createClient } from '@supabase/supabase-js'
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Faltan variables de entorno de Supabase')
+// Validar que las credenciales no sean las de ejemplo
+const hasValidCredentials = 
+  supabaseUrl && 
+  supabaseAnonKey && 
+  !supabaseUrl.includes('tu-proyecto') &&
+  !supabaseAnonKey.includes('tu-api-key')
+
+if (!hasValidCredentials) {
+  console.warn('⚠️ Supabase no configurado. Usando solo almacenamiento local.')
+  console.warn('Para habilitar sincronización, configura .env.local con tus credenciales de Supabase')
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: false,
-  },
-})
+export const supabase = hasValidCredentials 
+  ? createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: false,
+      },
+    })
+  : null as any // Modo offline puro
 
 // Types para TypeScript
 export type Transaction = {
