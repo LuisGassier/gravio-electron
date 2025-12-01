@@ -13,8 +13,32 @@ export type ElectronAPI = {
     onData: (callback: (data: string) => void) => () => void
   }
   printer: {
-    list: () => Promise<Array<{ name: string; displayName: string }>>
-    print: (data: any) => Promise<boolean>
+    list: () => Promise<Array<{
+      name: string
+      displayName: string
+      description?: string
+      isDefault?: boolean
+    }>>
+    print: (data: {
+      printerName: string
+      folio?: string
+      fecha: Date
+      empresa: string
+      vehiculo: {
+        placas: string
+        numeroEconomico: string
+      }
+      operador: string
+      ruta: string
+      pesos: {
+        entrada?: number
+        salida?: number
+        neto?: number
+      }
+      fechaEntrada?: Date
+      fechaSalida?: Date
+      observaciones?: string
+    }) => Promise<boolean>
   }
   db: {
     query: (sql: string, params?: any[]) => Promise<any[]>

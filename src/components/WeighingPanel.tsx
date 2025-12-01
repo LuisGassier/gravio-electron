@@ -124,8 +124,8 @@ export function WeighingPanel() {
       
       setObservaciones(selectedRegistro.observaciones || '')
       
-      toast.info(`📥 Modo SALIDA: ${selectedRegistro.placaVehiculo}`, {
-        description: `Peso entrada: ${selectedRegistro.pesoEntrada?.toFixed(2)} kg`
+      toast.success(`Vehículo seleccionado para salida`, {
+        description: `${selectedRegistro.placaVehiculo} - Peso entrada: ${selectedRegistro.pesoEntrada?.toFixed(2)} kg`
       })
     }
   }, [selectedRegistro, vehiculos, operadores, rutas, conceptos])
@@ -135,7 +135,6 @@ export function WeighingPanel() {
     setCurrentRegistro(null)
     clearSelection()
     limpiarFormulario()
-    toast.info('❌ Modo salida cancelado')
   }
 
   const limpiarFormulario = () => {
@@ -322,11 +321,14 @@ export function WeighingPanel() {
 
     if (result.success) {
       const registro = result.value
-      toast.success(`Entrada registrada - Folio: ${registro?.folio || 'Generando...'}`)
+      toast.success('Entrada registrada exitosamente', {
+        description: `Folio: ${registro?.folio || 'Pendiente'} - ${registro?.placaVehiculo}`
+      })
       limpiarFormulario()
-      loadFormData()
     } else {
-      toast.error(`Error: ${result.error}`)
+      toast.error('Error al registrar entrada', {
+        description: result.error
+      })
     }
   }
 
@@ -364,17 +366,47 @@ export function WeighingPanel() {
         console.warn('⚠️ No se pudo sincronizar inmediatamente (modo offline):', error)
       }
       
-      toast.success(`✅ Salida registrada - Folio: ${registro.folio || 'Pendiente de sincronización'}`, {
-        description: `Peso neto: ${pesoNeto ? pesoNeto.toFixed(2) + ' kg' : 'N/A'}`
+      toast.success('Salida registrada exitosamente', {
+        description: `Folio: ${registro.folio || 'Pendiente'} - Peso neto: ${pesoNeto ? pesoNeto.toFixed(2) + ' kg' : 'N/A'}`
       })
-      
-      // TODO: Imprimir ticket térmico aquí
-      console.log('🖨️ Imprimiendo ticket...', registro)
-      
+
+      // Imprimir ticket térmico
+      try {
+        console.log('🖨️ Iniciando impresión de ticket...')
+
+        // Obtener el nombre de la empresa
+        const empresaResult = await window.electron.db.query(
+          'SELECT empresa FROM empresa WHERE clave_empresa = ?',
+          [registro.claveEmpresa]
+        )
+        const empresaNombre = empresaResult[0]?.empresa || 'Sin empresa'
+
+        const printResult = await container.printerService.printTicket({
+          registro,
+          empresa: empresaNombre
+        })
+
+        if (printResult.success) {
+          console.log('✅ Ticket impreso exitosamente')
+          toast.success('Ticket impreso exitosamente')
+        } else {
+          console.error('❌ Error al imprimir ticket:', printResult.error)
+          toast.warning('Salida registrada pero no se pudo imprimir el ticket', {
+            description: printResult.error.message
+          })
+        }
+      } catch (error) {
+        console.error('❌ Error al imprimir ticket:', error)
+        toast.warning('Salida registrada pero no se pudo imprimir el ticket', {
+          description: error instanceof Error ? error.message : 'Error desconocido'
+        })
+      }
+
       cancelarSalida()
-      loadFormData()
     } else {
-      toast.error(`Error: ${result.error}`)
+      toast.error('Error al registrar salida', {
+        description: result.error
+      })
     }
   }
 

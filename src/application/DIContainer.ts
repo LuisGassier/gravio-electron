@@ -14,6 +14,7 @@ import { SupabaseRutaRepository } from '../infrastructure/database/SupabaseRutaR
 import { SQLiteEmpresaRepository } from '../infrastructure/database/SQLiteEmpresaRepository';
 import { SupabaseEmpresaRepository } from '../infrastructure/database/SupabaseEmpresaRepository';
 import { MettlerToledoScale } from '../infrastructure/hardware/MettlerToledoScale';
+import { PrinterService } from '../infrastructure/hardware/PrinterService';
 
 import { CreateEntradaUseCase } from '../domain/use-cases/registro/CreateEntrada';
 import { CompleteWithSalidaUseCase } from '../domain/use-cases/registro/CompleteWithSalida';
@@ -49,6 +50,7 @@ class DIContainer {
 
   // Hardware
   private _mettlerToledoScale?: MettlerToledoScale;
+  private _printerService?: PrinterService;
 
   // Use Cases
   private _createEntradaUseCase?: CreateEntradaUseCase;
@@ -141,6 +143,13 @@ class DIContainer {
       this._mettlerToledoScale = new MettlerToledoScale();
     }
     return this._mettlerToledoScale;
+  }
+
+  get printerService(): PrinterService {
+    if (!this._printerService) {
+      this._printerService = new PrinterService();
+    }
+    return this._printerService;
   }
 
   // Use Cases

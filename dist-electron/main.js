@@ -496,7 +496,7 @@ if (!IS_WINDOWS) {
 if (IS_LINUX) {
   Signals.push("SIGIO", "SIGPOLL", "SIGPWR", "SIGSTKFLT");
 }
-class Interceptor {
+let Interceptor$1 = class Interceptor {
   /* CONSTRUCTOR */
   constructor() {
     this.callbacks = /* @__PURE__ */ new Set();
@@ -533,9 +533,9 @@ class Interceptor {
     };
     this.hook();
   }
-}
-const Interceptor$1 = new Interceptor();
-const whenExit = Interceptor$1.register;
+};
+const Interceptor2 = new Interceptor$1();
+const whenExit = Interceptor2.register;
 const Temp = {
   /* VARIABLES */
   store: {},
@@ -16510,6 +16510,276 @@ function getPortInfo() {
     isOpen: port.isOpen
   };
 }
+function generateTicketHTML(data) {
+  const formatDate = (date) => {
+    return date.toLocaleDateString("es-MX", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric"
+    });
+  };
+  const formatTime = (date) => {
+    return date.toLocaleTimeString("es-MX", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false
+    });
+  };
+  const formatWeight = (weight) => {
+    return weight ? weight.toFixed(2) : "0.00";
+  };
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    @page {
+      size: 80mm auto;
+      margin: 0;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Courier New', 'Courier', monospace;
+      font-size: 12px;
+      line-height: 1.4;
+      width: 80mm;
+      padding: 5mm;
+      background: white;
+      color: #000;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 8px;
+    }
+
+    .header h1 {
+      font-size: 20px;
+      font-weight: bold;
+      margin-bottom: 2px;
+      letter-spacing: 1px;
+    }
+
+    .header .empresa {
+      font-size: 13px;
+      font-weight: bold;
+      margin-bottom: 2px;
+    }
+
+    .header .folio {
+      font-size: 14px;
+      font-weight: bold;
+      margin-top: 4px;
+    }
+
+    .divider {
+      border-top: 2px dashed #000;
+      margin: 8px 0;
+    }
+
+    .divider-solid {
+      border-top: 1px solid #000;
+      margin: 6px 0;
+    }
+
+    .section {
+      margin-bottom: 8px;
+    }
+
+    .section-title {
+      font-size: 13px;
+      font-weight: bold;
+      margin-bottom: 4px;
+      text-decoration: underline;
+    }
+
+    .row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 2px;
+      font-size: 11px;
+    }
+
+    .label {
+      font-weight: bold;
+      width: 45%;
+    }
+
+    .value {
+      width: 55%;
+      text-align: right;
+    }
+
+    .pesos {
+      margin-top: 8px;
+    }
+
+    .peso-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 0;
+      font-size: 12px;
+      border-bottom: 1px dotted #000;
+    }
+
+    .peso-row:last-child {
+      border-bottom: none;
+    }
+
+    .peso-row.highlight {
+      font-size: 14px;
+      font-weight: bold;
+      background: #f0f0f0;
+      padding: 6px 4px;
+      border: 2px solid #000;
+      margin-top: 4px;
+    }
+
+    .peso-label {
+      font-weight: bold;
+    }
+
+    .peso-value {
+      font-weight: bold;
+    }
+
+    .observaciones {
+      margin-top: 8px;
+      padding: 6px;
+      border: 1px solid #000;
+      background: #f9f9f9;
+      font-size: 10px;
+      word-wrap: break-word;
+      white-space: pre-wrap;
+    }
+
+    .footer {
+      margin-top: 10px;
+      text-align: center;
+      font-size: 10px;
+      color: #333;
+    }
+
+    .footer .date {
+      margin-top: 4px;
+      font-size: 9px;
+    }
+
+    @media print {
+      body {
+        width: 80mm;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- HEADER -->
+  <div class="header">
+    <h1>GRAVIO</h1>
+    <div class="empresa">${data.empresa}</div>
+    <div style="font-size: 11px;">Sistema de Gestión de Relleno Sanitario</div>
+    <div class="folio">FOLIO: ${data.folio}</div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- INFORMACIÓN DEL VEHÍCULO -->
+  <div class="section">
+    <div class="section-title">DATOS DEL VEHÍCULO</div>
+    <div class="row">
+      <span class="label">Placas:</span>
+      <span class="value">${data.vehiculo.placas}</span>
+    </div>
+    <div class="row">
+      <span class="label">No. Económico:</span>
+      <span class="value">${data.vehiculo.numeroEconomico}</span>
+    </div>
+    <div class="row">
+      <span class="label">Operador:</span>
+      <span class="value">${data.operador}</span>
+    </div>
+    <div class="row">
+      <span class="label">Ruta:</span>
+      <span class="value">${data.ruta}</span>
+    </div>
+  </div>
+
+  <div class="divider-solid"></div>
+
+  <!-- FECHAS -->
+  <div class="section">
+    <div class="row">
+      <span class="label">Fecha Entrada:</span>
+      <span class="value">${data.fechaEntrada ? formatDate(data.fechaEntrada) : "N/A"}</span>
+    </div>
+    <div class="row">
+      <span class="label">Hora Entrada:</span>
+      <span class="value">${data.fechaEntrada ? formatTime(data.fechaEntrada) : "N/A"}</span>
+    </div>
+    <div class="row">
+      <span class="label">Fecha Salida:</span>
+      <span class="value">${data.fechaSalida ? formatDate(data.fechaSalida) : "N/A"}</span>
+    </div>
+    <div class="row">
+      <span class="label">Hora Salida:</span>
+      <span class="value">${data.fechaSalida ? formatTime(data.fechaSalida) : "N/A"}</span>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- PESOS -->
+  <div class="section pesos">
+    <div class="section-title">REGISTRO DE PESOS</div>
+
+    <div class="peso-row">
+      <span class="peso-label">Peso Entrada:</span>
+      <span class="peso-value">${formatWeight(data.pesos.entrada)} kg</span>
+    </div>
+
+    <div class="peso-row">
+      <span class="peso-label">Peso Salida:</span>
+      <span class="peso-value">${formatWeight(data.pesos.salida)} kg</span>
+    </div>
+
+    <div class="peso-row highlight">
+      <span class="peso-label">PESO NETO:</span>
+      <span class="peso-value">${formatWeight(data.pesos.neto)} kg</span>
+    </div>
+  </div>
+
+  ${data.observaciones ? `
+  <div class="divider-solid"></div>
+
+  <!-- OBSERVACIONES -->
+  <div class="section">
+    <div class="section-title">OBSERVACIONES</div>
+    <div class="observaciones">${data.observaciones}</div>
+  </div>
+  ` : ""}
+
+  <div class="divider"></div>
+
+  <!-- FOOTER -->
+  <div class="footer">
+    <div>Sistema Gravio v1.0</div>
+    <div class="date">Impreso: ${formatDate(/* @__PURE__ */ new Date())} ${formatTime(/* @__PURE__ */ new Date())}</div>
+    <div style="margin-top: 8px; font-size: 8px;">
+      Este documento es válido sin firma ni sello
+    </div>
+  </div>
+</body>
+</html>
+  `.trim();
+}
 async function listPrinters(mainWindow2) {
   console.log("📞 listPrinters() llamada - mainWindow:", mainWindow2 ? "disponible" : "NULL");
   try {
@@ -16540,81 +16810,54 @@ async function listPrinters(mainWindow2) {
 async function printThermal(mainWindow2, data) {
   try {
     console.log("🖨️ Preparando impresión térmica:", data);
+    if (!data.printerName) {
+      console.error("❌ No se especificó nombre de impresora");
+      return false;
+    }
     const workerWindow = new BrowserWindow({
       show: false,
-      width: 400,
-      // Ancho aproximado para 80mm
+      width: 302,
+      // 80mm ≈ 302px @ 96 DPI
       height: 600,
       webPreferences: {
-        nodeIntegration: true,
-        contextIsolation: false
+        nodeIntegration: false,
+        contextIsolation: true
       }
     });
-    const htmlContent = `
-      <html>
-      <head>
-        <style>
-          body { 
-            font-family: 'Courier New', monospace; 
-            font-size: 14px; 
-            font-weight: 900;
-            width: 100%; 
-            margin: 0; 
-            padding: 5px; 
-            color: #000000;
-            background: white;
-          }
-          .header { 
-            text-align: center; 
-            font-weight: 900; 
-            font-size: 18px; 
-            margin-bottom: 10px; 
-          }
-          .divider { 
-            border-top: 2px dashed #000000; 
-            margin: 10px 0; 
-          }
-          .footer { 
-            text-align: center; 
-            margin-top: 20px; 
-            font-size: 12px; 
-            font-weight: 900;
-          }
-          .content {
-            white-space: pre-wrap;
-            font-weight: 900;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="header">GRAVIO</div>
-        <div style="text-align: center;">Prueba de Impresión</div>
-        <div class="divider"></div>
-        <div>Fecha: ${(/* @__PURE__ */ new Date()).toLocaleString()}</div>
-        <div>Impresora: ${data.printerName}</div>
-        <div class="divider"></div>
-        <div class="content" style="text-align: center; font-size: 14px;">
-          ¡Funciona Correctamente!
-          <br/>
-          Impresora Térmica Configurada
-        </div>
-        <div class="divider"></div>
-        <div class="footer">Sistema de Gestión de Relleno Sanitario</div>
-      </body>
-      </html>
-    `;
+    const htmlContent = generateTicketHTML({
+      folio: data.folio || "PENDIENTE",
+      fecha: data.fecha ? new Date(data.fecha) : /* @__PURE__ */ new Date(),
+      empresa: data.empresa || "Sin empresa",
+      vehiculo: {
+        placas: data.vehiculo?.placas || "N/A",
+        numeroEconomico: data.vehiculo?.numeroEconomico || "N/A"
+      },
+      operador: data.operador || "Sin operador",
+      ruta: data.ruta || "Sin ruta",
+      pesos: {
+        entrada: data.pesos?.entrada,
+        salida: data.pesos?.salida,
+        neto: data.pesos?.neto
+      },
+      fechaEntrada: data.fechaEntrada ? new Date(data.fechaEntrada) : void 0,
+      fechaSalida: data.fechaSalida ? new Date(data.fechaSalida) : void 0,
+      observaciones: data.observaciones
+    });
     await workerWindow.loadURL("data:text/html;charset=utf-8," + encodeURIComponent(htmlContent));
+    await new Promise((resolve2) => setTimeout(resolve2, 500));
     return new Promise((resolve2) => {
       workerWindow.webContents.print({
         silent: true,
-        printBackground: false,
+        printBackground: true,
         deviceName: data.printerName,
+        pageSize: {
+          width: 8e4,
+          // 80mm en micrones
+          height: 297e3
+          // Largo variable, usar altura estándar
+        },
         margins: {
-          marginType: "custom",
-          top: 0,
-          bottom: 0,
-          left: 0,
-          right: 0
+          marginType: "none"
         }
       }, (success, errorType) => {
         if (!success) {
@@ -16624,7 +16867,13 @@ async function printThermal(mainWindow2, data) {
           console.log("✅ Impresión enviada exitosamente");
           resolve2(true);
         }
-        setTimeout(() => workerWindow.close(), 1e3);
+        setTimeout(() => {
+          try {
+            workerWindow.close();
+          } catch (e) {
+            console.warn("Ventana ya cerrada");
+          }
+        }, 1e3);
       });
     });
   } catch (error) {

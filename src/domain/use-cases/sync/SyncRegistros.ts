@@ -36,12 +36,10 @@ export class SyncRegistrosUseCase {
       const errors: Array<{ registroId: string; error: string }> = [];
 
       // FASE 1: Descargar registros pendientes de Supabase → SQLite
-      console.log('📥 Descargando registros pendientes de Supabase...');
       try {
         const remotePendingResult = await this.remoteRepository.findAllPending();
         
         if (remotePendingResult.success && remotePendingResult.value.length > 0) {
-          console.log(`📦 Encontrados ${remotePendingResult.value.length} registros pendientes en Supabase`);
           
           for (const remoteRegistro of remotePendingResult.value) {
             try {
@@ -67,11 +65,10 @@ export class SyncRegistrosUseCase {
           }
         }
       } catch (error) {
-        console.warn('⚠️ Error al descargar registros pendientes:', error);
+        // Silenciar error de descarga
       }
 
       // FASE 2: Subir registros no sincronizados de SQLite → Supabase
-      console.log('📤 Subiendo registros locales no sincronizados...');
       const unsyncedResult = await this.localRepository.findUnsynchronized();
 
       if (!unsyncedResult.success) {
@@ -81,8 +78,6 @@ export class SyncRegistrosUseCase {
       const unsyncedRegistros = unsyncedResult.value;
 
       if (unsyncedRegistros.length > 0) {
-        console.log(`📦 Encontrados ${unsyncedRegistros.length} registros no sincronizados localmente`);
-
         // Sincronizar cada registro
         for (const registro of unsyncedRegistros) {
           try {
@@ -110,8 +105,6 @@ export class SyncRegistrosUseCase {
           }
         }
       }
-
-      console.log(`✅ Sincronización completa: ${synced} exitosos, ${failed} fallidos`);
 
       return ResultFactory.ok({
         synced,

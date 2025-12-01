@@ -28,3 +28,4 @@ export * from './use-cases/sync/SyncRegistros';
 
 // Hardware
 export * from './hardware/IWeightReader';
+export * from './hardware/IPrinterService';

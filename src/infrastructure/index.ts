@@ -24,3 +24,4 @@ export * from './database/SupabaseEmpresaRepository';
 
 // Hardware
 export * from './hardware/MettlerToledoScale';
+export * from './hardware/PrinterService';

@@ -1,4 +1,5 @@
 import { BrowserWindow } from 'electron'
+import { generateTicketHTML } from './ticketTemplate'
 
 export interface PrinterInfo {
   name: string
@@ -61,87 +62,61 @@ export async function printThermal(
   try {
     console.log('🖨️ Preparando impresión térmica:', data)
 
+    if (!data.printerName) {
+      console.error('❌ No se especificó nombre de impresora')
+      return false
+    }
+
     // Crear ventana oculta para renderizar el ticket
     const workerWindow = new BrowserWindow({
       show: false,
-      width: 400, // Ancho aproximado para 80mm
+      width: 302, // 80mm ≈ 302px @ 96 DPI
       height: 600,
       webPreferences: {
-        nodeIntegration: true,
-        contextIsolation: false
+        nodeIntegration: false,
+        contextIsolation: true
       }
     });
 
-    // Template HTML básico para ticket de 80mm
-    const htmlContent = `
-      <html>
-      <head>
-        <style>
-          body { 
-            font-family: 'Courier New', monospace; 
-            font-size: 14px; 
-            font-weight: 900;
-            width: 100%; 
-            margin: 0; 
-            padding: 5px; 
-            color: #000000;
-            background: white;
-          }
-          .header { 
-            text-align: center; 
-            font-weight: 900; 
-            font-size: 18px; 
-            margin-bottom: 10px; 
-          }
-          .divider { 
-            border-top: 2px dashed #000000; 
-            margin: 10px 0; 
-          }
-          .footer { 
-            text-align: center; 
-            margin-top: 20px; 
-            font-size: 12px; 
-            font-weight: 900;
-          }
-          .content {
-            white-space: pre-wrap;
-            font-weight: 900;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="header">GRAVIO</div>
-        <div style="text-align: center;">Prueba de Impresión</div>
-        <div class="divider"></div>
-        <div>Fecha: ${new Date().toLocaleString()}</div>
-        <div>Impresora: ${data.printerName}</div>
-        <div class="divider"></div>
-        <div class="content" style="text-align: center; font-size: 14px;">
-          ¡Funciona Correctamente!
-          <br/>
-          Impresora Térmica Configurada
-        </div>
-        <div class="divider"></div>
-        <div class="footer">Sistema de Gestión de Relleno Sanitario</div>
-      </body>
-      </html>
-    `;
+    // Generar HTML del ticket usando el template
+    const htmlContent = generateTicketHTML({
+      folio: data.folio || 'PENDIENTE',
+      fecha: data.fecha ? new Date(data.fecha) : new Date(),
+      empresa: data.empresa || 'Sin empresa',
+      vehiculo: {
+        placas: data.vehiculo?.placas || 'N/A',
+        numeroEconomico: data.vehiculo?.numeroEconomico || 'N/A'
+      },
+      operador: data.operador || 'Sin operador',
+      ruta: data.ruta || 'Sin ruta',
+      pesos: {
+        entrada: data.pesos?.entrada,
+        salida: data.pesos?.salida,
+        neto: data.pesos?.neto
+      },
+      fechaEntrada: data.fechaEntrada ? new Date(data.fechaEntrada) : undefined,
+      fechaSalida: data.fechaSalida ? new Date(data.fechaSalida) : undefined,
+      observaciones: data.observaciones
+    });
 
-    // Cargar contenido
+    // Cargar contenido y esperar a que se complete
     await workerWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(htmlContent));
+
+    // Pequeño delay para asegurar que el contenido se renderice
+    await new Promise(resolve => setTimeout(resolve, 500));
 
     // Imprimir
     return new Promise((resolve) => {
       workerWindow.webContents.print({
         silent: true,
-        printBackground: false,
+        printBackground: true,
         deviceName: data.printerName,
+        pageSize: {
+          width: 80000, // 80mm en micrones
+          height: 297000 // Largo variable, usar altura estándar
+        },
         margins: {
-          marginType: 'custom',
-          top: 0,
-          bottom: 0,
-          left: 0,
-          right: 0
+          marginType: 'none'
         }
       }, (success, errorType) => {
         if (!success) {
@@ -152,7 +127,13 @@ export async function printThermal(
           resolve(true);
         }
         // Cerrar ventana después de un breve delay para asegurar que se envió
-        setTimeout(() => workerWindow.close(), 1000);
+        setTimeout(() => {
+          try {
+            workerWindow.close();
+          } catch (e) {
+            console.warn('Ventana ya cerrada');
+          }
+        }, 1000);
       });
     });
 
