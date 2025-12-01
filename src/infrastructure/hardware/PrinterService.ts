@@ -75,8 +75,8 @@ export class PrinterService implements IPrinterService {
       const companyLogo = await window.electron.storage.get('companyLogo') ?? undefined;
 
       // Obtener usuario actual desde almacenamiento
-      const storedUser = await window.electron.storage.get('currentUser');
-      const usuario = storedUser?.name || storedUser?.email || 'Sistema';
+      const storedUser = await window.electron.storage.get('supabase_user');
+      const usuario = storedUser?.nombre || storedUser?.email || 'Sistema';
 
       // Preparar datos para el ticket
       const ticketData = {
