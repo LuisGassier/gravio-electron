@@ -119,51 +119,6 @@ export function WeighingPanel() {
         </Card>
       )}
 
-      {/* Weight Display */}
-      <Card className="bg-card border-border">
-        <CardContent className="p-6">
-          <div className="text-center">
-            <div className="inline-flex items-center gap-4 mb-2">
-              <div className="w-3 h-3 rounded-full bg-primary/30 flex items-center justify-center">
-                <div className="w-1.5 h-1.5 rounded-full bg-primary"></div>
-              </div>
-              <div className="w-3 h-3 rounded-full bg-primary/30 flex items-center justify-center">
-                <div className="w-1.5 h-1.5 rounded-full bg-primary"></div>
-              </div>
-              <div className="w-3 h-3 rounded-full bg-primary/30 flex items-center justify-center">
-                <div className="w-1.5 h-1.5 rounded-full bg-primary"></div>
-              </div>
-            </div>
-            <div className="text-7xl font-bold text-foreground mb-2 tracking-tight">
-              {weight}
-            </div>
-            <div className="text-xl text-muted-foreground">kilogramos</div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Scale Status */}
-      <Card className="bg-card border-border">
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              {isScaleConnected ? (
-                <>
-                  <div className="w-2 h-2 rounded-full bg-success"></div>
-                  <span className="text-sm text-success font-medium">Báscula no disponible</span>
-                </>
-              ) : (
-                <>
-                  <div className="w-2 h-2 rounded-full bg-destructive"></div>
-                  <span className="text-sm text-destructive font-medium">Báscula no disponible</span>
-                </>
-              )}
-            </div>
-            <span className="text-xs text-muted-foreground">Verifique la conexión</span>
-          </div>
-        </CardContent>
-      </Card>
-
       {/* Form Section */}
       <Card className="bg-card border-border">
         <CardHeader className="pb-3">
@@ -314,6 +269,52 @@ export function WeighingPanel() {
               className="w-full min-h-[80px] px-3 py-2 bg-input border border-border rounded-md text-foreground text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary"
             />
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Weight Display */}
+      <Card className="bg-card border-border">
+        <CardContent className="p-6">
+          <div className="text-center mb-4">
+            <div className="inline-flex items-center gap-3 mb-3">
+              <div className="w-2.5 h-2.5 rounded-full bg-primary/20">
+                <div className="w-2.5 h-2.5 rounded-full bg-primary animate-pulse"></div>
+              </div>
+              <div className="w-2.5 h-2.5 rounded-full bg-primary/20">
+                <div className="w-2.5 h-2.5 rounded-full bg-primary animate-pulse" style={{ animationDelay: '0.2s' }}></div>
+              </div>
+              <div className="w-2.5 h-2.5 rounded-full bg-primary/20">
+                <div className="w-2.5 h-2.5 rounded-full bg-primary animate-pulse" style={{ animationDelay: '0.4s' }}></div>
+              </div>
+            </div>
+            <div className="text-6xl font-bold text-foreground mb-1 tracking-tight">
+              {weight}
+            </div>
+            <div className="text-lg text-muted-foreground">kilogramos</div>
+          </div>
+
+          {/* Scale Status */}
+          <div className="flex items-center justify-center gap-2 mb-4 py-2 px-4 bg-muted/30 rounded-md">
+            {isScaleConnected ? (
+              <>
+                <div className="w-2 h-2 rounded-full bg-success"></div>
+                <span className="text-sm text-success font-medium">Báscula conectada</span>
+              </>
+            ) : (
+              <>
+                <div className="w-2 h-2 rounded-full bg-destructive"></div>
+                <span className="text-sm text-destructive font-medium">Báscula no disponible</span>
+              </>
+            )}
+          </div>
+
+          {/* Action Button */}
+          <Button
+            className="w-full h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-base"
+            disabled={!isScaleConnected}
+          >
+            Registrar Entrada
+          </Button>
         </CardContent>
       </Card>
     </div>

@@ -1,24 +1,31 @@
 import { StatusPanel } from './StatusPanel'
 import { WeighingPanel } from './WeighingPanel'
 import { PendingTrucksPanel } from './PendingTrucksPanel'
+import { Card } from '@/components/ui/card'
 
 export function Dashboard() {
   return (
     <div className="grid grid-cols-[320px_1fr_340px] gap-4 h-[calc(100vh-120px)] overflow-hidden">
       {/* Left Panel - Status and Stats */}
-      <div className="overflow-y-auto pr-2 scrollbar-thin">
-        <StatusPanel />
-      </div>
+      <Card className="border-primary/40 bg-card/50 backdrop-blur-sm overflow-hidden">
+        <div className="overflow-y-auto h-full p-4 scrollbar-thin">
+          <StatusPanel />
+        </div>
+      </Card>
 
       {/* Center Panel - Weighing Form */}
-      <div className="overflow-y-auto px-2 scrollbar-thin">
-        <WeighingPanel />
-      </div>
+      <Card className="border-primary/40 bg-card/50 backdrop-blur-sm overflow-hidden">
+        <div className="overflow-y-auto h-full p-4 scrollbar-thin">
+          <WeighingPanel />
+        </div>
+      </Card>
 
       {/* Right Panel - Pending Trucks */}
-      <div className="overflow-y-auto pl-2 scrollbar-thin">
-        <PendingTrucksPanel />
-      </div>
+      <Card className="border-primary/40 bg-card/50 backdrop-blur-sm overflow-hidden">
+        <div className="overflow-y-auto h-full p-4 scrollbar-thin">
+          <PendingTrucksPanel />
+        </div>
+      </Card>
     </div>
   )
 }

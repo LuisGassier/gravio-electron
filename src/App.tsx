@@ -3,6 +3,7 @@ import { Dashboard } from './components/Dashboard'
 import { SettingsPanel } from './components/SettingsPanel'
 import { LoginPanel } from './components/LoginPanel'
 import { Header } from './components/Header'
+import { SplashScreen } from './components/SplashScreen'
 import { initSync, getSyncStatus, onSyncStatusChange } from './lib/sync'
 
 type View = 'dashboard' | 'settings' | 'login'
@@ -12,6 +13,7 @@ function App() {
   const [, setIsAuthenticated] = useState(false)
   const [userName, setUserName] = useState<string>('luis')
   const [empresaName, setEmpresaName] = useState<string>('Organismo Operador de servicio...')
+  const [showSplash, setShowSplash] = useState(true)
 
   useEffect(() => {
     // Inicializar sistema de sincronización
@@ -48,6 +50,10 @@ function App() {
     } catch (error) {
       console.error('Error loading user info:', error)
     }
+  }
+
+  if (showSplash) {
+    return <SplashScreen onComplete={() => setShowSplash(false)} />
   }
 
   return (
