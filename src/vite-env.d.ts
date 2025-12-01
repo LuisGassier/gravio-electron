@@ -48,6 +48,7 @@ interface ImportMetaEnv {
   readonly VITE_COM_PORT?: string
   readonly VITE_COM_BAUDRATE?: string
   readonly VITE_PRINTER_MODEL?: string
+  readonly VITE_APP_VERSION: string
 }
 
 interface ImportMeta {
