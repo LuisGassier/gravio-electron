@@ -5,6 +5,9 @@ on:
     tags:
       - 'v*' # Ejecutar cuando se cree un tag como v1.0.0
 
+permissions:
+  contents: write
+
 jobs:
   release:
     runs-on: windows-latest
