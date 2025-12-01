@@ -4,10 +4,14 @@ import { Button } from './ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog'
 import { Input } from './ui/input'
 import { Label } from './ui/label'
-import { Printer, Search, Calendar } from 'lucide-react'
+import { Printer, Search, Calendar, ArrowLeft } from 'lucide-react'
 import { toast } from 'sonner'
-import { DIContainer } from '@/application/DIContainer'
+import { container } from '@/application/DIContainer'
 import type { Registro } from '@/domain/entities/Registro'
+
+interface HistorialPageProps {
+  onNavigate?: (view: string) => void
+}
 
 interface RegistroConNombres {
   id: string
@@ -30,9 +34,7 @@ interface RegistroConNombres {
   sincronizado: boolean
 }
 
-const container = DIContainer.getInstance()
-
-export function HistorialPage() {
+export function HistorialPage({ onNavigate }: HistorialPageProps) {
   const [registros, setRegistros] = useState<RegistroConNombres[]>([])
   const [filteredRegistros, setFilteredRegistros] = useState<RegistroConNombres[]>([])
   const [selectedRegistro, setSelectedRegistro] = useState<RegistroConNombres | null>(null)
@@ -150,7 +152,9 @@ export function HistorialPage() {
 
       const fechaSalida = registro.fechaSalida ? new Date(registro.fechaSalida) : new Date(registro.fechaEntrada)
       
-      await window.electron.printer.print({
+      console.log('🖨️ Imprimiendo ticket para registro:', registro.folio)
+      
+      const printResult = await window.electron.printer.print({
         folio: registro.folio || 'SIN FOLIO',
         fecha: fechaSalida.toLocaleString('es-MX', {
           year: 'numeric',
@@ -173,9 +177,10 @@ export function HistorialPage() {
         usuario,
       })
 
+      console.log('✅ Resultado de impresión:', printResult)
       toast.success('Ticket impreso correctamente')
     } catch (error) {
-      console.error('Error printing:', error)
+      console.error('❌ Error printing:', error)
       toast.error('Error al imprimir ticket')
     } finally {
       setIsPrinting(false)
@@ -196,13 +201,24 @@ export function HistorialPage() {
     <div className="flex-1 overflow-auto p-6 space-y-6">
       <Card className="bg-card border-border shadow-sm">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Calendar className="w-5 h-5" />
-            Historial de Registros
-          </CardTitle>
-          <CardDescription>
-            Consulta y reimprime tickets de registros completados
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Calendar className="w-5 h-5" />
+                Historial de Registros
+              </CardTitle>
+              <CardDescription>
+                Consulta y reimprime tickets de registros completados
+              </CardDescription>
+            </div>
+            <Button
+              variant="outline"
+              onClick={() => onNavigate?.('dashboard')}
+            >
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Regresar
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Barra de búsqueda */}

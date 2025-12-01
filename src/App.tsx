@@ -155,7 +155,7 @@ function App() {
           </div>
         )}
         {currentView === 'historial' && isAuthenticated && (
-          <HistorialPage />
+          <HistorialPage onNavigate={(view) => setCurrentView(view as View)} />
         )}
       </div>
     </div>
