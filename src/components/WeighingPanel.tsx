@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Scale, AlertCircle, Truck, User, Route, FileText } from 'lucide-react'
@@ -112,6 +112,10 @@ export function WeighingPanel() {
         []
       )
 
+      console.log('📦 Datos cargados:')
+      console.log('  Conceptos:', conceptosData)
+      console.log('  Operadores:', operadoresData)
+
       setVehiculos(vehiculosData)
       setOperadores(operadoresData)
       setRutas(rutasData)
@@ -153,6 +157,16 @@ export function WeighingPanel() {
     ? conceptos.filter(c => c.clave_empresa === selectedEmpresa)
     : conceptos
 
+  // Debug logs
+  console.log('📊 Estado actual:')
+  console.log('  selectedEmpresa:', selectedEmpresa)
+  console.log('  Total operadores:', operadores.length)
+  console.log('  Operadores filtrados:', filteredOperadores.length)
+  console.log('  Total conceptos:', conceptos.length)
+  console.log('  Conceptos filtrados:', filteredConceptos.length)
+
+
+
   // Prepare options for comboboxes con formato mejorado
   const vehiculoOptions = filteredVehiculos
     .filter(v => v.clave_empresa && v.empresa) // Filtrar los que no tienen empresa
@@ -183,45 +197,154 @@ export function WeighingPanel() {
 
   const conceptoOptions = filteredConceptos
     .filter(c => c.clave_empresa) // Solo verificar clave_empresa (empresa puede ser null temporalmente)
-    .map(c => ({
-      value: `${c.id}-${c.clave_empresa}`,
-      label: `${c.clave_concepto || ''} ${c.nombre}`.trim(),
-      subtitle: c.empresa || c.prefijo || '(Sin empresa)',
-      clave_empresa: c.clave_empresa
-    }))
+    .map(c => {
+      const option = {
+        value: `${c.id}-${c.clave_empresa}`,
+        label: `${c.clave_concepto || ''} ${c.nombre}`.trim(),
+        subtitle: c.empresa || c.prefijo || '(Sin empresa)',
+        clave_empresa: c.clave_empresa
+      }
+      console.log('🎯 Concepto option:', option)
+      return option
+    })
 
   // Handler para actualizar empresa cuando se selecciona un valor
   const handleVehiculoChange = (value: string) => {
     setSelectedVehiculo(value)
+    if (!value) {
+      // Si se limpia, resetear empresa si no hay otros campos seleccionados
+      if (!selectedOperador && !selectedRuta && !selectedConcepto) {
+        setSelectedEmpresa(null)
+      }
+      return
+    }
     const vehiculo = vehiculos.find(v => v.id === value)
-    if (vehiculo && !selectedEmpresa) {
-      setSelectedEmpresa(vehiculo.clave_empresa)
+    if (vehiculo) {
+      const nuevaEmpresa = vehiculo.clave_empresa
+      setSelectedEmpresa(nuevaEmpresa)
+      // Limpiar campos que no pertenecen a esta empresa
+      if (selectedOperador) {
+        const lastDashIndex = selectedOperador.lastIndexOf('-')
+        const opEmp = selectedOperador.substring(lastDashIndex + 1)
+        if (Number(opEmp) !== nuevaEmpresa) setSelectedOperador('')
+      }
+      if (selectedRuta) {
+        const ruta = rutas.find(r => r.id === Number(selectedRuta))
+        if (ruta && ruta.clave_empresa !== nuevaEmpresa) setSelectedRuta('')
+      }
+      if (selectedConcepto) {
+        const lastDashIndex = selectedConcepto.lastIndexOf('-')
+        const concEmp = selectedConcepto.substring(lastDashIndex + 1)
+        if (Number(concEmp) !== nuevaEmpresa) setSelectedConcepto('')
+      }
     }
   }
 
   const handleOperadorChange = (value: string) => {
     setSelectedOperador(value)
-    const [id, empresa] = value.split('-')
+    if (!value) {
+      if (!selectedVehiculo && !selectedRuta && !selectedConcepto) {
+        setSelectedEmpresa(null)
+      }
+      return
+    }
+    // Separar correctamente el UUID de la empresa (el UUID contiene guiones)
+    const lastDashIndex = value.lastIndexOf('-')
+    const id = value.substring(0, lastDashIndex)
+    const empresa = value.substring(lastDashIndex + 1)
+
     const operador = operadores.find(o => o.id === id && o.clave_empresa === Number(empresa))
-    if (operador && !selectedEmpresa) {
-      setSelectedEmpresa(operador.clave_empresa)
+    if (operador) {
+      const nuevaEmpresa = operador.clave_empresa
+      setSelectedEmpresa(nuevaEmpresa)
+      // Limpiar campos que no pertenecen a esta empresa
+      if (selectedVehiculo) {
+        const vehiculo = vehiculos.find(v => v.id === selectedVehiculo)
+        if (vehiculo && vehiculo.clave_empresa !== nuevaEmpresa) setSelectedVehiculo('')
+      }
+      if (selectedRuta) {
+        const ruta = rutas.find(r => r.id === Number(selectedRuta))
+        if (ruta && ruta.clave_empresa !== nuevaEmpresa) setSelectedRuta('')
+      }
+      if (selectedConcepto) {
+        const lastDashIndex = selectedConcepto.lastIndexOf('-')
+        const concId = selectedConcepto.substring(0, lastDashIndex)
+        const concEmp = selectedConcepto.substring(lastDashIndex + 1)
+        if (Number(concEmp) !== nuevaEmpresa) setSelectedConcepto('')
+      }
     }
   }
 
   const handleRutaChange = (value: string) => {
     setSelectedRuta(value)
+    if (!value) {
+      if (!selectedVehiculo && !selectedOperador && !selectedConcepto) {
+        setSelectedEmpresa(null)
+      }
+      return
+    }
     const ruta = rutas.find(r => r.id === Number(value))
-    if (ruta && !selectedEmpresa) {
-      setSelectedEmpresa(ruta.clave_empresa)
+    if (ruta) {
+      const nuevaEmpresa = ruta.clave_empresa
+      setSelectedEmpresa(nuevaEmpresa)
+      // Limpiar campos que no pertenecen a esta empresa
+      if (selectedVehiculo) {
+        const vehiculo = vehiculos.find(v => v.id === selectedVehiculo)
+        if (vehiculo && vehiculo.clave_empresa !== nuevaEmpresa) setSelectedVehiculo('')
+      }
+      if (selectedOperador) {
+        const lastDashIndex = selectedOperador.lastIndexOf('-')
+        const opEmp = selectedOperador.substring(lastDashIndex + 1)
+        if (Number(opEmp) !== nuevaEmpresa) setSelectedOperador('')
+      }
+      if (selectedConcepto) {
+        const lastDashIndex = selectedConcepto.lastIndexOf('-')
+        const concEmp = selectedConcepto.substring(lastDashIndex + 1)
+        if (Number(concEmp) !== nuevaEmpresa) setSelectedConcepto('')
+      }
     }
   }
 
   const handleConceptoChange = (value: string) => {
+    console.log('🔍 handleConceptoChange called with value:', value)
     setSelectedConcepto(value)
-    const [id, empresa] = value.split('-')
-    const concepto = conceptos.find(c => c.id === id && c.clave_empresa === Number(empresa))
-    if (concepto && !selectedEmpresa) {
-      setSelectedEmpresa(concepto.clave_empresa)
+    if (!value) {
+      if (!selectedVehiculo && !selectedOperador && !selectedRuta) {
+        setSelectedEmpresa(null)
+      }
+      return
+    }
+    // Separar correctamente el UUID de la empresa (el UUID contiene guiones)
+    const lastDashIndex = value.lastIndexOf('-')
+    const id = value.substring(0, lastDashIndex)
+    const empresa = value.substring(lastDashIndex + 1)
+
+    console.log('🔍 Concepto ID:', id, 'Empresa:', empresa)
+    console.log('🔍 Todos los conceptos:', conceptos)
+    console.log('🔍 Buscando concepto con id:', id, 'y clave_empresa:', Number(empresa))
+    const concepto = conceptos.find(c => {
+      console.log('  Comparando:', c.id, '===', id, '&&', c.clave_empresa, '===', Number(empresa), '→', c.id === id && c.clave_empresa === Number(empresa))
+      return c.id === id && c.clave_empresa === Number(empresa)
+    })
+    console.log('🔍 Concepto encontrado:', concepto)
+    if (concepto) {
+      const nuevaEmpresa = concepto.clave_empresa
+      console.log('🔍 Nueva empresa seleccionada:', nuevaEmpresa)
+      setSelectedEmpresa(nuevaEmpresa)
+      // Limpiar campos que no pertenecen a esta empresa
+      if (selectedVehiculo) {
+        const vehiculo = vehiculos.find(v => v.id === selectedVehiculo)
+        if (vehiculo && vehiculo.clave_empresa !== nuevaEmpresa) setSelectedVehiculo('')
+      }
+      if (selectedOperador) {
+        const lastDashIndex = selectedOperador.lastIndexOf('-')
+        const opEmp = selectedOperador.substring(lastDashIndex + 1)
+        if (Number(opEmp) !== nuevaEmpresa) setSelectedOperador('')
+      }
+      if (selectedRuta) {
+        const ruta = rutas.find(r => r.id === Number(selectedRuta))
+        if (ruta && ruta.clave_empresa !== nuevaEmpresa) setSelectedRuta('')
+      }
     }
   }
 
@@ -277,6 +400,7 @@ export function WeighingPanel() {
             <div className="space-y-2">
               <Label className="text-sm font-medium">Concepto</Label>
               <Combobox
+                key={`concepto-${selectedEmpresa || 'all'}`}
                 options={conceptoOptions}
                 value={selectedConcepto}
                 onValueChange={handleConceptoChange}
@@ -290,6 +414,7 @@ export function WeighingPanel() {
             <div className="space-y-2">
               <Label className="text-sm font-medium">Operador</Label>
               <Combobox
+                key={`operador-${selectedEmpresa || 'all'}`}
                 options={operadorOptions}
                 value={selectedOperador}
                 onValueChange={handleOperadorChange}
@@ -306,6 +431,7 @@ export function WeighingPanel() {
             <div className="space-y-2">
               <Label className="text-sm font-medium">Ruta</Label>
               <Combobox
+                key={`ruta-${selectedEmpresa || 'all'}`}
                 options={rutaOptions}
                 value={selectedRuta}
                 onValueChange={handleRutaChange}
@@ -319,6 +445,7 @@ export function WeighingPanel() {
             <div className="space-y-2">
               <Label className="text-sm font-medium">Vehículo</Label>
               <Combobox
+                key={`vehiculo-${selectedEmpresa || 'all'}`}
                 options={vehiculoOptions}
                 value={selectedVehiculo}
                 onValueChange={handleVehiculoChange}
