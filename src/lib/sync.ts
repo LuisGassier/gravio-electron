@@ -70,7 +70,7 @@ async function getPendingTransactions() {
   
   try {
     const result = await window.electron.db.query(
-      'SELECT * FROM transactions WHERE synced = 0 ORDER BY timestamp ASC',
+      'SELECT * FROM registros WHERE sincronizado = 0 ORDER BY fecha_registro ASC',
       []
     )
     return result
@@ -88,7 +88,7 @@ async function syncTransaction(transaction: any) {
   if (!supabase) {
     console.warn('⚠️ Supabase no configurado, transacción solo en local')
     await window.electron.db.query(
-      'UPDATE transactions SET synced = 1 WHERE id = ?',
+      'UPDATE registros SET sincronizado = 1 WHERE id = ?',
       [transaction.id]
     )
     return true
@@ -96,21 +96,33 @@ async function syncTransaction(transaction: any) {
   
   try {
     const { error } = await supabase
-      .from('transactions')
+      .from('registros')
       .upsert({
         id: transaction.id,
-        type: transaction.type,
-        weight: transaction.weight,
-        vehicle_plate: transaction.vehicle_plate,
-        driver_name: transaction.driver_name,
-        waste_type: transaction.waste_type,
-        timestamp: new Date(transaction.timestamp * 1000).toISOString(),
+        clave_ruta: transaction.clave_ruta,
+        placa_vehiculo: transaction.placa_vehiculo,
+        numero_economico: transaction.numero_economico,
+        clave_operador: transaction.clave_operador,
+        operador: transaction.operador,
+        ruta: transaction.ruta,
+        peso: transaction.peso,
+        peso_entrada: transaction.peso_entrada,
+        peso_salida: transaction.peso_salida,
+        fecha_entrada: transaction.fecha_entrada,
+        fecha_salida: transaction.fecha_salida,
+        fecha_registro: transaction.fecha_registro,
+        tipo_pesaje: transaction.tipo_pesaje,
+        folio: transaction.folio,
+        clave_concepto: transaction.clave_concepto,
+        concepto_id: transaction.concepto_id,
+        clave_empresa: transaction.clave_empresa,
+        observaciones: transaction.observaciones,
       })
     
     if (error) {
-      // Si la tabla no existe (404), advertir pero continuar
-      if (error.code === 'PGRST116' || (error as any).message?.includes('404')) {
-        console.warn('⚠️ Tabla "transactions" no existe en Supabase. Mantiendo transacción en local.')
+      // Si la tabla no existe (42P01 = tabla no existe, PGRST116 = no encontrado)
+      if (error.code === '42P01' || error.code === 'PGRST116' || (error as any).message?.includes('does not exist')) {
+        console.warn('⚠️ Tabla "registros" no existe en Supabase. Mantiendo transacción en local.')
         return true // No reintentar si la tabla no existe
       }
       throw error
@@ -118,7 +130,7 @@ async function syncTransaction(transaction: any) {
     
     // Marcar como sincronizado en SQLite
     await window.electron.db.query(
-      'UPDATE transactions SET synced = 1 WHERE id = ?',
+      'UPDATE registros SET sincronizado = 1 WHERE id = ?',
       [transaction.id]
     )
     
@@ -172,49 +184,49 @@ async function downloadCacheData() {
   }
   
   try {
-    // Descargar vehículos
+    // Descargar vehículos (tabla 'vehiculos' en Supabase)
     const { data: vehicles, error: vehiclesError } = await supabase
-      .from('vehicles')
+      .from('vehiculos')
       .select('*')
       .limit(1000)
     
     if (vehiclesError) {
-      // Si la tabla no existe (404), solo advertir sin error
-      if (vehiclesError.code === 'PGRST116' || vehiclesError.message.includes('404')) {
-        console.warn('⚠️ Tabla "vehicles" no existe en Supabase. Crea la tabla o ignora esta advertencia.')
+      // Si la tabla no existe (42P01 = tabla no existe, PGRST116 = no encontrado)
+      if (vehiclesError.code === '42P01' || vehiclesError.code === 'PGRST116' || vehiclesError.message.includes('does not exist')) {
+        console.warn('⚠️ Tabla "vehiculos" no existe en Supabase. Crea la tabla o ignora esta advertencia.')
       } else {
         console.error('❌ Error al descargar vehículos:', vehiclesError)
       }
     } else if (vehicles && vehicles.length > 0) {
       for (const vehicle of vehicles) {
         await window.electron.db.query(
-          `INSERT OR REPLACE INTO vehicles (id, plate, type, owner, last_updated) 
+          `INSERT OR REPLACE INTO vehiculos (id, no_economico, placas, clave_empresa, created_at) 
            VALUES (?, ?, ?, ?, ?)`,
-          [vehicle.id, vehicle.plate, vehicle.type, vehicle.owner, Date.now()]
+          [vehicle.id, vehicle.no_economico, vehicle.placas, vehicle.clave_empresa, vehicle.created_at || Date.now()]
         )
       }
       console.log(`✅ Descargados ${vehicles.length} vehículos`)
     }
     
-    // Descargar usuarios
+    // Descargar usuarios (tabla 'usuarios' en Supabase)
     const { data: users, error: usersError } = await supabase
-      .from('users')
+      .from('usuarios')
       .select('*')
       .limit(1000)
     
     if (usersError) {
-      // Si la tabla no existe (404), solo advertir sin error
-      if (usersError.code === 'PGRST116' || usersError.message.includes('404')) {
-        console.warn('⚠️ Tabla "users" no existe en Supabase. Crea la tabla o ignora esta advertencia.')
+      // Si la tabla no existe (42P01 = tabla no existe, PGRST116 = no encontrado)
+      if (usersError.code === '42P01' || usersError.code === 'PGRST116' || usersError.message.includes('does not exist')) {
+        console.warn('⚠️ Tabla "usuarios" no existe en Supabase. Crea la tabla o ignora esta advertencia.')
       } else {
         console.error('❌ Error al descargar usuarios:', usersError)
       }
     } else if (users && users.length > 0) {
       for (const user of users) {
         await window.electron.db.query(
-          `INSERT OR REPLACE INTO users (id, email, full_name, role, last_updated) 
-           VALUES (?, ?, ?, ?, ?)`,
-          [user.id, user.email, user.full_name, user.role, Date.now()]
+          `INSERT OR REPLACE INTO usuarios (id, nombre, email, telefono, rol_id, activo, created_at) 
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [user.id, user.nombre, user.email, user.telefono, user.rol_id, user.activo ?? 1, user.created_at || Date.now()]
         )
       }
       console.log(`✅ Descargados ${users.length} usuarios`)
