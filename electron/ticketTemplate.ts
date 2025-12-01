@@ -84,43 +84,98 @@ export function generateTicketHTML(data: TicketTemplateData): string {
     }
 
     body {
-      font-family: 'Courier New', 'Courier', monospace;
-      font-size: 10px;
-      line-height: 1.3;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 11px;
+      font-weight: bold;
+      line-height: 1.4;
       width: 80mm;
-      padding: 3mm;
+      padding: 2mm 3mm;
       background: white;
       color: #000;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
     }
 
     .logo-container {
       text-align: center;
-      margin-bottom: 3px;
+      margin-bottom: 4px;
     }
 
     .logo {
-      max-width: 60mm;
-      max-height: 15mm;
+      max-width: 65mm;
+      max-height: 18mm;
       margin: 0 auto;
     }
 
-    .company-name {
+    .header {
       text-align: center;
+      margin-bottom: 6px;
+    }
+
+    .company-name {
       font-size: 11px;
+      font-weight: bold;
+      margin-bottom: 1px;
+      line-height: 1.2;
+    }
+
+    .company-address {
+      font-size: 10px;
+      font-weight: normal;
+      margin-bottom: 4px;
+    }
+
+    .separator {
+      border-bottom: 1px dashed #000;
+      margin: 3px 0;
+    }
+
+    .folio {
+      font-size: 12px;
       font-weight: bold;
       margin-bottom: 2px;
     }
 
-    .company-address {
-      text-align: center;
-      font-size: 9px;
-      margin-bottom: 4px;
-    }
-
     .field {
       font-size: 10px;
+      font-weight: bold;
+      margin-bottom: 1.5px;
+      line-height: 1.3;
+    }
+
+    .field-label {
+      display: inline-block;
+      min-width: 50px;
+    }
+
+    .section-title {
+      font-size: 11px;
+      font-weight: bold;
+      margin-top: 4px;
+      margin-bottom: 2px;
+      text-decoration: underline;
+    }
+
+    .pesos-section {
+      margin-top: 5px;
+      padding-top: 3px;
+      border-top: 1px solid #000;
+    }
+
+    .peso-field {
+      font-size: 11px;
+      font-weight: bold;
       margin-bottom: 1px;
-      line-height: 1.4;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .footer {
+      margin-top: 5px;
+      padding-top: 3px;
+      border-top: 1px dashed #000;
+      font-size: 9px;
+      font-weight: normal;
     }
 
     @media print {
@@ -137,31 +192,47 @@ export function generateTicketHTML(data: TicketTemplateData): string {
   </div>
   ` : ''}
 
-  ${data.companyName ? `
-  <div class="company-name">${data.companyName}</div>
-  ` : ''}
+  <div class="header">
+    ${data.companyName ? `<div class="company-name">${data.companyName}</div>` : ''}
+    ${data.companyAddress ? `<div class="company-address">${data.companyAddress}</div>` : ''}
+  </div>
 
-  ${data.companyAddress ? `
-  <div class="company-address">${data.companyAddress}</div>
-  ` : ''}
-
-  <div class="field">Folio: ${data.folio}</div>
+  <div class="folio">Folio: ${data.folio}</div>
   <div class="field">Entrada: ${data.fechaEntrada ? `${formatDate(data.fechaEntrada)} ${formatTime(data.fechaEntrada)}` : 'N/A'}</div>
   <div class="field">Salida: ${data.fechaSalida ? `${formatDate(data.fechaSalida)} ${formatTime(data.fechaSalida)}` : 'N/A'}</div>
-  <div class="field">${data.vehiculo.placas ? `Placas: ${data.vehiculo.placas}` : `Numero Economico: ${data.vehiculo.numeroEconomico}`}</div>
+  <div class="field">Placas: ${data.vehiculo.placas}</div>
+
+  <div class="separator"></div>
+
   <div class="field">Concepto: ${data.conceptoClave} - ${data.conceptoNombre}</div>
   <div class="field">Empresa: ${data.empresaClave} - ${data.empresaNombre}</div>
   <div class="field">Operador: ${data.operadorClave} - ${data.operadorNombre}</div>
   <div class="field">Ruta: ${data.rutaClave} - ${data.rutaNombre}</div>
   <div class="field">Vehiculo: ${data.vehiculo.numeroEconomico}</div>
 
-  <div class="field">Peso Bruto: ${kgToToneladas(data.pesos.entrada)} t</div>
-  <div class="field">Peso Tara: ${kgToToneladas(data.pesos.salida)} t</div>
-  <div class="field">Peso Neto: ${kgToToneladas(data.pesos.neto)} t</div>
-  <div class="field">Tiempo: ${calcularTiempo()} min</div>
+  <div class="pesos-section">
+    <div class="peso-field">
+      <span>Peso Bruto:</span>
+      <span>${kgToToneladas(data.pesos.entrada)} t</span>
+    </div>
+    <div class="peso-field">
+      <span>Peso Tara:</span>
+      <span>${kgToToneladas(data.pesos.salida)} t</span>
+    </div>
+    <div class="peso-field">
+      <span>Peso Neto:</span>
+      <span>${kgToToneladas(data.pesos.neto)} t</span>
+    </div>
+    <div class="peso-field">
+      <span>Tiempo:</span>
+      <span>${calcularTiempo()} min</span>
+    </div>
+  </div>
 
-  ${data.observaciones ? `<div class="field">Obs: ${data.observaciones}</div>` : ''}
-  ${data.usuario ? `<div class="field">Usuario: ${data.usuario}</div>` : ''}
+  <div class="footer">
+    ${data.observaciones ? `<div>Obs: ${data.observaciones}</div>` : ''}
+    ${data.usuario ? `<div>Usuario: ${data.usuario}</div>` : ''}
+  </div>
 </body>
 </html>
   `.trim();
