@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Toaster } from 'sonner'
 import { Dashboard } from './components/Dashboard'
 import { SettingsPanel } from './components/SettingsPanel'
 import { LoginPanel } from './components/LoginPanel'
@@ -58,6 +59,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
+      <Toaster position="top-center" richColors />
       {/* Header */}
       <Header
         empresaName={empresaName}

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Settings, Save, RefreshCw } from 'lucide-react'
@@ -93,9 +94,11 @@ export function SettingsPanel() {
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
       
+      toast.success('Configuración guardada correctamente')
       console.log('✅ Configuración guardada:', settings)
     } catch (error) {
       console.error('Error al guardar configuración:', error)
+      toast.error('Error al guardar la configuración')
     }
   }
 
@@ -110,14 +113,14 @@ export function SettingsPanel() {
       )
       
       if (success) {
-        alert('✅ Conexión exitosa con la báscula')
+        toast.success('Conexión exitosa con la báscula')
         await window.electron.serialPort.close()
       } else {
-        alert('❌ Error al conectar con la báscula')
+        toast.error('Error al conectar con la báscula')
       }
     } catch (error) {
       console.error('Error al probar conexión:', error)
-      alert('❌ Error al conectar con la báscula')
+      toast.error('Error al conectar con la báscula')
     } finally {
       setLoading(false)
     }
@@ -135,13 +138,13 @@ export function SettingsPanel() {
       })
       
       if (success) {
-        console.log('✅ Impresión enviada a la cola')
+        toast.success('Impresión enviada a la cola')
       } else {
-        alert('❌ Error al enviar impresión')
+        toast.error('Error al enviar impresión')
       }
     } catch (error) {
       console.error('Error al probar impresión:', error)
-      alert('❌ Error al probar impresión')
+      toast.error('Error al probar impresión')
     } finally {
       setLoading(false)
     }
