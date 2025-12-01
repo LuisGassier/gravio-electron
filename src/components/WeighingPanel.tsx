@@ -68,16 +68,6 @@ export function WeighingPanel() {
     }
   }, [])
 
-  // Log para debugging
-  useEffect(() => {
-    console.log('📊 Datos cargados:', {
-      vehiculos: vehiculos.length,
-      operadores: operadores.length,
-      rutas: rutas.length,
-      conceptos: conceptos.length
-    })
-  }, [vehiculos, operadores, rutas, conceptos])
-
   const loadFormData = async () => {
     if (!window.electron) return
 
@@ -187,16 +177,16 @@ export function WeighingPanel() {
     .map(r => ({
       value: String(r.id),
       label: `${r.clave_ruta} ${r.ruta}`,
-      subtitle: `(${r.prefijo})`,
+      subtitle: r.empresa,
       clave_empresa: r.clave_empresa
     }))
 
   const conceptoOptions = filteredConceptos
-    .filter(c => c.clave_empresa && c.empresa) // Filtrar los que no tienen empresa
+    .filter(c => c.clave_empresa) // Solo verificar clave_empresa (empresa puede ser null temporalmente)
     .map(c => ({
       value: `${c.id}-${c.clave_empresa}`,
       label: `${c.clave_concepto || ''} ${c.nombre}`.trim(),
-      subtitle: c.empresa,
+      subtitle: c.empresa || c.prefijo || '(Sin empresa)',
       clave_empresa: c.clave_empresa
     }))
 
