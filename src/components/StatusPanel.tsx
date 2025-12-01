@@ -1,10 +1,8 @@
 import { useState, useEffect } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { RefreshCw, Wifi, WifiOff, Database, Truck, Users, Building2, Scale, FileText, AlertCircle } from 'lucide-react'
+import { RefreshCw, Wifi, WifiOff, Database, Truck, Users, Building2, Scale, FileText } from 'lucide-react'
 import { getSyncStatus, onSyncStatusChange, syncNow } from '@/lib/sync'
-import { checkForUpdates, type AppVersion } from '@/lib/updater'
-import { UpdateNotificationDialog } from './UpdateNotificationDialog'
 
 export function StatusPanel() {
   const [isOnline, setIsOnline] = useState(navigator.onLine)
@@ -19,9 +17,6 @@ export function StatusPanel() {
   const [version, setVersion] = useState<string>('')
   const [printerCount, setPrinterCount] = useState(0)
   const [scalePort, setScalePort] = useState<string | null>(null)
-  const [updateAvailable, setUpdateAvailable] = useState(false)
-  const [updateInfo, setUpdateInfo] = useState<AppVersion | null>(null)
-  const [showUpdateDialog, setShowUpdateDialog] = useState(false)
 
   useEffect(() => {
     // Online/Offline listeners
@@ -52,15 +47,10 @@ export function StatusPanel() {
       })
     }
 
-    // Check for updates on mount and every 30 minutes
-    checkUpdates()
-    const updateInterval = setInterval(checkUpdates, 30 * 60 * 1000)
-
     return () => {
       window.removeEventListener('online', handleOnline)
       window.removeEventListener('offline', handleOffline)
       unsubscribe()
-      clearInterval(updateInterval)
     }
   }, [])
 
@@ -106,23 +96,6 @@ export function StatusPanel() {
     return `Hace ${minutes} minutos`
   }
 
-  const checkUpdates = async () => {
-    try {
-      const result = await checkForUpdates()
-      if (result.hasUpdate && result.latestVersion) {
-        setUpdateAvailable(true)
-        setUpdateInfo(result.latestVersion)
-        
-        // Si es una actualización requerida, mostrar el diálogo automáticamente
-        if (result.latestVersion.is_required) {
-          setShowUpdateDialog(true)
-        }
-      }
-    } catch (error) {
-      console.error('Error checking for updates:', error)
-    }
-  }
-
   const getGreeting = () => {
     const hour = new Date().getHours()
     if (hour >= 6 && hour < 12) return 'Buenos días'
@@ -132,16 +105,6 @@ export function StatusPanel() {
 
   return (
     <div className="space-y-4">
-      {/* Update Dialog */}
-      {updateInfo && (
-        <UpdateNotificationDialog
-          open={showUpdateDialog}
-          onOpenChange={setShowUpdateDialog}
-          updateInfo={updateInfo}
-          currentVersion={version}
-        />
-      )}
-
       {/* Title */}
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-foreground">{getGreeting()}</h2>
@@ -155,31 +118,6 @@ export function StatusPanel() {
           Actualizar
         </Button>
       </div>
-
-      {/* Update Available Banner */}
-      {updateAvailable && updateInfo && (
-        <Card className="border-2 border-warning bg-warning/5 p-3">
-          <div className="flex items-center gap-2.5">
-            <AlertCircle className="w-5 h-5 text-warning flex-shrink-0" />
-            <div className="flex-1 min-w-0">
-              <span className="text-sm font-semibold text-warning block">
-                Actualización Requerida
-              </span>
-              <p className="text-xs text-warning/80 mt-0.5">
-                Nueva versión {updateInfo.version}
-              </p>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowUpdateDialog(true)}
-              className="border-warning text-warning hover:bg-warning hover:text-white flex-shrink-0"
-            >
-              Ver detalles
-            </Button>
-          </div>
-        </Card>
-      )}
 
       {/* Online Status */}
       <Card className={`border ${isOnline ? 'bg-success/5 border-success/30' : 'bg-destructive/5 border-destructive/30'} p-3`}>
