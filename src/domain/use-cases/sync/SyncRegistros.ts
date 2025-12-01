@@ -43,7 +43,19 @@ export class SyncRegistrosUseCase {
           
           for (const remoteRegistro of remotePendingResult.value) {
             try {
-              // Guardar/actualizar en SQLite local
+              // Verificar si el registro ya existe localmente
+              const localExistingResult = await this.localRepository.findById(remoteRegistro.id!);
+              
+              // Si existe localmente y ya tiene salida, NO sobrescribir
+              if (localExistingResult.success && localExistingResult.value) {
+                const localRegistro = localExistingResult.value;
+                if (localRegistro.pesoSalida && localRegistro.fechaSalida) {
+                  // El registro local tiene salida, no sobrescribir con la versión pendiente de Supabase
+                  continue;
+                }
+              }
+              
+              // Guardar/actualizar en SQLite local solo si no tiene salida local
               const localResult = await this.localRepository.saveEntrada(remoteRegistro);
               
               if (localResult.success) {
