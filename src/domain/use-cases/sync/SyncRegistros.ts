@@ -31,7 +31,47 @@ export class SyncRegistrosUseCase {
 
   async execute(): Promise<Result<SyncRegistrosOutput>> {
     try {
-      // Obtener registros no sincronizados
+      let synced = 0;
+      let failed = 0;
+      const errors: Array<{ registroId: string; error: string }> = [];
+
+      // FASE 1: Descargar registros pendientes de Supabase → SQLite
+      console.log('📥 Descargando registros pendientes de Supabase...');
+      try {
+        const remotePendingResult = await this.remoteRepository.findAllPending();
+        
+        if (remotePendingResult.success && remotePendingResult.value.length > 0) {
+          console.log(`📦 Encontrados ${remotePendingResult.value.length} registros pendientes en Supabase`);
+          
+          for (const remoteRegistro of remotePendingResult.value) {
+            try {
+              // Guardar/actualizar en SQLite local
+              const localResult = await this.localRepository.saveEntrada(remoteRegistro);
+              
+              if (localResult.success) {
+                synced++;
+              } else {
+                failed++;
+                errors.push({
+                  registroId: remoteRegistro.id || 'unknown',
+                  error: `Error al guardar localmente: ${localResult.error.message}`,
+                });
+              }
+            } catch (error) {
+              failed++;
+              errors.push({
+                registroId: remoteRegistro.id || 'unknown',
+                error: error instanceof Error ? error.message : String(error),
+              });
+            }
+          }
+        }
+      } catch (error) {
+        console.warn('⚠️ Error al descargar registros pendientes:', error);
+      }
+
+      // FASE 2: Subir registros no sincronizados de SQLite → Supabase
+      console.log('📤 Subiendo registros locales no sincronizados...');
       const unsyncedResult = await this.localRepository.findUnsynchronized();
 
       if (!unsyncedResult.success) {
@@ -40,44 +80,38 @@ export class SyncRegistrosUseCase {
 
       const unsyncedRegistros = unsyncedResult.value;
 
-      if (unsyncedRegistros.length === 0) {
-        return ResultFactory.ok({
-          synced: 0,
-          failed: 0,
-          errors: [],
-        });
-      }
+      if (unsyncedRegistros.length > 0) {
+        console.log(`📦 Encontrados ${unsyncedRegistros.length} registros no sincronizados localmente`);
 
-      let synced = 0;
-      let failed = 0;
-      const errors: Array<{ registroId: string; error: string }> = [];
+        // Sincronizar cada registro
+        for (const registro of unsyncedRegistros) {
+          try {
+            // Intentar guardar en Supabase
+            // Si es entrada, Supabase generará el folio
+            const remoteResult = await this.remoteRepository.saveEntrada(registro);
 
-      // Sincronizar cada registro
-      for (const registro of unsyncedRegistros) {
-        try {
-          // Intentar guardar en Supabase
-          // Si es entrada, Supabase generará el folio
-          const remoteResult = await this.remoteRepository.saveEntrada(registro);
-
-          if (remoteResult.success) {
-            // Marcar como sincronizado localmente
-            await this.localRepository.markAsSynced(registro.id!);
-            synced++;
-          } else {
+            if (remoteResult.success) {
+              // Marcar como sincronizado localmente
+              await this.localRepository.markAsSynced(registro.id!);
+              synced++;
+            } else {
+              failed++;
+              errors.push({
+                registroId: registro.id || 'unknown',
+                error: remoteResult.error.message,
+              });
+            }
+          } catch (error) {
             failed++;
             errors.push({
               registroId: registro.id || 'unknown',
-              error: remoteResult.error.message,
+              error: error instanceof Error ? error.message : String(error),
             });
           }
-        } catch (error) {
-          failed++;
-          errors.push({
-            registroId: registro.id || 'unknown',
-            error: error instanceof Error ? error.message : String(error),
-          });
         }
       }
+
+      console.log(`✅ Sincronización completa: ${synced} exitosos, ${failed} fallidos`);
 
       return ResultFactory.ok({
         synced,
