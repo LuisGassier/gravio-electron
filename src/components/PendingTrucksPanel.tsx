@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { CheckCircle2, Truck } from 'lucide-react'
 
 interface PendingTruck {
@@ -92,7 +92,7 @@ export function PendingTrucksPanel() {
 
           {/* Pending Trucks List */}
           <div className="space-y-2 max-h-[calc(100vh-280px)] overflow-y-auto pr-2">
-            {pendingTrucks.map((truck, index) => (
+            {pendingTrucks.map((truck) => (
               <Card
                 key={truck.id}
                 className="bg-card border-border hover:border-primary/50 transition-colors"

@@ -9,7 +9,7 @@ type View = 'dashboard' | 'settings' | 'login'
 
 function App() {
   const [currentView, setCurrentView] = useState<View>('dashboard')
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [, setIsAuthenticated] = useState(false)
   const [userName, setUserName] = useState<string>('luis')
   const [empresaName, setEmpresaName] = useState<string>('Organismo Operador de servicio...')
 

@@ -71,8 +71,9 @@ export function StatusPanel() {
     }
   }
 
-  const formatLastSync = (timestamp?: number) => {
-    if (!timestamp) return 'Ahora mismo'
+  const formatLastSync = (lastSyncDate: Date | null) => {
+    if (!lastSyncDate) return 'Ahora mismo'
+    const timestamp = lastSyncDate.getTime()
     const seconds = Math.floor((Date.now() - timestamp) / 1000)
     if (seconds < 60) return 'Hace unos segundos'
     const minutes = Math.floor(seconds / 60)
@@ -156,7 +157,7 @@ export function StatusPanel() {
           <div className="flex justify-between">
             <span>Última sync:</span>
             <span className="text-foreground font-medium">
-              {formatLastSync(syncStatus.lastSyncTime)}
+              {formatLastSync(syncStatus.lastSync)}
             </span>
           </div>
         </div>

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Scale, AlertCircle, RefreshCw, Truck, User, Route, FileText } from 'lucide-react'
+import { Scale, AlertCircle, Truck, User, Route, FileText } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
@@ -19,8 +19,8 @@ export function WeighingPanel() {
   const [rutas, setRutas] = useState<SelectOption[]>([])
   const [conceptos, setConceptos] = useState<SelectOption[]>([])
 
-  const [selectedVehiculo, setSelectedVehiculo] = useState('')
-  const [selectedOperador, setSelectedOperador] = useState('')
+  const [, setSelectedVehiculo] = useState('')
+  const [, setSelectedOperador] = useState('')
   const [selectedRuta, setSelectedRuta] = useState('')
   const [selectedConcepto, setSelectedConcepto] = useState('')
   const [observaciones, setObservaciones] = useState('')
@@ -226,7 +226,7 @@ export function WeighingPanel() {
               />
               <button className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinecap="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
               </button>
             </div>

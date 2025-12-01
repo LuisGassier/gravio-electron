@@ -1,4 +1,4 @@
-import { supabase, restoreSession, authenticateUser, signOut, getCurrentUserId } from './supabase'
+import { supabase, restoreSession } from './supabase'
 
 // Re-exportar funciones de autenticación para facilitar el acceso
 export { authenticateUser, signOut, getCurrentUserId } from './supabase'
