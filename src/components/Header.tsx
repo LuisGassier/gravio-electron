@@ -146,8 +146,8 @@ export function Header({
   return (
     <header className="bg-card border-b border-border px-6 py-3 shadow-sm">
       <div className="grid grid-cols-3 items-center">
-        {/* Right: Time, User, Settings */}
-        <div className="flex items-center gap-4 justify-end">
+        {/* Left: Updates Button + Greeting/Shift */}
+        <div className="flex items-center gap-4">
           {/* Check Updates Button */}
           <Button
             variant="outline"
@@ -161,19 +161,10 @@ export function Header({
             {isCheckingUpdate ? 'Verificando...' : 'Actualizaciones'}
           </Button>
 
-          {/* Date and Time */}
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-primary to-primary/60 rounded-lg flex items-center justify-center shadow-md">
-              <Clock className="w-5 h-5 text-white" />
-            </div>
-            <div className="flex flex-col">
-              <div className="text-sm font-semibold text-foreground">
-                {currentTime.toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit' })}
-              </div>
-              <div className="text-xs text-muted-foreground">
-                {currentTime.toLocaleDateString('es-DO', { weekday: 'short', day: 'numeric', month: 'short' })}
-              </div>
-            </div>
+          {/* Greeting and Shift Info */}
+          <div className="flex items-center gap-2 text-xs">
+            {getGreetingIcon(currentTime)}
+            <span className="text-muted-foreground">{getGreeting(currentTime)} • Turno {getShift(currentTime)}</span>
           </div>
         </div>
 
