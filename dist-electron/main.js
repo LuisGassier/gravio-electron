@@ -16522,12 +16522,18 @@ function generateTicketHTML(data) {
     return date.toLocaleTimeString("es-MX", {
       hour: "2-digit",
       minute: "2-digit",
-      second: "2-digit",
       hour12: false
     });
   };
-  const formatWeight = (weight) => {
-    return weight ? weight.toFixed(2) : "0.00";
+  const kgToToneladas = (kg) => {
+    if (!kg) return "0.000";
+    return (kg / 1e3).toFixed(3);
+  };
+  const calcularTiempo = () => {
+    if (!data.fechaEntrada || !data.fechaSalida) return "0";
+    const diffMs = data.fechaSalida.getTime() - data.fechaEntrada.getTime();
+    const diffMinutes = Math.floor(diffMs / (1e3 * 60));
+    return diffMinutes.toString();
   };
   return `
 <!DOCTYPE html>
@@ -16548,129 +16554,42 @@ function generateTicketHTML(data) {
 
     body {
       font-family: 'Courier New', 'Courier', monospace;
-      font-size: 12px;
-      line-height: 1.4;
+      font-size: 10px;
+      line-height: 1.3;
       width: 80mm;
-      padding: 5mm;
+      padding: 3mm;
       background: white;
       color: #000;
     }
 
-    .header {
+    .logo-container {
       text-align: center;
-      margin-bottom: 8px;
+      margin-bottom: 3px;
     }
 
-    .header h1 {
-      font-size: 20px;
-      font-weight: bold;
-      margin-bottom: 2px;
-      letter-spacing: 1px;
+    .logo {
+      max-width: 60mm;
+      max-height: 15mm;
+      margin: 0 auto;
     }
 
-    .header .empresa {
-      font-size: 13px;
-      font-weight: bold;
-      margin-bottom: 2px;
-    }
-
-    .header .folio {
-      font-size: 14px;
-      font-weight: bold;
-      margin-top: 4px;
-    }
-
-    .divider {
-      border-top: 2px dashed #000;
-      margin: 8px 0;
-    }
-
-    .divider-solid {
-      border-top: 1px solid #000;
-      margin: 6px 0;
-    }
-
-    .section {
-      margin-bottom: 8px;
-    }
-
-    .section-title {
-      font-size: 13px;
-      font-weight: bold;
-      margin-bottom: 4px;
-      text-decoration: underline;
-    }
-
-    .row {
-      display: flex;
-      justify-content: space-between;
-      margin-bottom: 2px;
+    .company-name {
+      text-align: center;
       font-size: 11px;
-    }
-
-    .label {
       font-weight: bold;
-      width: 45%;
+      margin-bottom: 2px;
     }
 
-    .value {
-      width: 55%;
-      text-align: right;
-    }
-
-    .pesos {
-      margin-top: 8px;
-    }
-
-    .peso-row {
-      display: flex;
-      justify-content: space-between;
-      padding: 4px 0;
-      font-size: 12px;
-      border-bottom: 1px dotted #000;
-    }
-
-    .peso-row:last-child {
-      border-bottom: none;
-    }
-
-    .peso-row.highlight {
-      font-size: 14px;
-      font-weight: bold;
-      background: #f0f0f0;
-      padding: 6px 4px;
-      border: 2px solid #000;
-      margin-top: 4px;
-    }
-
-    .peso-label {
-      font-weight: bold;
-    }
-
-    .peso-value {
-      font-weight: bold;
-    }
-
-    .observaciones {
-      margin-top: 8px;
-      padding: 6px;
-      border: 1px solid #000;
-      background: #f9f9f9;
-      font-size: 10px;
-      word-wrap: break-word;
-      white-space: pre-wrap;
-    }
-
-    .footer {
-      margin-top: 10px;
+    .company-address {
       text-align: center;
-      font-size: 10px;
-      color: #333;
+      font-size: 9px;
+      margin-bottom: 4px;
     }
 
-    .footer .date {
-      margin-top: 4px;
-      font-size: 9px;
+    .field {
+      font-size: 10px;
+      margin-bottom: 1px;
+      line-height: 1.4;
     }
 
     @media print {
@@ -16681,101 +16600,37 @@ function generateTicketHTML(data) {
   </style>
 </head>
 <body>
-  <!-- HEADER -->
-  <div class="header">
-    <h1>GRAVIO</h1>
-    <div class="empresa">${data.empresa}</div>
-    <div style="font-size: 11px;">Sistema de Gestión de Relleno Sanitario</div>
-    <div class="folio">FOLIO: ${data.folio}</div>
-  </div>
-
-  <div class="divider"></div>
-
-  <!-- INFORMACIÓN DEL VEHÍCULO -->
-  <div class="section">
-    <div class="section-title">DATOS DEL VEHÍCULO</div>
-    <div class="row">
-      <span class="label">Placas:</span>
-      <span class="value">${data.vehiculo.placas}</span>
-    </div>
-    <div class="row">
-      <span class="label">No. Económico:</span>
-      <span class="value">${data.vehiculo.numeroEconomico}</span>
-    </div>
-    <div class="row">
-      <span class="label">Operador:</span>
-      <span class="value">${data.operador}</span>
-    </div>
-    <div class="row">
-      <span class="label">Ruta:</span>
-      <span class="value">${data.ruta}</span>
-    </div>
-  </div>
-
-  <div class="divider-solid"></div>
-
-  <!-- FECHAS -->
-  <div class="section">
-    <div class="row">
-      <span class="label">Fecha Entrada:</span>
-      <span class="value">${data.fechaEntrada ? formatDate(data.fechaEntrada) : "N/A"}</span>
-    </div>
-    <div class="row">
-      <span class="label">Hora Entrada:</span>
-      <span class="value">${data.fechaEntrada ? formatTime(data.fechaEntrada) : "N/A"}</span>
-    </div>
-    <div class="row">
-      <span class="label">Fecha Salida:</span>
-      <span class="value">${data.fechaSalida ? formatDate(data.fechaSalida) : "N/A"}</span>
-    </div>
-    <div class="row">
-      <span class="label">Hora Salida:</span>
-      <span class="value">${data.fechaSalida ? formatTime(data.fechaSalida) : "N/A"}</span>
-    </div>
-  </div>
-
-  <div class="divider"></div>
-
-  <!-- PESOS -->
-  <div class="section pesos">
-    <div class="section-title">REGISTRO DE PESOS</div>
-
-    <div class="peso-row">
-      <span class="peso-label">Peso Entrada:</span>
-      <span class="peso-value">${formatWeight(data.pesos.entrada)} kg</span>
-    </div>
-
-    <div class="peso-row">
-      <span class="peso-label">Peso Salida:</span>
-      <span class="peso-value">${formatWeight(data.pesos.salida)} kg</span>
-    </div>
-
-    <div class="peso-row highlight">
-      <span class="peso-label">PESO NETO:</span>
-      <span class="peso-value">${formatWeight(data.pesos.neto)} kg</span>
-    </div>
-  </div>
-
-  ${data.observaciones ? `
-  <div class="divider-solid"></div>
-
-  <!-- OBSERVACIONES -->
-  <div class="section">
-    <div class="section-title">OBSERVACIONES</div>
-    <div class="observaciones">${data.observaciones}</div>
+  ${data.companyLogo ? `
+  <div class="logo-container">
+    <img src="${data.companyLogo}" alt="Logo" class="logo">
   </div>
   ` : ""}
 
-  <div class="divider"></div>
+  ${data.companyName ? `
+  <div class="company-name">${data.companyName}</div>
+  ` : ""}
 
-  <!-- FOOTER -->
-  <div class="footer">
-    <div>Sistema Gravio v1.0</div>
-    <div class="date">Impreso: ${formatDate(/* @__PURE__ */ new Date())} ${formatTime(/* @__PURE__ */ new Date())}</div>
-    <div style="margin-top: 8px; font-size: 8px;">
-      Este documento es válido sin firma ni sello
-    </div>
-  </div>
+  ${data.companyAddress ? `
+  <div class="company-address">${data.companyAddress}</div>
+  ` : ""}
+
+  <div class="field">Folio: ${data.folio}</div>
+  <div class="field">Entrada: ${data.fechaEntrada ? `${formatDate(data.fechaEntrada)} ${formatTime(data.fechaEntrada)}` : "N/A"}</div>
+  <div class="field">Salida: ${data.fechaSalida ? `${formatDate(data.fechaSalida)} ${formatTime(data.fechaSalida)}` : "N/A"}</div>
+  <div class="field">${data.vehiculo.placas ? `Placas: ${data.vehiculo.placas}` : `Numero Economico: ${data.vehiculo.numeroEconomico}`}</div>
+  <div class="field">Concepto: ${data.conceptoClave} - ${data.conceptoNombre}</div>
+  <div class="field">Empresa: ${data.empresaClave} - ${data.empresaNombre}</div>
+  <div class="field">Operador: ${data.operadorClave} - ${data.operadorNombre}</div>
+  <div class="field">Ruta: ${data.rutaClave} - ${data.rutaNombre}</div>
+  <div class="field">Vehiculo: ${data.vehiculo.numeroEconomico}</div>
+
+  <div class="field">Peso Bruto: ${kgToToneladas(data.pesos.entrada)} t</div>
+  <div class="field">Peso Tara: ${kgToToneladas(data.pesos.salida)} t</div>
+  <div class="field">Peso Neto: ${kgToToneladas(data.pesos.neto)} t</div>
+  <div class="field">Tiempo: ${calcularTiempo()} min</div>
+
+  ${data.observaciones ? `<div class="field">Obs: ${data.observaciones}</div>` : ""}
+  ${data.usuario ? `<div class="field">Usuario: ${data.usuario}</div>` : ""}
 </body>
 </html>
   `.trim();
@@ -16827,13 +16682,21 @@ async function printThermal(mainWindow2, data) {
     const htmlContent = generateTicketHTML({
       folio: data.folio || "PENDIENTE",
       fecha: data.fecha ? new Date(data.fecha) : /* @__PURE__ */ new Date(),
-      empresa: data.empresa || "Sin empresa",
+      companyName: data.companyName,
+      companyAddress: data.companyAddress,
+      companyLogo: data.companyLogo,
+      empresaClave: data.empresaClave || "",
+      empresaNombre: data.empresaNombre || "Sin empresa",
+      conceptoClave: data.conceptoClave || "",
+      conceptoNombre: data.conceptoNombre || "Sin concepto",
       vehiculo: {
-        placas: data.vehiculo?.placas || "N/A",
+        placas: data.vehiculo?.placas || "",
         numeroEconomico: data.vehiculo?.numeroEconomico || "N/A"
       },
-      operador: data.operador || "Sin operador",
-      ruta: data.ruta || "Sin ruta",
+      operadorClave: data.operadorClave || "",
+      operadorNombre: data.operadorNombre || "Sin operador",
+      rutaClave: data.rutaClave || "",
+      rutaNombre: data.rutaNombre || "Sin ruta",
       pesos: {
         entrada: data.pesos?.entrada,
         salida: data.pesos?.salida,
@@ -16841,7 +16704,8 @@ async function printThermal(mainWindow2, data) {
       },
       fechaEntrada: data.fechaEntrada ? new Date(data.fechaEntrada) : void 0,
       fechaSalida: data.fechaSalida ? new Date(data.fechaSalida) : void 0,
-      observaciones: data.observaciones
+      observaciones: data.observaciones,
+      usuario: data.usuario
     });
     await workerWindow.loadURL("data:text/html;charset=utf-8," + encodeURIComponent(htmlContent));
     await new Promise((resolve2) => setTimeout(resolve2, 500));

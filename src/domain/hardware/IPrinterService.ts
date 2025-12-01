@@ -11,6 +11,9 @@ export interface PrinterInfo {
 export interface TicketData {
   registro: Registro;
   empresa: string;
+  empresaClave: string | number;
+  conceptoClave: number;
+  conceptoNombre: string;
   printerName?: string;
 }
 

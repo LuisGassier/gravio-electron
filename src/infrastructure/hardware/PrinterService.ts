@@ -67,20 +67,43 @@ export class PrinterService implements IPrinterService {
 
       console.log('✅ Usando impresora:', printerName);
 
-      const { registro, empresa } = data;
+      const { registro, empresa, empresaClave, conceptoClave, conceptoNombre } = data;
+
+      // Obtener configuración de la empresa que opera el software
+      const companyName = await window.electron.storage.get('companyName') ?? undefined;
+      const companyAddress = await window.electron.storage.get('companyAddress') ?? undefined;
+      const companyLogo = await window.electron.storage.get('companyLogo') ?? undefined;
+
+      // Obtener usuario actual (si está disponible)
+      const usuario = await window.electron.storage.get('userName') || 'Sistema';
+
+      // Extraer claves de los strings con formato "clave - nombre"
+      const [operadorClave, ...operadorNombreParts] = (registro.operador || '').split(' - ');
+      const operadorNombre = operadorNombreParts.join(' - ') || operadorClave;
+
+      const [rutaClave, ...rutaNombreParts] = (registro.ruta || '').split(' - ');
+      const rutaNombre = rutaNombreParts.join(' - ') || rutaClave;
 
       // Preparar datos para el ticket
       const ticketData = {
         printerName,
         folio: registro.folio || 'PENDIENTE',
         fecha: registro.fechaSalida || new Date(),
-        empresa,
+        companyName,
+        companyAddress,
+        companyLogo,
+        empresaClave: String(empresaClave),
+        empresaNombre: empresa,
+        conceptoClave: String(conceptoClave),
+        conceptoNombre,
         vehiculo: {
-          placas: registro.placaVehiculo,
-          numeroEconomico: registro.numeroEconomico
+          placas: registro.placaVehiculo || '',
+          numeroEconomico: registro.numeroEconomico || ''
         },
-        operador: registro.operador,
-        ruta: registro.ruta,
+        operadorClave: operadorClave || '',
+        operadorNombre,
+        rutaClave: rutaClave || '',
+        rutaNombre,
         pesos: {
           entrada: registro.pesoEntrada,
           salida: registro.pesoSalida,
@@ -88,7 +111,8 @@ export class PrinterService implements IPrinterService {
         },
         fechaEntrada: registro.fechaEntrada,
         fechaSalida: registro.fechaSalida,
-        observaciones: registro.observaciones
+        observaciones: registro.observaciones,
+        usuario
       };
 
       const success = await window.electron.printer.print(ticketData);

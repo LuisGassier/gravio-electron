@@ -82,13 +82,21 @@ export async function printThermal(
     const htmlContent = generateTicketHTML({
       folio: data.folio || 'PENDIENTE',
       fecha: data.fecha ? new Date(data.fecha) : new Date(),
-      empresa: data.empresa || 'Sin empresa',
+      companyName: data.companyName,
+      companyAddress: data.companyAddress,
+      companyLogo: data.companyLogo,
+      empresaClave: data.empresaClave || '',
+      empresaNombre: data.empresaNombre || 'Sin empresa',
+      conceptoClave: data.conceptoClave || '',
+      conceptoNombre: data.conceptoNombre || 'Sin concepto',
       vehiculo: {
-        placas: data.vehiculo?.placas || 'N/A',
+        placas: data.vehiculo?.placas || '',
         numeroEconomico: data.vehiculo?.numeroEconomico || 'N/A'
       },
-      operador: data.operador || 'Sin operador',
-      ruta: data.ruta || 'Sin ruta',
+      operadorClave: data.operadorClave || '',
+      operadorNombre: data.operadorNombre || 'Sin operador',
+      rutaClave: data.rutaClave || '',
+      rutaNombre: data.rutaNombre || 'Sin ruta',
       pesos: {
         entrada: data.pesos?.entrada,
         salida: data.pesos?.salida,
@@ -96,7 +104,8 @@ export async function printThermal(
       },
       fechaEntrada: data.fechaEntrada ? new Date(data.fechaEntrada) : undefined,
       fechaSalida: data.fechaSalida ? new Date(data.fechaSalida) : undefined,
-      observaciones: data.observaciones
+      observaciones: data.observaciones,
+      usuario: data.usuario
     });
 
     // Cargar contenido y esperar a que se complete

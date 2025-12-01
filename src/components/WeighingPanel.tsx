@@ -69,6 +69,9 @@ export function WeighingPanel() {
   const [showCompletedModal, setShowCompletedModal] = useState(false)
   const [completedRegistro, setCompletedRegistro] = useState<Registro | null>(null)
   const [completedEmpresa, setCompletedEmpresa] = useState<string>('')
+  const [completedEmpresaClave, setCompletedEmpresaClave] = useState<number>(0)
+  const [completedConceptoClave, setCompletedConceptoClave] = useState<number>(0)
+  const [completedConceptoNombre, setCompletedConceptoNombre] = useState<string>('')
 
   useEffect(() => {
     loadFormData()
@@ -402,6 +405,14 @@ export function WeighingPanel() {
       )
       const empresaNombre = empresaResult[0]?.empresa || 'Sin empresa'
 
+      // Obtener el concepto
+      const conceptoResult = await window.electron.db.query(
+        'SELECT clave_concepto, nombre FROM conceptos WHERE id = ?',
+        [registro.conceptoId]
+      )
+      const conceptoClave = conceptoResult[0]?.clave_concepto || 0
+      const conceptoNombre = conceptoResult[0]?.nombre || 'Sin concepto'
+
       // Verificar si la impresión automática está habilitada
       const autoPrintEnabled = await container.printerService.isAutoPrintEnabled()
       console.log('🖨️ Impresión automática:', autoPrintEnabled)
@@ -412,7 +423,10 @@ export function WeighingPanel() {
           console.log('🖨️ Imprimiendo automáticamente...')
           const printResult = await container.printerService.printTicket({
             registro,
-            empresa: empresaNombre
+            empresa: empresaNombre,
+            empresaClave: registro.claveEmpresa,
+            conceptoClave,
+            conceptoNombre
           })
 
           if (printResult.success) {
@@ -435,6 +449,9 @@ export function WeighingPanel() {
         // Mostrar modal para confirmar impresión
         setCompletedRegistro(registro)
         setCompletedEmpresa(empresaNombre)
+        setCompletedEmpresaClave(registro.claveEmpresa)
+        setCompletedConceptoClave(conceptoClave)
+        setCompletedConceptoNombre(conceptoNombre)
         setShowCompletedModal(true)
         cancelarSalida()
       }
@@ -453,7 +470,10 @@ export function WeighingPanel() {
         console.log(`🖨️ Imprimiendo copia ${i + 1} de ${copies}...`)
         const printResult = await container.printerService.printTicket({
           registro: completedRegistro,
-          empresa: completedEmpresa
+          empresa: completedEmpresa,
+          empresaClave: completedEmpresaClave,
+          conceptoClave: completedConceptoClave,
+          conceptoNombre: completedConceptoNombre
         })
 
         if (!printResult.success) {

@@ -23,13 +23,21 @@ export type ElectronAPI = {
       printerName: string
       folio?: string
       fecha: Date
-      empresa: string
+      companyName?: string
+      companyAddress?: string
+      companyLogo?: string
+      empresaClave: string
+      empresaNombre: string
+      conceptoClave: string
+      conceptoNombre: string
       vehiculo: {
         placas: string
         numeroEconomico: string
       }
-      operador: string
-      ruta: string
+      operadorClave: string
+      operadorNombre: string
+      rutaClave: string
+      rutaNombre: string
       pesos: {
         entrada?: number
         salida?: number
@@ -38,6 +46,7 @@ export type ElectronAPI = {
       fechaEntrada?: Date
       fechaSalida?: Date
       observaciones?: string
+      usuario?: string
     }) => Promise<boolean>
   }
   db: {
