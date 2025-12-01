@@ -1,4 +1,5 @@
 import { app, BrowserWindow, ipcMain, shell } from 'electron'
+import { autoUpdater } from 'electron-updater'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import Store from 'electron-store'
@@ -85,6 +86,43 @@ function createWindow() {
   })
 }
 
+// Configuración del auto-updater
+autoUpdater.autoDownload = false // No descargar automáticamente
+autoUpdater.autoInstallOnAppQuit = true
+
+// Eventos del auto-updater
+autoUpdater.on('checking-for-update', () => {
+  console.log('🔍 Verificando actualizaciones...')
+})
+
+autoUpdater.on('update-available', (info) => {
+  console.log('✅ Actualización disponible:', info.version)
+  if (mainWindow) {
+    mainWindow.webContents.send('update-available', info)
+  }
+})
+
+autoUpdater.on('update-not-available', () => {
+  console.log('✅ La aplicación está actualizada')
+})
+
+autoUpdater.on('download-progress', (progressObj) => {
+  if (mainWindow) {
+    mainWindow.webContents.send('update-download-progress', progressObj)
+  }
+})
+
+autoUpdater.on('update-downloaded', (info) => {
+  console.log('✅ Actualización descargada:', info.version)
+  if (mainWindow) {
+    mainWindow.webContents.send('update-downloaded', info)
+  }
+})
+
+autoUpdater.on('error', (error) => {
+  console.error('❌ Error en auto-updater:', error)
+})
+
 // App ready
 app.whenReady().then(async () => {
   // Inicializar base de datos
@@ -94,6 +132,13 @@ app.whenReady().then(async () => {
 
   // Registrar IPC Handlers
   registerIpcHandlers()
+
+  // Verificar actualizaciones (solo en producción)
+  if (!isDev) {
+    setTimeout(() => {
+      autoUpdater.checkForUpdates()
+    }, 5000) // Esperar 5 segundos después del inicio
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -202,29 +247,24 @@ function registerIpcHandlers() {
     store.clear()
   })
 
-  // Updater - Descargar e instalar actualización
-  ipcMain.handle('updater:downloadAndInstall', async (_event, downloadUrl: string, fileName: string) => {
-    try {
-      const downloadsPath = app.getPath('downloads')
-      const filePath = path.join(downloadsPath, fileName)
-      
-      // Verificar si ya existe el archivo
-      if (fs.existsSync(filePath)) {
-        // Si ya existe, ejecutar directamente
-        return await executeInstaller(filePath)
-      }
+  // Auto-Updater handlers
+  ipcMain.handle('updater:check', async () => {
+    if (!isDev) {
+      return await autoUpdater.checkForUpdates()
+    }
+    return null
+  })
 
-      // Descargar el archivo
-      await downloadFile(downloadUrl, filePath, (progress) => {
-        // Enviar progreso al renderer
-        mainWindow?.webContents.send('updater:progress', progress)
-      })
+  ipcMain.handle('updater:download', async () => {
+    if (!isDev) {
+      return await autoUpdater.downloadUpdate()
+    }
+    return null
+  })
 
-      // Ejecutar el instalador
-      return await executeInstaller(filePath)
-    } catch (error) {
-      console.error('Error downloading/installing update:', error)
-      throw error
+  ipcMain.handle('updater:installAndRestart', () => {
+    if (!isDev) {
+      autoUpdater.quitAndInstall(false, true)
     }
   })
 

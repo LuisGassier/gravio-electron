@@ -1,11 +1,15 @@
 {
   "name": "gravio-electron",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.5",
   "description": "Sistema de Gestión de Relleno Sanitario",
   "author": "Gravio",
   "main": "dist-electron/main.js",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/LuisGassier/gravio-electron.git"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
@@ -13,7 +17,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "type-check": "tsc --noEmit",
-    "postinstall": "electron-rebuild"
+    "postinstall": "electron-rebuild",
+    "publish:github": "npm run build:electron -- --publish always"
   },
   "build": {
     "appId": "com.gravio.sanitario",
@@ -24,20 +29,55 @@
     "files": [
       "dist/**/*",
       "dist-electron/**/*",
-      "package.json"
+      "package.json",
+      "!**/*.map",
+      "!**/*.md",
+      "!**/LICENSE",
+      "!**/.gitkeep"
     ],
+    "asar": true,
+    "asarUnpack": [
+      "**/*.node"
+    ],
+    "compression": "maximum",
+    "removePackageScripts": true,
+    "extraMetadata": {
+      "main": "dist-electron/main.js"
+    },
     "win": {
       "target": [
-        "nsis"
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
       ],
-      "icon": "public/icon.png"
+      "icon": "public/icon.png",
+      "artifactName": "${productName}-Setup-${version}.${ext}"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
-    }
+      "createStartMenuShortcut": true,
+      "differentialPackage": true,
+      "deleteAppDataOnUninstall": false,
+      "installerHeaderIcon": "public/icon.png"
+    },
+    "fileAssociations": [],
+    "electronLanguages": [
+      "es",
+      "en"
+    ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "LuisGassier",
+        "repo": "gravio-electron",
+        "releaseType": "release"
+      }
+    ]
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",
@@ -56,6 +96,7 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "electron-store": "^11.0.2",
+    "electron-updater": "^6.6.2",
     "lucide-react": "^0.555.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
@@ -86,6 +127,7 @@
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.18",
     "tailwindcss-animate": "^1.0.7",
+    "terser": "^5.44.1",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.4",
     "vite": "^7.2.4",

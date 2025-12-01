@@ -6,6 +6,7 @@ import { Header } from './components/Header'
 import { SplashScreen } from './components/SplashScreen'
 import { CompanyConfigPanel } from './components/CompanyConfigPanel'
 import { HistorialPage } from './components/HistorialPage'
+import { AutoUpdateDialog } from './components/AutoUpdateDialog'
 import { initSync, getSyncStatus, onSyncStatusChange } from './lib/sync'
 
 type View = 'dashboard' | 'login' | 'company-config' | 'historial'
@@ -121,6 +122,10 @@ function App() {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <Toaster position="top-center" richColors />
+      
+      {/* Auto-Update Dialog */}
+      <AutoUpdateDialog />
+      
       {/* Header - Solo mostrar cuando está autenticado */}
       {isAuthenticated && (
         <Header

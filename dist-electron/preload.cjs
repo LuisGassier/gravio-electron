@@ -47,12 +47,26 @@ electron.contextBridge.exposeInMainWorld("electron", {
     delete: (key) => electron.ipcRenderer.invoke("storage:delete", key),
     clear: () => electron.ipcRenderer.invoke("storage:clear")
   },
-  // Updater
+  // Updater (Auto-update con GitHub Releases)
   updater: {
-    downloadAndInstall: (downloadUrl, fileName) => electron.ipcRenderer.invoke("updater:downloadAndInstall", downloadUrl, fileName),
+    check: () => electron.ipcRenderer.invoke("updater:check"),
+    download: () => electron.ipcRenderer.invoke("updater:download"),
+    installAndRestart: () => electron.ipcRenderer.invoke("updater:installAndRestart"),
     openExternal: (url) => electron.ipcRenderer.invoke("updater:openExternal", url),
-    onProgress: (callback) => {
-      electron.ipcRenderer.on("updater:progress", (_event, progress) => callback(progress));
+    onUpdateAvailable: (callback) => {
+      const listener = (_event, info) => callback(info);
+      electron.ipcRenderer.on("update-available", listener);
+      return () => electron.ipcRenderer.removeListener("update-available", listener);
+    },
+    onDownloadProgress: (callback) => {
+      const listener = (_event, progress) => callback(progress);
+      electron.ipcRenderer.on("update-download-progress", listener);
+      return () => electron.ipcRenderer.removeListener("update-download-progress", listener);
+    },
+    onUpdateDownloaded: (callback) => {
+      const listener = (_event, info) => callback(info);
+      electron.ipcRenderer.on("update-downloaded", listener);
+      return () => electron.ipcRenderer.removeListener("update-downloaded", listener);
     }
   }
 });

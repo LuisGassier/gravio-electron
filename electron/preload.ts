@@ -60,14 +60,26 @@ contextBridge.exposeInMainWorld('electron', {
     clear: () => ipcRenderer.invoke('storage:clear'),
   },
 
-  // Updater
+  // Updater (Auto-update con GitHub Releases)
   updater: {
-    downloadAndInstall: (downloadUrl: string, fileName: string) => 
-      ipcRenderer.invoke('updater:downloadAndInstall', downloadUrl, fileName),
-    openExternal: (url: string) => 
-      ipcRenderer.invoke('updater:openExternal', url),
-    onProgress: (callback: (progress: number) => void) => {
-      ipcRenderer.on('updater:progress', (_event, progress) => callback(progress))
+    check: () => ipcRenderer.invoke('updater:check'),
+    download: () => ipcRenderer.invoke('updater:download'),
+    installAndRestart: () => ipcRenderer.invoke('updater:installAndRestart'),
+    openExternal: (url: string) => ipcRenderer.invoke('updater:openExternal', url),
+    onUpdateAvailable: (callback: (info: any) => void) => {
+      const listener = (_event: any, info: any) => callback(info)
+      ipcRenderer.on('update-available', listener)
+      return () => ipcRenderer.removeListener('update-available', listener)
+    },
+    onDownloadProgress: (callback: (progress: any) => void) => {
+      const listener = (_event: any, progress: any) => callback(progress)
+      ipcRenderer.on('update-download-progress', listener)
+      return () => ipcRenderer.removeListener('update-download-progress', listener)
+    },
+    onUpdateDownloaded: (callback: (info: any) => void) => {
+      const listener = (_event: any, info: any) => callback(info)
+      ipcRenderer.on('update-downloaded', listener)
+      return () => ipcRenderer.removeListener('update-downloaded', listener)
     },
   },
 })
@@ -109,9 +121,13 @@ export type ElectronAPI = {
     clear: () => Promise<void>
   }
   updater: {
-    downloadAndInstall: (downloadUrl: string, fileName: string) => Promise<void>
+    check: () => Promise<any>
+    download: () => Promise<any>
+    installAndRestart: () => Promise<void>
     openExternal: (url: string) => Promise<void>
-    onProgress: (callback: (progress: number) => void) => void
+    onUpdateAvailable: (callback: (info: any) => void) => () => void
+    onDownloadProgress: (callback: (progress: any) => void) => () => void
+    onUpdateDownloaded: (callback: (info: any) => void) => () => void
   }
 }
 
