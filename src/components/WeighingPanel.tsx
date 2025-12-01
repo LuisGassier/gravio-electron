@@ -774,8 +774,25 @@ export function WeighingPanel() {
           <CardDescription>Complete los datos del vehículo</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Row 1: Vehículo y Concepto */}
+          {/* Row 1: Ruta y Vehículo */}
           <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Ruta</Label>
+              <Combobox
+                key={`ruta-${selectedEmpresa || 'all'}`}
+                options={rutaOptions}
+                value={selectedRuta}
+                onValueChange={handleRutaChange}
+                placeholder="Buscar ruta..."
+                searchPlaceholder="Buscar..."
+                emptyText="No se encontraron rutas"
+                icon={<Route className="w-4 h-4" />}
+                showCount={true}
+                countLabel="Ruta"
+                disabled={isSalidaMode}
+              />
+            </div>
+
             <div className="space-y-2">
               <Label className="text-sm font-medium">Vehículo</Label>
               <Combobox
@@ -794,7 +811,10 @@ export function WeighingPanel() {
                 disabled={isSalidaMode}
               />
             </div>
+          </div>
 
+          {/* Row 2: Concepto y Operador */}
+          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label className="text-sm font-medium">Concepto</Label>
               <Combobox
@@ -811,10 +831,7 @@ export function WeighingPanel() {
                 disabled={isSalidaMode}
               />
             </div>
-          </div>
 
-          {/* Row 2: Operador y Ruta */}
-          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label className="text-sm font-medium">Operador</Label>
               <Combobox
@@ -823,23 +840,6 @@ export function WeighingPanel() {
                 value={selectedOperador}
                 onValueChange={handleOperadorChange}
                 placeholder="Buscar operador..."
-                searchPlaceholder="Buscar..."
-                emptyText="No se encontraron operadores"
-                icon={<User className="w-4 h-4" />}
-                showCount={true}
-                countLabel="Operador"
-                disabled={isSalidaMode}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Ruta</Label>
-              <Combobox
-                key={`ruta-${selectedEmpresa || 'all'}`}
-                options={rutaOptions}
-                value={selectedRuta}
-                onValueChange={handleRutaChange}
-                placeholder="Buscar ruta..."
                 searchPlaceholder="Buscar..."
                 emptyText="No se encontraron rutas"
                 icon={<Route className="w-4 h-4" />}
