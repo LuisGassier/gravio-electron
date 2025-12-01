@@ -74,15 +74,9 @@ export class PrinterService implements IPrinterService {
       const companyAddress = await window.electron.storage.get('companyAddress') ?? undefined;
       const companyLogo = await window.electron.storage.get('companyLogo') ?? undefined;
 
-      // Obtener usuario actual (si está disponible)
-      const usuario = await window.electron.storage.get('userName') || 'Sistema';
-
-      // Extraer claves de los strings con formato "clave - nombre"
-      const [operadorClave, ...operadorNombreParts] = (registro.operador || '').split(' - ');
-      const operadorNombre = operadorNombreParts.join(' - ') || operadorClave;
-
-      const [rutaClave, ...rutaNombreParts] = (registro.ruta || '').split(' - ');
-      const rutaNombre = rutaNombreParts.join(' - ') || rutaClave;
+      // Obtener usuario actual desde almacenamiento
+      const storedUser = await window.electron.storage.get('currentUser');
+      const usuario = storedUser?.name || storedUser?.email || 'Sistema';
 
       // Preparar datos para el ticket
       const ticketData = {
@@ -100,10 +94,10 @@ export class PrinterService implements IPrinterService {
           placas: registro.placaVehiculo || '',
           numeroEconomico: registro.numeroEconomico || ''
         },
-        operadorClave: operadorClave || '',
-        operadorNombre,
-        rutaClave: rutaClave || '',
-        rutaNombre,
+        operadorClave: String(registro.claveOperador),
+        operadorNombre: registro.operador,
+        rutaClave: String(registro.claveRuta),
+        rutaNombre: registro.ruta,
         pesos: {
           entrada: registro.pesoEntrada,
           salida: registro.pesoSalida,

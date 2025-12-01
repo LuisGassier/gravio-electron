@@ -16553,12 +16553,12 @@ function generateTicketHTML(data) {
     }
 
     body {
-      font-family: 'Courier New', Courier, monospace;
+      font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif;
       font-size: 11px;
       font-weight: bold;
       line-height: 1.4;
       width: 80mm;
-      padding: 2mm 3mm;
+      padding: 2mm 5mm;
       background: white;
       color: #000;
       -webkit-print-color-adjust: exact;
@@ -16590,7 +16590,7 @@ function generateTicketHTML(data) {
 
     .company-address {
       font-size: 10px;
-      font-weight: normal;
+      font-weight: bold;
       margin-bottom: 4px;
     }
 
@@ -16643,8 +16643,8 @@ function generateTicketHTML(data) {
       margin-top: 5px;
       padding-top: 3px;
       border-top: 1px dashed #000;
-      font-size: 9px;
-      font-weight: normal;
+      font-size: 10px;
+      font-weight: bold;
     }
 
     @media print {
@@ -16677,7 +16677,7 @@ function generateTicketHTML(data) {
   <div class="field">Empresa: ${data.empresaClave} - ${data.empresaNombre}</div>
   <div class="field">Operador: ${data.operadorClave} - ${data.operadorNombre}</div>
   <div class="field">Ruta: ${data.rutaClave} - ${data.rutaNombre}</div>
-  <div class="field">Vehiculo: ${data.vehiculo.numeroEconomico}</div>
+  <div class="field">Vehiculo (No. economico): ${data.vehiculo.numeroEconomico}</div>
 
   <div class="pesos-section">
     <div class="peso-field">
