@@ -60,9 +60,9 @@ function createWindow() {
 }
 
 // App ready
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   // Inicializar base de datos
-  initDatabase()
+  await initDatabase()
   
   createWindow()
 

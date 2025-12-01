@@ -1,8 +1,20 @@
-import { SerialPort } from 'serialport'
-import { ReadlineParser } from '@serialport/parser-readline'
+// Importaciones dinámicas para evitar problemas con ES modules
+let SerialPort: any
+let ReadlineParser: any
 
-let port: SerialPort | null = null
-let parser: ReadlineParser | null = null
+// Cargar módulos al inicio
+async function loadModules() {
+  if (!SerialPort) {
+    const serialportModule = await import('serialport')
+    SerialPort = serialportModule.SerialPort
+    
+    const parserModule = await import('@serialport/parser-readline')
+    ReadlineParser = parserModule.ReadlineParser
+  }
+}
+
+let port: any = null
+let parser: any = null
 let currentWeight: string = ''
 
 // Configuración por defecto para Mettler Toledo
@@ -19,8 +31,9 @@ const DEFAULT_CONFIG = {
  */
 export async function listSerialPorts() {
   try {
+    await loadModules()
     const ports = await SerialPort.list()
-    return ports.map(port => ({
+    return ports.map((port: any) => ({
       path: port.path,
       manufacturer: port.manufacturer,
       serialNumber: port.serialNumber,
@@ -82,6 +95,9 @@ export async function openSerialPort(
   onDataCallback?: (weight: number) => void
 ): Promise<boolean> {
   try {
+    // Cargar módulos primero
+    await loadModules()
+    
     // Cerrar puerto existente si hay uno
     if (port && port.isOpen) {
       await closeSerialPort()
@@ -116,7 +132,7 @@ export async function openSerialPort(
     })
 
     // Manejo de errores
-    port.on('error', (err) => {
+    port.on('error', (err: any) => {
       console.error('❌ Error en puerto serial:', err)
     })
 
@@ -126,7 +142,7 @@ export async function openSerialPort(
 
     // Abrir puerto
     await new Promise<void>((resolve, reject) => {
-      port!.open((err) => {
+      port!.open((err: any) => {
         if (err) {
           reject(err)
         } else {
@@ -149,7 +165,7 @@ export async function openSerialPort(
 export async function closeSerialPort(): Promise<void> {
   if (port && port.isOpen) {
     await new Promise<void>((resolve) => {
-      port!.close((err) => {
+      port!.close((err: any) => {
         if (err) {
           console.error('❌ Error al cerrar puerto:', err)
         }

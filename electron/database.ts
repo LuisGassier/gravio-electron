@@ -1,16 +1,29 @@
-import Database from 'better-sqlite3'
+// Importación dinámica para better-sqlite3
 import { app } from 'electron'
 import path from 'path'
 import fs from 'fs'
 
-let db: Database.Database | null = null
+let Database: any
+let db: any = null
 
 // Ruta de la base de datos
-const DB_PATH = path.join(app.getPath('userData'), 'gravio.db')
+let DB_PATH: string
+
+// Cargar módulo de forma dinámica
+async function loadDatabase() {
+  if (!Database) {
+    const dbModule = await import('better-sqlite3')
+    Database = dbModule.default
+    DB_PATH = path.join(app.getPath('userData'), 'gravio.db')
+  }
+}
 
 // Inicializar la base de datos
-export function initDatabase() {
+export async function initDatabase() {
   try {
+    // Cargar módulo primero
+    await loadDatabase()
+    
     // Asegurar que existe el directorio
     const dir = path.dirname(DB_PATH)
     if (!fs.existsSync(dir)) {
@@ -144,7 +157,7 @@ export function executeTransaction(queries: Array<{ sql: string; params?: any[] 
     throw new Error('Base de datos no inicializada')
   }
 
-  const transaction = db.transaction((queries) => {
+  const transaction = db.transaction((queries: Array<{ sql: string; params?: any[] }>) => {
     for (const query of queries) {
       const stmt = db!.prepare(query.sql)
       stmt.run(...(query.params || []))
