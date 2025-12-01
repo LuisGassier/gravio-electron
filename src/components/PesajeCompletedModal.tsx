@@ -35,6 +35,14 @@ export function PesajeCompletedModal({
 
   const pesoNeto = registro.getPesoNeto()
 
+  // Debug: Log peso values
+  console.log('🔍 Modal - Pesos del registro:', {
+    pesoEntrada: registro.pesoEntrada,
+    pesoSalida: registro.pesoSalida,
+    pesoNeto: pesoNeto,
+    folio: registro.folio
+  })
+
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <DialogContent className="sm:max-w-[500px]">

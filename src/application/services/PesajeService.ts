@@ -113,7 +113,20 @@ export class PesajeService {
         observaciones,
       };
 
+      console.log('🔧 PesajeService - Llamando a completeWithSalidaUseCase con:', completeInput);
+
       const result = await this.completeWithSalidaUseCase.execute(completeInput);
+
+      if (result.success) {
+        console.log('✅ PesajeService - Registro actualizado:', {
+          id: result.value.id,
+          pesoEntrada: result.value.pesoEntrada,
+          pesoSalida: result.value.pesoSalida,
+          pesoNeto: result.value.getPesoNeto()
+        });
+      } else {
+        console.error('❌ PesajeService - Error al actualizar:', result.error);
+      }
 
       return result;
     } catch (error) {

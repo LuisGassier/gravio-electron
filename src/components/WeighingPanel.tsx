@@ -7,7 +7,7 @@ import { Combobox } from '@/components/ui/combobox'
 import { container } from '@/application'
 import { toast } from 'sonner'
 import { usePesaje } from '@/contexts/PesajeContext'
-import type { Registro } from '@/domain'
+import { Registro } from '@/domain'
 import { PesajeCompletedModal } from './PesajeCompletedModal'
 
 interface Vehiculo {
@@ -375,8 +375,20 @@ export function WeighingPanel() {
             const updatedResult = await container.sqliteRegistroRepository.findById(registro.id!)
 
             if (updatedResult.success && updatedResult.value && updatedResult.value.folio) {
-              registro = updatedResult.value
-              console.log('✅ Folio obtenido de Supabase:', registro.folio)
+              // Solo actualizar el folio, NO reemplazar todo el registro
+              // para no perder el peso de salida que acabamos de registrar
+              const folio = updatedResult.value.folio
+              console.log('✅ Folio obtenido de Supabase:', folio)
+
+              // Crear nuevo registro con el folio actualizado pero conservando todos los demás datos
+              const registroConFolio = Registro.create({
+                ...registro.toObject(),
+                folio
+              })
+
+              if (registroConFolio.success) {
+                registro = registroConFolio.value
+              }
               break
             }
 
@@ -447,6 +459,15 @@ export function WeighingPanel() {
         cancelarSalida()
       } else {
         // Mostrar modal para confirmar impresión
+        console.log('📋 Datos del registro para modal:', {
+          id: registro.id,
+          folio: registro.folio,
+          pesoEntrada: registro.pesoEntrada,
+          pesoSalida: registro.pesoSalida,
+          pesoNeto: registro.getPesoNeto(),
+          fechaEntrada: registro.fechaEntrada,
+          fechaSalida: registro.fechaSalida
+        })
         setCompletedRegistro(registro)
         setCompletedEmpresa(empresaNombre)
         setCompletedEmpresaClave(registro.claveEmpresa)
