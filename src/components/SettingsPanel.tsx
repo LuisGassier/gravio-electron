@@ -69,11 +69,17 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
     
     setLoading(true)
     try {
-      const ports = await window.electron.serialPort.list()
-      setAvailablePorts(ports)
-      console.log('📋 Puertos disponibles:', ports)
+      const result = await window.electron.serialPort.list()
+      if (result.success && result.ports) {
+        setAvailablePorts(result.ports)
+        console.log('📋 Puertos disponibles:', result.ports)
+      } else {
+        console.error('Error al listar puertos:', result.error)
+        setAvailablePorts([])
+      }
     } catch (error) {
       console.error('Error al listar puertos:', error)
+      setAvailablePorts([])
     } finally {
       setLoading(false)
     }

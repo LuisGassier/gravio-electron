@@ -1,3 +1,9 @@
+/**
+ * Sync.ts - Wrapper de compatibilidad que usa Clean Architecture
+ * Mantiene la API legacy mientras delega al nuevo SyncService
+ */
+
+import { container } from '@/application'
 import { supabase, restoreSession } from './supabase'
 
 // Re-exportar funciones de autenticación para facilitar el acceso
@@ -68,17 +74,17 @@ window.addEventListener('online', () => updateOnlineStatus(true))
 window.addEventListener('offline', () => updateOnlineStatus(false))
 
 /**
- * Obtener transacciones pendientes de sincronizar desde SQLite
+ * Obtener transacciones pendientes de sincronizar (usa nuevo repository)
  */
 async function getPendingTransactions() {
   if (!window.electron) return []
   
   try {
-    const result = await window.electron.db.query(
-      'SELECT * FROM registros WHERE sincronizado = 0 ORDER BY fecha_registro ASC',
-      []
-    )
-    return result
+    const result = await container.sqliteRegistroRepository.findUnsynchronized()
+    if (result.success && result.value) {
+      return result.value
+    }
+    return []
   } catch (error) {
     console.error('❌ Error al obtener transacciones pendientes:', error)
     return []
@@ -86,127 +92,27 @@ async function getPendingTransactions() {
 }
 
 /**
- * Convertir timestamp Unix (segundos) a ISO string para Supabase
- */
-function unixToISO(timestamp: number | null | undefined): string | null {
-  if (!timestamp) return null
-  return new Date(timestamp * 1000).toISOString()
-}
-
-/**
- * Sincronizar una transacción a Supabase
- */
-async function syncTransaction(transaction: any) {
-  // Si no hay supabase configurado, marcar como sincronizado localmente
-  if (!supabase) {
-    console.warn('⚠️ Supabase no configurado, transacción solo en local')
-    await window.electron.db.query(
-      'UPDATE registros SET sincronizado = 1 WHERE id = ?',
-      [transaction.id]
-    )
-    return true
-  }
-
-  // Verificar autenticación antes de sincronizar
-  if (!syncStatus.isAuthenticated) {
-    console.warn('⚠️ Usuario no autenticado, transacción pendiente')
-    return false
-  }
-  
-  try {
-    // Convertir datos de SQLite (integers/booleans) a formato Supabase (timestamptz/booleans)
-    const supabaseData = {
-      id: transaction.id,
-      clave_ruta: transaction.clave_ruta || null,
-      placa_vehiculo: transaction.placa_vehiculo,
-      numero_economico: transaction.numero_economico || null,
-      clave_operador: transaction.clave_operador || null,
-      operador: transaction.operador || null,
-      ruta: transaction.ruta || null,
-      peso: transaction.peso ? parseFloat(transaction.peso) : null,
-      peso_entrada: transaction.peso_entrada ? parseFloat(transaction.peso_entrada) : null,
-      peso_salida: transaction.peso_salida ? parseFloat(transaction.peso_salida) : null,
-      fecha_entrada: unixToISO(transaction.fecha_entrada),
-      fecha_salida: unixToISO(transaction.fecha_salida),
-      fecha_registro: unixToISO(transaction.fecha_registro) || new Date().toISOString(),
-      tipo_pesaje: transaction.tipo_pesaje || 'entrada',
-      folio: transaction.folio || null,
-      clave_concepto: transaction.clave_concepto || null,
-      concepto_id: transaction.concepto_id || null,
-      clave_empresa: transaction.clave_empresa || null,
-      observaciones: transaction.observaciones || null,
-      sincronizado: true, // Supabase usa boolean
-    }
-
-    const { error } = await supabase
-      .from('registros')
-      .upsert(supabaseData)
-    
-    if (error) {
-      // Si la tabla no existe (42P01 = tabla no existe, PGRST116 = no encontrado)
-      if (error.code === '42P01' || error.code === 'PGRST116' || (error as any).message?.includes('does not exist')) {
-        console.warn('⚠️ Tabla "registros" no existe en Supabase. Mantiendo transacción en local.')
-        return true // No reintentar si la tabla no existe
-      }
-      throw error
-    }
-    
-    // Marcar como sincronizado en SQLite
-    await window.electron.db.query(
-      'UPDATE registros SET sincronizado = 1 WHERE id = ?',
-      [transaction.id]
-    )
-    
-    console.log('✅ Transacción sincronizada:', transaction.id)
-    return true
-  } catch (error) {
-    console.error('❌ Error al sincronizar transacción:', error)
-    return false
-  }
-}
-
-/**
- * Sincronizar todas las transacciones pendientes
+ * Sincronizar todas las transacciones pendientes (usa SyncService)
+ * La lógica de sincronización ahora está en SyncService y SupabaseRegistroRepository
  */
 async function syncTransactions() {
-  const pending = await getPendingTransactions()
+  const result = await container.syncService.syncNow()
   
-  if (pending.length === 0) {
-    console.log('✅ No hay transacciones pendientes')
-    return
-  }
-  
-  console.log(`🔄 Sincronizando ${pending.length} transacciones...`)
-  
-  let successCount = 0
-  const errors: string[] = []
-  
-  for (const transaction of pending) {
-    const success = await syncTransaction(transaction)
-    if (success) {
-      successCount++
-    } else {
-      errors.push(`Error en transacción ${transaction.id}`)
-    }
-  }
-  
-  console.log(`✅ Sincronizadas ${successCount}/${pending.length} transacciones`)
-  
-  syncStatus.errors = errors
-  syncStatus.pendingItems = pending.length - successCount
+  console.log(`✅ Sincronizadas ${result.synced} transacciones`)
+  syncStatus.errors = result.errors.map(e => e.error)
+  syncStatus.pendingItems = result.failed
 }
 
 /**
- * Descargar datos de Supabase a cache local (vehículos, usuarios, etc.)
+ * Descargar datos de Supabase a cache local
+ * TODO: Migrar a usar repositorios cuando estén implementados
  */
 async function downloadCacheData() {
-  // Si no hay supabase configurado, skip
   if (!supabase) {
     console.log('⚠️ Supabase no configurado, omitiendo descarga de cache')
     return
   }
 
-  // Verificar autenticación
   if (!syncStatus.isAuthenticated) {
     console.warn('⚠️ Usuario no autenticado. Intentando restaurar sesión...')
     const restored = await restoreSession()

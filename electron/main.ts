@@ -13,6 +13,9 @@ import {
   executeQuery,
   executeCommand,
   executeTransaction,
+  getOne,
+  getAll,
+  runCommand,
 } from './database'
 
 import {
@@ -146,6 +149,19 @@ function registerIpcHandlers() {
   
   ipcMain.handle('db:transaction', (_event, queries: Array<{ sql: string; params?: any[] }>) => {
     return executeTransaction(queries)
+  })
+  
+  ipcMain.handle('db:get', (_event, sql: string, params?: any[]) => {
+    return getOne(sql, params)
+  })
+  
+  ipcMain.handle('db:run', (_event, sql: string, params?: any[]) => {
+    runCommand(sql, params)
+    return
+  })
+  
+  ipcMain.handle('db:all', (_event, sql: string, params?: any[]) => {
+    return getAll(sql, params)
   })
 
   // Printer (Impresora Térmica)

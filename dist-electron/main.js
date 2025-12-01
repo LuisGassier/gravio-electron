@@ -16304,6 +16304,36 @@ function executeTransaction(queries) {
     throw error;
   }
 }
+function getOne(sql, params = []) {
+  if (!db) throw new Error("Database not initialized");
+  try {
+    const stmt = db.prepare(sql);
+    return stmt.get(...params);
+  } catch (error) {
+    console.error("❌ Error en getOne:", error);
+    throw error;
+  }
+}
+function getAll(sql, params = []) {
+  if (!db) throw new Error("Database not initialized");
+  try {
+    const stmt = db.prepare(sql);
+    return stmt.all(...params);
+  } catch (error) {
+    console.error("❌ Error en getAll:", error);
+    throw error;
+  }
+}
+function runCommand(sql, params = []) {
+  if (!db) throw new Error("Database not initialized");
+  try {
+    const stmt = db.prepare(sql);
+    return stmt.run(...params);
+  } catch (error) {
+    console.error("❌ Error en runCommand:", error);
+    throw error;
+  }
+}
 function closeDatabase() {
   if (db) {
     db.close();
@@ -16358,16 +16388,15 @@ async function listSerialPorts() {
         console.warn("⚠️ Error al listar puertos con PowerShell:", psError);
       }
     }
-    return ports.map((port2) => ({
+    const portList = ports.map((port2) => ({
       path: port2.path,
-      manufacturer: port2.manufacturer,
-      serialNumber: port2.serialNumber,
-      vendorId: port2.vendorId,
-      productId: port2.productId
+      manufacturer: port2.manufacturer
     }));
+    return { success: true, ports: portList };
   } catch (error) {
-    console.error("❌ Error al listar puertos:", error);
-    return [];
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error("❌ Error al listar puertos:", errorMessage);
+    return { success: false, error: errorMessage };
   }
 }
 function parseWeightData(data) {
@@ -16440,25 +16469,34 @@ async function openSerialPort(portPath, baudRate = DEFAULT_CONFIG.baudRate, onDa
         }
       });
     });
-    return true;
+    return { success: true };
   } catch (error) {
-    console.error("❌ Error al abrir puerto serial:", error);
-    return false;
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error("❌ Error al abrir puerto serial:", errorMessage);
+    return { success: false, error: errorMessage };
   }
 }
 async function closeSerialPort() {
-  if (port && port.isOpen) {
-    await new Promise((resolve2) => {
-      port.close((err) => {
-        if (err) {
-          console.error("❌ Error al cerrar puerto:", err);
-        }
-        port = null;
-        parser = null;
-        currentWeight = "";
-        resolve2();
+  try {
+    if (port && port.isOpen) {
+      await new Promise((resolve2, reject) => {
+        port.close((err) => {
+          if (err) {
+            console.error("❌ Error al cerrar puerto:", err);
+            reject(err);
+          } else {
+            port = null;
+            parser = null;
+            currentWeight = "";
+            resolve2();
+          }
+        });
       });
-    });
+    }
+    return { success: true };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return { success: false, error: errorMessage };
   }
 }
 function readCurrentWeight() {
@@ -16677,6 +16715,16 @@ function registerIpcHandlers() {
   });
   ipcMain$1.handle("db:transaction", (_event, queries) => {
     return executeTransaction(queries);
+  });
+  ipcMain$1.handle("db:get", (_event, sql, params) => {
+    return getOne(sql, params);
+  });
+  ipcMain$1.handle("db:run", (_event, sql, params) => {
+    runCommand(sql, params);
+    return;
+  });
+  ipcMain$1.handle("db:all", (_event, sql, params) => {
+    return getAll(sql, params);
   });
   ipcMain$1.handle("printer:list", () => listPrinters(mainWindow));
   ipcMain$1.handle("printer:print", (_event, data) => printThermal(mainWindow, data));

@@ -15,7 +15,9 @@ contextBridge.exposeInMainWorld('electron', {
     read: () => ipcRenderer.invoke('serial:read'),
     getPortInfo: () => ipcRenderer.invoke('serial:getPortInfo'),
     onData: (callback: (data: string) => void) => {
-      ipcRenderer.on('serial:data', (_event, data) => callback(data))
+      const listener = (_event: any, data: string) => callback(data);
+      ipcRenderer.on('serial:data', listener);
+      return () => ipcRenderer.removeListener('serial:data', listener);
     },
   },
 
@@ -32,6 +34,12 @@ contextBridge.exposeInMainWorld('electron', {
     exec: (sql: string) => ipcRenderer.invoke('db:exec', sql),
     transaction: (queries: Array<{ sql: string; params?: any[] }>) => 
       ipcRenderer.invoke('db:transaction', queries),
+    get: (sql: string, params?: any[]) => 
+      ipcRenderer.invoke('db:get', sql, params),
+    run: (sql: string, params?: any[]) => 
+      ipcRenderer.invoke('db:run', sql, params),
+    all: (sql: string, params?: any[]) => 
+      ipcRenderer.invoke('db:all', sql, params),
   },
 
   // Sync
@@ -69,11 +77,12 @@ export type ElectronAPI = {
   getVersion: () => Promise<string>
   getPlatform: () => Promise<string>
   serialPort: {
-    list: () => Promise<Array<{ path: string; manufacturer?: string }>>
-    open: (port: string, baudRate: number) => Promise<boolean>
-    close: () => Promise<void>
+    list: () => Promise<{ success: boolean; ports?: Array<{ path: string; manufacturer?: string }>; error?: string }>
+    open: (port: string, baudRate: number) => Promise<{ success: boolean; error?: string }>
+    close: () => Promise<{ success: boolean; error?: string }>
     read: () => Promise<string>
-    onData: (callback: (data: string) => void) => void
+    getPortInfo: () => Promise<{ path: string; baudRate: number; isOpen: boolean } | null>
+    onData: (callback: (data: string) => void) => () => void
   }
   printer: {
     list: () => Promise<Array<{ name: string; displayName: string }>>
@@ -83,6 +92,9 @@ export type ElectronAPI = {
     query: (sql: string, params?: any[]) => Promise<any[]>
     exec: (sql: string) => Promise<void>
     transaction: (queries: Array<{ sql: string; params?: any[] }>) => Promise<void>
+    get: (sql: string, params?: any[]) => Promise<any | undefined>
+    run: (sql: string, params?: any[]) => Promise<void>
+    all: (sql: string, params?: any[]) => Promise<any[]>
   }
   sync: {
     start: () => Promise<void>

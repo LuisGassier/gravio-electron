@@ -365,6 +365,45 @@ export function incrementSyncAttempts(id: string) {
   stmt.run(id)
 }
 
+// Ejecutar query y obtener un solo resultado (get)
+export function getOne(sql: string, params: any[] = []) {
+  if (!db) throw new Error('Database not initialized')
+  
+  try {
+    const stmt = db.prepare(sql)
+    return stmt.get(...params)
+  } catch (error) {
+    console.error('❌ Error en getOne:', error)
+    throw error
+  }
+}
+
+// Ejecutar query y obtener todos los resultados (all)
+export function getAll(sql: string, params: any[] = []) {
+  if (!db) throw new Error('Database not initialized')
+  
+  try {
+    const stmt = db.prepare(sql)
+    return stmt.all(...params)
+  } catch (error) {
+    console.error('❌ Error en getAll:', error)
+    throw error
+  }
+}
+
+// Ejecutar comando sin resultado (run)
+export function runCommand(sql: string, params: any[] = []) {
+  if (!db) throw new Error('Database not initialized')
+  
+  try {
+    const stmt = db.prepare(sql)
+    return stmt.run(...params)
+  } catch (error) {
+    console.error('❌ Error en runCommand:', error)
+    throw error
+  }
+}
+
 // Cerrar conexión
 export function closeDatabase() {
   if (db) {

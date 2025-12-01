@@ -31,7 +31,7 @@ const DEFAULT_CONFIG = {
   autoOpen: false,
 }
 
-export async function listSerialPorts() {
+export async function listSerialPorts(): Promise<{ success: boolean; ports?: Array<{ path: string; manufacturer?: string }>; error?: string }> {
   try {
     await loadModules()
     const ports = await SerialPort.list()
@@ -64,16 +64,16 @@ export async function listSerialPorts() {
       }
     }
 
-    return ports.map((port: any) => ({
+    const portList = ports.map((port: any) => ({
       path: port.path,
       manufacturer: port.manufacturer,
-      serialNumber: port.serialNumber,
-      vendorId: port.vendorId,
-      productId: port.productId,
     }))
+
+    return { success: true, ports: portList }
   } catch (error) {
-    console.error('❌ Error al listar puertos:', error)
-    return []
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    console.error('❌ Error al listar puertos:', errorMessage)
+    return { success: false, error: errorMessage }
   }
 }
 
@@ -128,7 +128,7 @@ export async function openSerialPort(
   portPath: string, 
   baudRate: number = DEFAULT_CONFIG.baudRate,
   onDataCallback?: (weight: number) => void
-): Promise<boolean> {
+): Promise<{ success: boolean; error?: string }> {
   try {
     // Cargar módulos primero
     await loadModules()
@@ -191,29 +191,38 @@ export async function openSerialPort(
       })
     })
 
-    return true
+    return { success: true }
   } catch (error) {
-    console.error('❌ Error al abrir puerto serial:', error)
-    return false
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    console.error('❌ Error al abrir puerto serial:', errorMessage)
+    return { success: false, error: errorMessage }
   }
 }
 
 /**
  * Cerrar puerto serial
  */
-export async function closeSerialPort(): Promise<void> {
-  if (port && port.isOpen) {
-    await new Promise<void>((resolve) => {
-      port!.close((err: any) => {
-        if (err) {
-          console.error('❌ Error al cerrar puerto:', err)
-        }
-        port = null
-        parser = null
-        currentWeight = ''
-        resolve()
+export async function closeSerialPort(): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (port && port.isOpen) {
+      await new Promise<void>((resolve, reject) => {
+        port!.close((err: any) => {
+          if (err) {
+            console.error('❌ Error al cerrar puerto:', err)
+            reject(err)
+          } else {
+            port = null
+            parser = null
+            currentWeight = ''
+            resolve()
+          }
+        })
       })
-    })
+    }
+    return { success: true }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    return { success: false, error: errorMessage }
   }
 }
 

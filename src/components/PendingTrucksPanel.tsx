@@ -1,17 +1,11 @@
 import { useState, useEffect } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { CheckCircle2, Truck, Clock, User } from 'lucide-react'
-
-interface PendingTruck {
-  id: string
-  numero_economico: string
-  placas: string
-  operador_nombre?: string
-  hora_entrada?: number
-}
+import { container } from '@/application'
+import type { Registro } from '@/domain'
 
 export function PendingTrucksPanel() {
-  const [pendingTrucks, setPendingTrucks] = useState<PendingTruck[]>([])
+  const [pendingTrucks, setPendingTrucks] = useState<Registro[]>([])
 
   useEffect(() => {
     loadPendingTrucks()
@@ -21,31 +15,22 @@ export function PendingTrucksPanel() {
     if (!window.electron) return
 
     try {
-      // Query basado en la estructura real de las tablas
-      // registros: tiene placa_vehiculo, numero_economico, operador, fecha_entrada, fecha_salida
-      // vehiculos: tiene no_economico, placas
-      const query = `
-        SELECT
-          r.id,
-          r.numero_economico,
-          r.placa_vehiculo as placas,
-          r.operador as operador_nombre,
-          r.fecha_entrada as hora_entrada
-        FROM registros r
-        WHERE r.fecha_salida IS NULL
-          AND r.fecha_entrada IS NOT NULL
-        ORDER BY r.fecha_entrada DESC
-      `
-      const trucks = await window.electron.db.query(query, [])
-      setPendingTrucks(trucks)
+      const result = await container.sqliteRegistroRepository.findAllPending()
+      if (result.success && result.value) {
+        setPendingTrucks(result.value)
+      } else {
+        console.error('Error loading pending trucks:', result)
+        setPendingTrucks([])
+      }
     } catch (error) {
       console.error('Error loading pending trucks:', error)
+      setPendingTrucks([])
     }
   }
 
   const formatTime = (timestamp?: number) => {
     if (!timestamp) return 'N/A'
-    const date = new Date(timestamp * 1000)
+    const date = new Date(timestamp)
     return date.toLocaleTimeString('es-MX', {
       hour: '2-digit',
       minute: '2-digit',
@@ -119,11 +104,11 @@ export function PendingTrucksPanel() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2 mb-2">
                         <h3 className="font-semibold text-foreground text-sm">
-                          {truck.numero_economico || 'N/A'}
+                          {truck.numeroEconomico || 'N/A'}
                         </h3>
                         <div className="flex items-center gap-1.5 text-xs text-muted-foreground whitespace-nowrap bg-muted/30 px-2 py-1 rounded">
                           <Clock className="w-3 h-3" />
-                          {formatTime(truck.hora_entrada)}
+                          {formatTime(truck.fechaEntrada?.getTime())}
                         </div>
                       </div>
 
@@ -131,13 +116,13 @@ export function PendingTrucksPanel() {
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-muted-foreground">Placas:</span>
                           <span className="text-xs text-foreground font-semibold bg-muted/30 px-2 py-0.5 rounded">
-                            {truck.placas || 'N/A'}
+                            {truck.placaVehiculo || 'N/A'}
                           </span>
                         </div>
-                        {truck.operador_nombre && (
+                        {truck.operador && (
                           <p className="text-xs text-muted-foreground">
                             <User className="w-3 h-3 inline mr-1" />
-                            <span className="text-foreground font-medium">{truck.operador_nombre}</span>
+                            <span className="text-foreground font-medium">{truck.operador}</span>
                           </p>
                         )}
                       </div>

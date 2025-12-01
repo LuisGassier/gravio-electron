@@ -12,7 +12,9 @@ electron.contextBridge.exposeInMainWorld("electron", {
     read: () => electron.ipcRenderer.invoke("serial:read"),
     getPortInfo: () => electron.ipcRenderer.invoke("serial:getPortInfo"),
     onData: (callback) => {
-      electron.ipcRenderer.on("serial:data", (_event, data) => callback(data));
+      const listener = (_event, data) => callback(data);
+      electron.ipcRenderer.on("serial:data", listener);
+      return () => electron.ipcRenderer.removeListener("serial:data", listener);
     }
   },
   // Printer (Impresora Térmica)
@@ -24,7 +26,10 @@ electron.contextBridge.exposeInMainWorld("electron", {
   db: {
     query: (sql, params) => electron.ipcRenderer.invoke("db:query", sql, params),
     exec: (sql) => electron.ipcRenderer.invoke("db:exec", sql),
-    transaction: (queries) => electron.ipcRenderer.invoke("db:transaction", queries)
+    transaction: (queries) => electron.ipcRenderer.invoke("db:transaction", queries),
+    get: (sql, params) => electron.ipcRenderer.invoke("db:get", sql, params),
+    run: (sql, params) => electron.ipcRenderer.invoke("db:run", sql, params),
+    all: (sql, params) => electron.ipcRenderer.invoke("db:all", sql, params)
   },
   // Sync
   sync: {

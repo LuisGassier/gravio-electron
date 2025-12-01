@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Scale, AlertCircle, Truck, User, Route, FileText } from 'lucide-react'
 import { Label } from '@/components/ui/label'
 import { Combobox } from '@/components/ui/combobox'
+import { container } from '@/application'
+import { toast } from 'sonner'
 
 interface Vehiculo {
   id: string
@@ -128,12 +130,18 @@ export function WeighingPanel() {
     const savedBaudRate = await window.electron.storage.get('baudRate')
 
     if (!savedPort) {
-      alert('⚠️ Configura el puerto serial en Configuración')
+      toast.error('⚠️ Configura el puerto serial en Configuración')
       return
     }
 
-    const success = await window.electron.serialPort.open(savedPort, savedBaudRate || 2400)
-    setIsScaleConnected(success)
+    const result = await window.electron.serialPort.open(savedPort, savedBaudRate || 2400)
+    if (result.success) {
+      setIsScaleConnected(true)
+      toast.success('Báscula conectada correctamente')
+    } else {
+      setIsScaleConnected(false)
+      toast.error(`Error al conectar: ${result.error || 'Desconocido'}`)
+    }
   }
 
   // Filtrar por empresa seleccionada
@@ -189,6 +197,62 @@ export function WeighingPanel() {
       subtitle: c.empresa || c.prefijo || '(Sin empresa)',
       clave_empresa: c.clave_empresa
     }))
+
+  const registrarEntrada = async () => {
+    if (!isScaleConnected) {
+      toast.error('La báscula no está conectada')
+      return
+    }
+
+    if (!selectedVehiculo) {
+      toast.error('Debes seleccionar un vehículo')
+      return
+    }
+
+    // Parsear IDs compuestos (UUID-empresa)
+    const operadorId = selectedOperador ? selectedOperador.substring(0, selectedOperador.lastIndexOf('-')) : undefined
+    const conceptoId = selectedConcepto ? selectedConcepto.substring(0, selectedConcepto.lastIndexOf('-')) : undefined
+
+    // Buscar datos completos de las entidades seleccionadas
+    const vehiculo = vehiculos.find(v => v.id === selectedVehiculo)
+    const operador = operadorId ? operadores.find(o => o.id === operadorId) : undefined
+    const ruta = selectedRuta ? rutas.find(r => r.id === Number(selectedRuta)) : undefined
+    const concepto = conceptoId ? conceptos.find(c => c.id === conceptoId) : undefined
+
+    if (!vehiculo) {
+      toast.error('No se encontró el vehículo seleccionado')
+      return
+    }
+
+    const result = await container.pesajeService.registrarEntrada({
+      placaVehiculo: vehiculo.placas,
+      numeroEconomico: vehiculo.no_economico,
+      claveEmpresa: vehiculo.clave_empresa,
+      claveOperador: operador?.clave_operador || 0,
+      operador: operador?.operador || 'Sin operador',
+      claveRuta: ruta?.clave_ruta || 0,
+      ruta: ruta?.ruta || 'Sin ruta',
+      claveConcepto: concepto?.clave_concepto || 0,
+      conceptoId: conceptoId,
+      observaciones: observaciones || undefined
+    })
+
+    if (result.success) {
+      const registro = result.value
+      toast.success(`Entrada registrada - Folio: ${registro?.folio || 'Generando...'}`)
+      // Limpiar formulario
+      setSelectedVehiculo('')
+      setSelectedOperador('')
+      setSelectedRuta('')
+      setSelectedConcepto('')
+      setObservaciones('')
+      setSelectedEmpresa(null)
+      // Recargar datos
+      loadFormData()
+    } else {
+      toast.error(`Error: ${result.error}`)
+    }
+  }
 
   // Handler para actualizar empresa cuando se selecciona un valor
   const handleVehiculoChange = (value: string) => {
@@ -250,7 +314,6 @@ export function WeighingPanel() {
       }
       if (selectedConcepto) {
         const lastDashIndex = selectedConcepto.lastIndexOf('-')
-        const concId = selectedConcepto.substring(0, lastDashIndex)
         const concEmp = selectedConcepto.substring(lastDashIndex + 1)
         if (Number(concEmp) !== nuevaEmpresa) setSelectedConcepto('')
       }
@@ -484,8 +547,9 @@ export function WeighingPanel() {
 
           {/* Action Button */}
           <Button
+            onClick={registrarEntrada}
             className="w-full h-14 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-primary-foreground font-bold text-base shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-            disabled={!isScaleConnected}
+            disabled={!isScaleConnected || !selectedVehiculo}
           >
             <Scale className="w-5 h-5 mr-2" />
             Registrar Entrada
