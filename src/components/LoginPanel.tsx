@@ -4,7 +4,7 @@ import { Button } from './ui/button'
 import { Input } from './ui/input'
 import { Label } from './ui/label'
 import { authenticateUser, getSyncStatus } from '../lib/sync'
-import { Mail, Lock, KeyRound, LogIn, CheckCircle2, AlertCircle, Loader2, Shield } from 'lucide-react'
+import { Mail, Lock, KeyRound, LogIn, CheckCircle2, AlertCircle, Loader2, Shield, Eye, EyeOff } from 'lucide-react'
 
 interface LoginPanelProps {
   onLoginSuccess?: () => void
@@ -18,6 +18,8 @@ export function LoginPanel({ onLoginSuccess }: LoginPanelProps = {}) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [isAuthenticated, setIsAuthenticated] = useState(getSyncStatus().isAuthenticated)
+  const [showPin, setShowPin] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -95,8 +97,7 @@ export function LoginPanel({ onLoginSuccess }: LoginPanelProps = {}) {
           <form onSubmit={handleLogin} className="space-y-5">
             {/* Email Input */}
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-sm font-medium flex items-center gap-2">
-                <Mail className="w-4 h-4 text-muted-foreground" />
+              <Label htmlFor="email" className="text-sm font-medium">
                 Correo Electrónico
               </Label>
               <div className="relative">
@@ -153,14 +154,13 @@ export function LoginPanel({ onLoginSuccess }: LoginPanelProps = {}) {
             {/* PIN or Password Input */}
             {usePin ? (
               <div className="space-y-2">
-                <Label htmlFor="pin" className="text-sm font-medium flex items-center gap-2">
-                  <KeyRound className="w-4 h-4 text-muted-foreground" />
+                <Label htmlFor="pin" className="text-sm font-medium">
                   PIN de Acceso
                 </Label>
                 <div className="relative">
                   <Input
                     id="pin"
-                    type="text"
+                    type={showPin ? "text" : "password"}
                     inputMode="numeric"
                     value={pin}
                     onChange={(e) => {
@@ -168,31 +168,54 @@ export function LoginPanel({ onLoginSuccess }: LoginPanelProps = {}) {
                       setPin(value)
                     }}
                     placeholder="Ingresa tu PIN"
-                    className="pl-10 h-11 bg-background/50 text-center text-lg tracking-widest font-mono"
+                    className="pl-10 pr-10 h-11 bg-background/50 text-center text-lg tracking-widest font-mono"
                     maxLength={6}
                     required
                   />
                   <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                  <button
+                    type="button"
+                    onClick={() => setShowPin(!showPin)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    tabIndex={-1}
+                  >
+                    {showPin ? (
+                      <EyeOff className="w-4 h-4" />
+                    ) : (
+                      <Eye className="w-4 h-4" />
+                    )}
+                  </button>
                 </div>
                 <p className="text-xs text-muted-foreground">PIN de 4-6 dígitos</p>
               </div>
             ) : (
               <div className="space-y-2">
-                <Label htmlFor="password" className="text-sm font-medium flex items-center gap-2">
-                  <Lock className="w-4 h-4 text-muted-foreground" />
+                <Label htmlFor="password" className="text-sm font-medium">
                   Contraseña
                 </Label>
                 <div className="relative">
                   <Input
                     id="password"
-                    type="password"
+                    type={showPassword ? "text" : "password"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Ingresa tu contraseña"
-                    className="pl-10 h-11 bg-background/50"
+                    className="pl-10 pr-10 h-11 bg-background/50"
                     required
                   />
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    tabIndex={-1}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="w-4 h-4" />
+                    ) : (
+                      <Eye className="w-4 h-4" />
+                    )}
+                  </button>
                 </div>
               </div>
             )}
