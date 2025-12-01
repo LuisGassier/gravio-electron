@@ -14,19 +14,19 @@ interface HistorialPageProps {
 }
 
 interface RegistroConNombres {
-  id: string
+  id: string | undefined
   folio?: string
   placa: string
-  claveOperador: string
+  claveOperador: number
   nombreOperador: string
-  claveRuta: string
+  claveRuta: number
   nombreRuta: string
   pesoEntrada: number
   pesoSalida: number
   pesoNeto: number
   fechaEntrada: string
   fechaSalida?: string
-  claveConcepto: string
+  claveConcepto: number
   nombreConcepto: string
   claveEmpresa: number
   nombreEmpresa: string
@@ -75,19 +75,19 @@ export function HistorialPage({ onNavigate }: HistorialPageProps) {
 
         // Enriquecer registros con nombres
         const registrosConNombres: RegistroConNombres[] = sorted.map((r: Registro) => {
-          const operador = operadores.find((op: any) => op.clave === r.claveOperador)
-          const ruta = rutas.find((rt: any) => rt.clave === r.claveRuta)
+          const operador = operadores.find((op: any) => op.claveOperador === r.claveOperador)
+          const ruta = rutas.find((rt: any) => rt.claveRuta === r.claveRuta)
           const concepto = conceptos.find((c: any) => c.clave === r.claveConcepto)
-          const empresa = empresas.find((emp: any) => emp.clave === r.claveEmpresa)
+          const empresa = empresas.find((emp: any) => emp.claveEmpresa === r.claveEmpresa)
 
           return {
             id: r.id,
             folio: r.folio,
             placa: r.placaVehiculo,
             claveOperador: r.claveOperador,
-            nombreOperador: operador?.nombre || 'Desconocido',
+            nombreOperador: operador?.operador || 'Desconocido',
             claveRuta: r.claveRuta,
-            nombreRuta: ruta?.nombre || 'Desconocida',
+            nombreRuta: ruta?.ruta || 'Desconocida',
             pesoEntrada: r.pesoEntrada || 0,
             pesoSalida: r.pesoSalida || 0,
             pesoNeto: (r.pesoEntrada || 0) - (r.pesoSalida || 0),
@@ -96,7 +96,7 @@ export function HistorialPage({ onNavigate }: HistorialPageProps) {
             claveConcepto: r.claveConcepto,
             nombreConcepto: concepto?.nombre || 'Desconocido',
             claveEmpresa: r.claveEmpresa,
-            nombreEmpresa: empresa?.nombre || 'Desconocida',
+            nombreEmpresa: empresa?.empresa || 'Desconocida',
             observaciones: r.observaciones,
             sincronizado: r.sincronizado,
           }
@@ -131,9 +131,9 @@ export function HistorialPage({ onNavigate }: HistorialPageProps) {
       r.folio?.toLowerCase().includes(term) ||
       r.placa.toLowerCase().includes(term) ||
       r.nombreOperador?.toLowerCase().includes(term) ||
-      r.claveOperador.toLowerCase().includes(term) ||
+      r.claveOperador.toString().includes(term) ||
       r.nombreRuta?.toLowerCase().includes(term) ||
-      r.claveRuta.toLowerCase().includes(term)
+      r.claveRuta.toString().includes(term)
     )
     setFilteredRegistros(filtered)
   }, [searchTerm, registros])
@@ -149,6 +149,10 @@ export function HistorialPage({ onNavigate }: HistorialPageProps) {
       console.log('🖨️ Imprimiendo ticket para registro:', registro.folio)
       
       // Obtener el registro completo desde el repositorio
+      if (!registro.id) {
+        toast.error('Registro sin ID')
+        return
+      }
       const registroResult = await container.sqliteRegistroRepository.findById(registro.id)
       
       if (!registroResult.success || !registroResult.value) {
@@ -163,7 +167,7 @@ export function HistorialPage({ onNavigate }: HistorialPageProps) {
         registro: registroCompleto,
         empresa: registro.nombreEmpresa,
         empresaClave: registro.claveEmpresa,
-        conceptoClave: registro.claveConcepto,
+        conceptoClave: Number(registro.claveConcepto),
         conceptoNombre: registro.nombreConcepto,
       })
 

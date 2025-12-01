@@ -57,7 +57,10 @@ export function PendingTrucksPanel() {
         toast.success('✅ Sincronización completada')
         await loadPendingTrucks()
       } else {
-        toast.error(`Error al sincronizar: ${result.error}`)
+        const errorMsg = result.errors && result.errors.length > 0 
+          ? result.errors[0].error 
+          : 'Error desconocido'
+        toast.error(`Error al sincronizar: ${errorMsg}`)
       }
     } catch (error) {
       toast.error('Error de conexión. Verifique su internet.')

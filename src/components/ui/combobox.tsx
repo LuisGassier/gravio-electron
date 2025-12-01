@@ -54,7 +54,7 @@ export function Combobox({
   value,
   onValueChange,
   placeholder = "Seleccionar...",
-  searchPlaceholder = "Buscar...",
+  searchPlaceholder: _searchPlaceholder = "Buscar...",
   emptyText = "No se encontraron resultados",
   icon,
   className,

@@ -161,11 +161,25 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
 
     setLoading(true)
     try {
-      const success = await window.electron.printer.print({
-        type: 'test',
+      // Crear un ticket de prueba con datos mínimos
+      const testData = {
         printerName: settings.printerName,
-        content: 'Prueba de impresión'
-      })
+        folio: 'TEST-001',
+        fecha: new Date(),
+        empresaClave: '0000',
+        empresaNombre: 'Prueba',
+        conceptoClave: '000',
+        conceptoNombre: 'Prueba',
+        vehiculo: { placas: 'TEST-001', numeroEconomico: '001' },
+        operadorClave: '000',
+        operadorNombre: 'Prueba',
+        rutaClave: '000',
+        rutaNombre: 'Prueba',
+        pesos: { entrada: 1000, salida: 500, neto: 500 },
+        usuario: 'Sistema'
+      }
+      
+      const success = await window.electron.printer.print(testData)
       
       if (success) {
         toast.success('Impresión enviada a la cola')
