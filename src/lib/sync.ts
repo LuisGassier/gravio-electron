@@ -1,6 +1,6 @@
 /**
- * Sync.ts - Wrapper de compatibilidad que usa Clean Architecture
- * Mantiene la API legacy mientras delega al nuevo SyncService
+ * Sync.ts - Módulo de sincronización usando Clean Architecture
+ * Orquesta la sincronización entre SQLite local y Supabase usando SyncService
  */
 
 import { container } from '@/application'
@@ -105,7 +105,7 @@ async function syncTransactions() {
 
 /**
  * Descargar datos de Supabase a cache local
- * TODO: Migrar a usar repositorios cuando estén implementados
+ * Usa queries directos a Supabase para cachear datos de catálogos
  */
 async function downloadCacheData() {
   if (!supabase) {

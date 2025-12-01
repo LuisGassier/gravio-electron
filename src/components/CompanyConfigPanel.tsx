@@ -106,8 +106,6 @@ export function CompanyConfigPanel({ onClose, onSave }: CompanyConfigPanelProps)
       await window.electron.storage.set('companyName', config.nombre)
       await window.electron.storage.set('companyAddress', config.direccion)
       await window.electron.storage.set('companyLogo', config.logo)
-
-      // También guardar en las keys legacy para compatibilidad con Header
       await window.electron.storage.set('empresaName', config.nombre)
       await window.electron.storage.set('empresaLogo', config.logo)
 
