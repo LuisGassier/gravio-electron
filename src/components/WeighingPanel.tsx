@@ -735,7 +735,7 @@ export function WeighingPanel() {
             className="bg-destructive hover:bg-destructive/90 font-semibold shadow-lg"
           >
             <X className="w-5 h-5 mr-2" />
-            Cancelar Salida
+            Cancelar
           </Button>
         )}
       </div>
