@@ -86,6 +86,14 @@ async function getPendingTransactions() {
 }
 
 /**
+ * Convertir timestamp Unix (segundos) a ISO string para Supabase
+ */
+function unixToISO(timestamp: number | null | undefined): string | null {
+  if (!timestamp) return null
+  return new Date(timestamp * 1000).toISOString()
+}
+
+/**
  * Sincronizar una transacción a Supabase
  */
 async function syncTransaction(transaction: any) {
@@ -106,29 +114,33 @@ async function syncTransaction(transaction: any) {
   }
   
   try {
+    // Convertir datos de SQLite (integers/booleans) a formato Supabase (timestamptz/booleans)
+    const supabaseData = {
+      id: transaction.id,
+      clave_ruta: transaction.clave_ruta || null,
+      placa_vehiculo: transaction.placa_vehiculo,
+      numero_economico: transaction.numero_economico || null,
+      clave_operador: transaction.clave_operador || null,
+      operador: transaction.operador || null,
+      ruta: transaction.ruta || null,
+      peso: transaction.peso ? parseFloat(transaction.peso) : null,
+      peso_entrada: transaction.peso_entrada ? parseFloat(transaction.peso_entrada) : null,
+      peso_salida: transaction.peso_salida ? parseFloat(transaction.peso_salida) : null,
+      fecha_entrada: unixToISO(transaction.fecha_entrada),
+      fecha_salida: unixToISO(transaction.fecha_salida),
+      fecha_registro: unixToISO(transaction.fecha_registro) || new Date().toISOString(),
+      tipo_pesaje: transaction.tipo_pesaje || 'entrada',
+      folio: transaction.folio || null,
+      clave_concepto: transaction.clave_concepto || null,
+      concepto_id: transaction.concepto_id || null,
+      clave_empresa: transaction.clave_empresa || null,
+      observaciones: transaction.observaciones || null,
+      sincronizado: true, // Supabase usa boolean
+    }
+
     const { error } = await supabase
       .from('registros')
-      .upsert({
-        id: transaction.id,
-        clave_ruta: transaction.clave_ruta,
-        placa_vehiculo: transaction.placa_vehiculo,
-        numero_economico: transaction.numero_economico,
-        clave_operador: transaction.clave_operador,
-        operador: transaction.operador,
-        ruta: transaction.ruta,
-        peso: transaction.peso,
-        peso_entrada: transaction.peso_entrada,
-        peso_salida: transaction.peso_salida,
-        fecha_entrada: transaction.fecha_entrada,
-        fecha_salida: transaction.fecha_salida,
-        fecha_registro: transaction.fecha_registro,
-        tipo_pesaje: transaction.tipo_pesaje,
-        folio: transaction.folio,
-        clave_concepto: transaction.clave_concepto,
-        concepto_id: transaction.concepto_id,
-        clave_empresa: transaction.clave_empresa,
-        observaciones: transaction.observaciones,
-      })
+      .upsert(supabaseData)
     
     if (error) {
       // Si la tabla no existe (42P01 = tabla no existe, PGRST116 = no encontrado)

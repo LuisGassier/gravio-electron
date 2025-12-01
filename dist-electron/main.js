@@ -493,7 +493,7 @@ if (!IS_WINDOWS) {
 if (IS_LINUX) {
   Signals.push("SIGIO", "SIGPOLL", "SIGPWR", "SIGSTKFLT");
 }
-class Interceptor {
+let Interceptor$1 = class Interceptor {
   /* CONSTRUCTOR */
   constructor() {
     this.callbacks = /* @__PURE__ */ new Set();
@@ -530,9 +530,9 @@ class Interceptor {
     };
     this.hook();
   }
-}
-const Interceptor$1 = new Interceptor();
-const whenExit = Interceptor$1.register;
+};
+const Interceptor2 = new Interceptor$1();
+const whenExit = Interceptor2.register;
 const Temp = {
   /* VARIABLES */
   store: {},
@@ -16098,27 +16098,12 @@ async function initDatabase() {
 }
 function createTables() {
   if (!db) return;
+  db.pragma("foreign_keys = OFF");
   db.exec(`
     CREATE TABLE IF NOT EXISTS roles (
       id TEXT PRIMARY KEY,
       nombre TEXT UNIQUE NOT NULL,
       created_at INTEGER DEFAULT (strftime('%s', 'now'))
-    )
-  `);
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS usuarios (
-      id TEXT PRIMARY KEY,
-      nombre TEXT NOT NULL,
-      email TEXT UNIQUE NOT NULL,
-      telefono TEXT,
-      rol_id TEXT,
-      activo INTEGER DEFAULT 1,
-      password TEXT,
-      password_hash TEXT,
-      pin TEXT,
-      pin_expires_at INTEGER,
-      created_at INTEGER DEFAULT (strftime('%s', 'now')),
-      FOREIGN KEY (rol_id) REFERENCES roles(id)
     )
   `);
   db.exec(`
@@ -16134,8 +16119,7 @@ function createTables() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       ruta TEXT NOT NULL,
       clave_ruta INTEGER UNIQUE,
-      clave_empresa INTEGER,
-      FOREIGN KEY (clave_empresa) REFERENCES empresa(clave_empresa)
+      clave_empresa INTEGER
     )
   `);
   db.exec(`
@@ -16147,13 +16131,27 @@ function createTables() {
     )
   `);
   db.exec(`
+    CREATE TABLE IF NOT EXISTS usuarios (
+      id TEXT PRIMARY KEY,
+      nombre TEXT NOT NULL,
+      email TEXT UNIQUE NOT NULL,
+      telefono TEXT,
+      rol_id TEXT,
+      activo INTEGER DEFAULT 1,
+      password TEXT,
+      password_hash TEXT,
+      pin TEXT,
+      pin_expires_at INTEGER,
+      created_at INTEGER DEFAULT (strftime('%s', 'now'))
+    )
+  `);
+  db.exec(`
     CREATE TABLE IF NOT EXISTS vehiculos (
       id TEXT PRIMARY KEY,
       no_economico TEXT NOT NULL,
       placas TEXT NOT NULL,
       clave_empresa INTEGER,
-      created_at INTEGER DEFAULT (strftime('%s', 'now')),
-      FOREIGN KEY (clave_empresa) REFERENCES empresa(clave_empresa)
+      created_at INTEGER DEFAULT (strftime('%s', 'now'))
     )
   `);
   db.exec(`
@@ -16189,27 +16187,21 @@ function createTables() {
       observaciones TEXT,
       sincronizado INTEGER DEFAULT 0,
       created_at INTEGER DEFAULT (strftime('%s', 'now')),
-      updated_at INTEGER DEFAULT (strftime('%s', 'now')),
-      FOREIGN KEY (clave_ruta) REFERENCES rutas(clave_ruta),
-      FOREIGN KEY (clave_operador) REFERENCES operadores(clave_operador)
+      updated_at INTEGER DEFAULT (strftime('%s', 'now'))
     )
   `);
   db.exec(`
     CREATE TABLE IF NOT EXISTS operadores_empresas (
       operador_id TEXT NOT NULL,
       clave_empresa INTEGER NOT NULL,
-      PRIMARY KEY (operador_id, clave_empresa),
-      FOREIGN KEY (operador_id) REFERENCES operadores(id),
-      FOREIGN KEY (clave_empresa) REFERENCES empresa(clave_empresa)
+      PRIMARY KEY (operador_id, clave_empresa)
     )
   `);
   db.exec(`
     CREATE TABLE IF NOT EXISTS conceptos_empresas (
       concepto_id TEXT NOT NULL,
       clave_empresa INTEGER NOT NULL,
-      PRIMARY KEY (concepto_id, clave_empresa),
-      FOREIGN KEY (concepto_id) REFERENCES conceptos(id),
-      FOREIGN KEY (clave_empresa) REFERENCES empresa(clave_empresa)
+      PRIMARY KEY (concepto_id, clave_empresa)
     )
   `);
   db.exec(`
@@ -16240,22 +16232,43 @@ function createTables() {
     CREATE INDEX IF NOT EXISTS idx_operadores_clave ON operadores(clave_operador);
     CREATE INDEX IF NOT EXISTS idx_rutas_clave ON rutas(clave_ruta);
   `);
-  console.log("✅ Tablas de base de datos creadas");
+  db.pragma("foreign_keys = OFF");
+  console.log("✅ Tablas de base de datos creadas (estructura compatible con Supabase)");
+  console.log("⚠️  Foreign keys deshabilitadas para operación offline-first");
+}
+function sanitizeParams(params) {
+  return params.map((param) => {
+    if (param === void 0) return null;
+    if (param === null) return null;
+    if (typeof param === "number") return param;
+    if (typeof param === "string") return param;
+    if (typeof param === "bigint") return param;
+    if (Buffer.isBuffer(param)) return param;
+    if (typeof param === "boolean") return param ? 1 : 0;
+    if (typeof param === "object") {
+      console.warn("⚠️ Convirtiendo objeto a JSON string:", param);
+      return JSON.stringify(param);
+    }
+    return String(param);
+  });
 }
 function executeQuery(sql, params = []) {
   if (!db) {
     throw new Error("Base de datos no inicializada");
   }
   try {
+    const sanitizedParams = sanitizeParams(params);
     const stmt = db.prepare(sql);
     if (sql.trim().toUpperCase().startsWith("SELECT")) {
-      return stmt.all(...params);
+      return stmt.all(...sanitizedParams);
     } else {
-      const result = stmt.run(...params);
+      const result = stmt.run(...sanitizedParams);
       return [{ changes: result.changes, lastInsertRowid: result.lastInsertRowid }];
     }
   } catch (error) {
     console.error("❌ Error en query:", error);
+    console.error("   SQL:", sql);
+    console.error("   Params:", params);
     throw error;
   }
 }
@@ -16277,7 +16290,8 @@ function executeTransaction(queries) {
   const transaction = db.transaction((queries2) => {
     for (const query of queries2) {
       const stmt = db.prepare(query.sql);
-      stmt.run(...query.params || []);
+      const sanitizedParams = sanitizeParams(query.params || []);
+      stmt.run(...sanitizedParams);
     }
   });
   try {

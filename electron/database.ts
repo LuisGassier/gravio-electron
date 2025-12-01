@@ -47,7 +47,10 @@ export async function initDatabase() {
 function createTables() {
   if (!db) return
 
-  // Tabla de roles
+  // Deshabilitar foreign keys temporalmente para evitar errores de orden
+  db.pragma('foreign_keys = OFF')
+
+  // Tabla de roles (sin foreign keys)
   db.exec(`
     CREATE TABLE IF NOT EXISTS roles (
       id TEXT PRIMARY KEY,
@@ -56,7 +59,37 @@ function createTables() {
     )
   `)
 
-  // Tabla de usuarios
+  // Tabla de empresa (sin foreign keys, pero referenciada por otras)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS empresa (
+      id TEXT PRIMARY KEY,
+      empresa TEXT NOT NULL,
+      clave_empresa INTEGER UNIQUE,
+      prefijo TEXT NOT NULL
+    )
+  `)
+
+  // Tabla de rutas (depende de empresa.clave_empresa)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS rutas (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ruta TEXT NOT NULL,
+      clave_ruta INTEGER UNIQUE,
+      clave_empresa INTEGER
+    )
+  `)
+
+  // Tabla de operadores (sin foreign keys, pero referenciada)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS operadores (
+      id TEXT PRIMARY KEY,
+      operador TEXT NOT NULL,
+      clave_operador INTEGER UNIQUE NOT NULL,
+      created_at INTEGER DEFAULT (strftime('%s', 'now'))
+    )
+  `)
+
+  // Tabla de usuarios (depende de roles.id)
   db.exec(`
     CREATE TABLE IF NOT EXISTS usuarios (
       id TEXT PRIMARY KEY,
@@ -69,55 +102,22 @@ function createTables() {
       password_hash TEXT,
       pin TEXT,
       pin_expires_at INTEGER,
-      created_at INTEGER DEFAULT (strftime('%s', 'now')),
-      FOREIGN KEY (rol_id) REFERENCES roles(id)
-    )
-  `)
-
-  // Tabla de empresas
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS empresa (
-      id TEXT PRIMARY KEY,
-      empresa TEXT NOT NULL,
-      clave_empresa INTEGER UNIQUE,
-      prefijo TEXT NOT NULL
-    )
-  `)
-
-  // Tabla de rutas
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS rutas (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      ruta TEXT NOT NULL,
-      clave_ruta INTEGER UNIQUE,
-      clave_empresa INTEGER,
-      FOREIGN KEY (clave_empresa) REFERENCES empresa(clave_empresa)
-    )
-  `)
-
-  // Tabla de operadores
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS operadores (
-      id TEXT PRIMARY KEY,
-      operador TEXT NOT NULL,
-      clave_operador INTEGER UNIQUE NOT NULL,
       created_at INTEGER DEFAULT (strftime('%s', 'now'))
     )
   `)
 
-  // Tabla de vehículos
+  // Tabla de vehículos (depende de empresa.clave_empresa)
   db.exec(`
     CREATE TABLE IF NOT EXISTS vehiculos (
       id TEXT PRIMARY KEY,
       no_economico TEXT NOT NULL,
       placas TEXT NOT NULL,
       clave_empresa INTEGER,
-      created_at INTEGER DEFAULT (strftime('%s', 'now')),
-      FOREIGN KEY (clave_empresa) REFERENCES empresa(clave_empresa)
+      created_at INTEGER DEFAULT (strftime('%s', 'now'))
     )
   `)
 
-  // Tabla de conceptos
+  // Tabla de conceptos (sin foreign keys, pero referenciada)
   db.exec(`
     CREATE TABLE IF NOT EXISTS conceptos (
       id TEXT PRIMARY KEY,
@@ -129,7 +129,7 @@ function createTables() {
     )
   `)
 
-  // Tabla de registros (principal)
+  // Tabla de registros (depende de rutas.clave_ruta y operadores.clave_operador)
   db.exec(`
     CREATE TABLE IF NOT EXISTS registros (
       id TEXT PRIMARY KEY,
@@ -153,31 +153,25 @@ function createTables() {
       observaciones TEXT,
       sincronizado INTEGER DEFAULT 0,
       created_at INTEGER DEFAULT (strftime('%s', 'now')),
-      updated_at INTEGER DEFAULT (strftime('%s', 'now')),
-      FOREIGN KEY (clave_ruta) REFERENCES rutas(clave_ruta),
-      FOREIGN KEY (clave_operador) REFERENCES operadores(clave_operador)
+      updated_at INTEGER DEFAULT (strftime('%s', 'now'))
     )
   `)
 
-  // Tabla de operadores-empresas (relación)
+  // Tabla de operadores-empresas (relación muchos-a-muchos)
   db.exec(`
     CREATE TABLE IF NOT EXISTS operadores_empresas (
       operador_id TEXT NOT NULL,
       clave_empresa INTEGER NOT NULL,
-      PRIMARY KEY (operador_id, clave_empresa),
-      FOREIGN KEY (operador_id) REFERENCES operadores(id),
-      FOREIGN KEY (clave_empresa) REFERENCES empresa(clave_empresa)
+      PRIMARY KEY (operador_id, clave_empresa)
     )
   `)
 
-  // Tabla de conceptos-empresas (relación)
+  // Tabla de conceptos-empresas (relación muchos-a-muchos)
   db.exec(`
     CREATE TABLE IF NOT EXISTS conceptos_empresas (
       concepto_id TEXT NOT NULL,
       clave_empresa INTEGER NOT NULL,
-      PRIMARY KEY (concepto_id, clave_empresa),
-      FOREIGN KEY (concepto_id) REFERENCES conceptos(id),
-      FOREIGN KEY (clave_empresa) REFERENCES empresa(clave_empresa)
+      PRIMARY KEY (concepto_id, clave_empresa)
     )
   `)
 
@@ -215,7 +209,35 @@ function createTables() {
     CREATE INDEX IF NOT EXISTS idx_rutas_clave ON rutas(clave_ruta);
   `)
 
-  console.log('✅ Tablas de base de datos creadas')
+  // Rehabilitar foreign keys (pero sin constraints estrictos para offline-first)
+  // Las FKs son opcionales ya que en offline podemos tener datos sin referencias
+  db.pragma('foreign_keys = OFF')
+
+  console.log('✅ Tablas de base de datos creadas (estructura compatible con Supabase)')
+  console.log('⚠️  Foreign keys deshabilitadas para operación offline-first')
+}
+
+// Sanitizar parámetros para SQLite
+function sanitizeParams(params: any[]): any[] {
+  return params.map(param => {
+    // SQLite solo acepta: numbers, strings, bigints, buffers, y null
+    if (param === undefined) return null
+    if (param === null) return null
+    if (typeof param === 'number') return param
+    if (typeof param === 'string') return param
+    if (typeof param === 'bigint') return param
+    if (Buffer.isBuffer(param)) return param
+    if (typeof param === 'boolean') return param ? 1 : 0
+    
+    // Objetos/Arrays → convertir a JSON string
+    if (typeof param === 'object') {
+      console.warn('⚠️ Convirtiendo objeto a JSON string:', param)
+      return JSON.stringify(param)
+    }
+    
+    // Fallback: convertir a string
+    return String(param)
+  })
 }
 
 // Ejecutar query
@@ -225,16 +247,21 @@ export function executeQuery(sql: string, params: any[] = []): any[] {
   }
 
   try {
+    // Sanitizar parámetros
+    const sanitizedParams = sanitizeParams(params)
+    
     const stmt = db.prepare(sql)
     
     if (sql.trim().toUpperCase().startsWith('SELECT')) {
-      return stmt.all(...params)
+      return stmt.all(...sanitizedParams)
     } else {
-      const result = stmt.run(...params)
+      const result = stmt.run(...sanitizedParams)
       return [{ changes: result.changes, lastInsertRowid: result.lastInsertRowid }]
     }
   } catch (error) {
     console.error('❌ Error en query:', error)
+    console.error('   SQL:', sql)
+    console.error('   Params:', params)
     throw error
   }
 }
@@ -262,7 +289,8 @@ export function executeTransaction(queries: Array<{ sql: string; params?: any[] 
   const transaction = db.transaction((queries: Array<{ sql: string; params?: any[] }>) => {
     for (const query of queries) {
       const stmt = db!.prepare(query.sql)
-      stmt.run(...(query.params || []))
+      const sanitizedParams = sanitizeParams(query.params || [])
+      stmt.run(...sanitizedParams)
     }
   })
 
