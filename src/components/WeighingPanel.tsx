@@ -327,7 +327,7 @@ export function WeighingPanel() {
       limpiarFormulario()
     } else {
       toast.error('Error al registrar entrada', {
-        description: result.error
+        description: result.error.message
       })
     }
   }
@@ -405,7 +405,7 @@ export function WeighingPanel() {
       cancelarSalida()
     } else {
       toast.error('Error al registrar salida', {
-        description: result.error
+        description: result.error.message
       })
     }
   }
