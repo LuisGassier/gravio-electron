@@ -12,6 +12,8 @@ dist
 dist-ssr
 *.local
 
+.vscode\mcp.json
+
 # Editor directories and files
 
 !.vscode/extensions.json
@@ -26,4 +28,3 @@ dist-ssr
 .env
 #carpeta de dist builder
 dist-builder
-.vscode
