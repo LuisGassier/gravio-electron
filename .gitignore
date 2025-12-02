@@ -26,3 +26,4 @@ dist-ssr
 .env
 #carpeta de dist builder
 dist-builder
+.vscode/mcp.json
