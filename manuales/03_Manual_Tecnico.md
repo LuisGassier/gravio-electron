@@ -1,133 +1,156 @@
-# Manual Técnico - Arquitectura y Base de Datos - Gravio
+# Manual Técnico - Arquitectura, Datos y Protocolos - Gravio
 
-## 1. Arquitectura del Sistema
+## 1. Visión General de la Arquitectura
 
-Gravio sigue los principios de **Clean Architecture** (Arquitectura Limpia) adaptada para una aplicación de escritorio con Electron. El objetivo es desacoplar la lógica de negocio de la interfaz de usuario y de la infraestructura externa (hardware, base de datos).
+Gravio es una aplicación de escritorio de alto rendimiento diseñada con arquitectura híbrida **Electron + React**, optimizada para entornos industriales con conectividad intermitente (Offline-First).
 
-### 1.1. Capas del Sistema
+### 1.1. Diagrama de Componentes
 
-1.  **Domain (Dominio)**: `src/domain/`
-    *   Núcleo del sistema. Contiene las reglas de negocio puras.
-    *   **Entities**: Objetos de negocio como `Registro`, `Vehiculo`, `Empresa`, `Operador`.
-    *   **Repositories (Interfaces)**: Contratos que definen cómo se accede a los datos (`IRegistroRepository`, `IVehiculoRepository`).
-    *   *Dependencias*: Cero. No conoce React, ni Electron, ni SQL.
+```mermaid
+graph TD
+    Hardware[Hardware] -->|Serial/USB| Main[Electron Main Process]
+    Main -->|IPC Events| Renderer[React Renderer Process]
+    Renderer -->|DI Container| Services[Application Services]
+    Services -->|Repository Pattern| Infra[Infrastructure]
+    Infra -->|Better-SQLite3| LocalDB[(SQLite Local)]
+    Infra -->|Supabase JS| CloudDB[(Supabase Cloud)]
+```
 
-2.  **Application (Aplicación)**: `src/application/`
-    *   Casos de uso y orquestación.
-    *   **Services**: `PesajeService` (lógica de pesaje), `SyncService` (coordinación de sincronización).
-    *   **DIContainer**: Inyección de dependencias para conectar las implementaciones concretas con las interfaces.
-
-3.  **Infrastructure (Infraestructura)**: `src/infrastructure/`
-    *   Implementaciones concretas de los repositorios y adaptadores.
-    *   **Database**: `SQLiteRegistroRepository` (Local), `SupabaseRegistroRepository` (Nube).
-    *   **Hardware**: `MettlerToledoScale` (Lector serial), `PrinterService` (ESC/POS).
-
-4.  **Presentation (UI)**: `src/components/`
-    *   Interfaz de usuario construida con **React 18**.
-    *   Utiliza **TailwindCSS** para estilos y **Lucide Icons**.
-    *   Se comunica con la capa de Aplicación a través del `DIContainer` o Hooks personalizados.
-
-5.  **Main Process (Electron)**: `electron/`
-    *   `main.ts`: Punto de entrada. Gestiona ventanas y ciclo de vida.
-    *   `preload.ts`: Puente seguro (ContextBridge) entre el proceso Main (Node.js) y el Renderer (React). Expone APIs seguras como `window.electron.serialPort`.
+### 1.2. Stack Tecnológico
+*   **Runtime**: Electron 28+ (Chromium + Node.js).
+*   **Frontend**: React 18, TypeScript 5, Vite, TailwindCSS.
+*   **Estado**: Zustand (Gestión global ligera).
+*   **Base de Datos Local**: `better-sqlite3` (Acceso síncrono de alto rendimiento).
+*   **Nube**: Supabase (PostgreSQL, Auth, Realtime, Storage).
+*   **Hardware**: `serialport` (Comunicación RS-232), `electron-printer` (Impresión nativa).
 
 ---
 
 ## 2. Base de Datos y Esquema
 
-El sistema utiliza un enfoque híbrido:
-- **SQLite (`better-sqlite3`)**: Base de datos principal en el cliente. Garantiza funcionamiento offline.
-- **Supabase (PostgreSQL)**: Base de datos en la nube para centralización y respaldo.
+El sistema utiliza dos bases de datos espejo: una local (SQLite) y una en la nube (PostgreSQL). Ambas comparten el mismo esquema lógico para facilitar la sincronización.
 
-### 2.1. Tablas Principales (Schema)
+### 2.1. Tablas Core (`electron/database.ts`)
 
 #### `registros`
-Tabla transaccional principal. Almacena cada evento de pesaje.
-- `id` (UUID): Identificador único global.
-- `folio` (TEXT): Identificador legible humano (ej. `GRAV-00123`).
-- `tipo_pesaje` (TEXT): `'entrada'`, `'salida'`, `'completo'`.
-- `peso_entrada` (REAL): Peso en kg al ingresar.
-- `peso_salida` (REAL): Tara del vehículo al salir (nullable).
-- `peso_neto` (REAL): Calculado (`entrada - salida`).
-- `placa_vehiculo` (TEXT): Placa del camión.
-- `clave_empresa`, `clave_operador`, `clave_ruta`: Referencias a catálogos.
-- `sincronizado` (BOOLEAN): Bandera de control para el motor de sync (`0` = pendiente, `1` = synced).
+La tabla transaccional principal. Almacena cada evento de pesaje.
+```sql
+CREATE TABLE registros (
+  id TEXT PRIMARY KEY,           -- UUID v4
+  folio TEXT,                    -- Generado: PREF-000000
+  tipo_pesaje TEXT,              -- 'entrada', 'salida', 'completo'
+  peso_entrada REAL,             -- Kg
+  peso_salida REAL,              -- Kg (Nullable)
+  peso_neto REAL GENERATED ALWAYS AS (peso_entrada - peso_salida) VIRTUAL,
+  fecha_entrada TEXT,            -- ISO8601
+  fecha_salida TEXT,             -- ISO8601
+  placa_vehiculo TEXT NOT NULL,
+  numero_economico TEXT,
+  clave_empresa INTEGER,
+  clave_operador INTEGER,
+  clave_ruta INTEGER,
+  clave_concepto INTEGER,
+  sincronizado INTEGER DEFAULT 0 -- 0: Pendiente, 1: Synced
+);
+```
 
 #### `vehiculos`
-Catálogo de unidades autorizadas.
-- `id` (UUID)
-- `placas` (TEXT)
-- `no_economico` (TEXT): Identificador interno de la empresa.
-- `tara_actual` (REAL): Último peso conocido vacío (para referencia).
-
-#### `operadores`
-Catálogo de choferes.
-- `id` (UUID)
-- `operador` (TEXT): Nombre completo.
-- `clave_operador` (INTEGER): ID numérico legado.
+Catálogo de unidades.
+```sql
+CREATE TABLE vehiculos (
+  id TEXT PRIMARY KEY,
+  placas TEXT UNIQUE,
+  no_economico TEXT,
+  clave_empresa INTEGER,
+  tara_actual REAL,
+  updated_at INTEGER
+);
+```
 
 #### `folio_sequences`
-Control de folios offline.
-- `clave_empresa` (INTEGER)
-- `ultimo_numero` (INTEGER): Contador incremental para generar folios sin conexión.
-- `prefijo_empresa` (TEXT): Ej. "GRAV".
-
-#### `sync_queue`
-Cola de prioridad para la sincronización.
-- `id` (INTEGER PK)
-- `entity_type` (TEXT): 'registro', 'vehiculo', etc.
-- `entity_id` (TEXT): ID del registro afectado.
-- `operation` (TEXT): 'INSERT', 'UPDATE'.
-- `created_at` (DATETIME).
+Control crítico para la generación de folios offline.
+```sql
+CREATE TABLE folio_sequences (
+  clave_empresa INTEGER PRIMARY KEY,
+  prefijo_empresa TEXT,          -- Ej: 'GRAV'
+  ultimo_numero INTEGER,         -- Contador incremental
+  sincronizado INTEGER DEFAULT 0
+);
+```
 
 ---
 
-## 3. Motor de Sincronización (Sync Engine)
+## 3. Protocolos de Comunicación (IPC)
 
-El `SyncService` (`src/application/services/SyncService.ts`) y `sync.ts` (`src/lib/sync.ts`) orquestan el flujo de datos.
+La seguridad es prioritaria. El proceso `Renderer` (UI) no tiene acceso directo a Node.js. Toda la comunicación pasa por un `ContextBridge` definido en `preload.ts`.
 
-### Flujo de Sincronización (Subida / Upstream)
-1.  El usuario guarda un registro. Se escribe en **SQLite** y se marca `sincronizado = 0`.
-2.  Un *watcher* o el temporizador (cada 5 min) detecta conexión a internet.
-3.  Se leen todos los registros con `sincronizado = 0`.
-4.  Se envían uno a uno (o en batch) a **Supabase** usando `SupabaseRegistroRepository`.
-5.  Si Supabase confirma (HTTP 200/201), se actualiza el registro local a `sincronizado = 1`.
+### 3.1. Canales de Eventos
 
-### Flujo de Descarga (Downstream)
-1.  Al iniciar la aplicación, se consultan los catálogos (`Empresas`, `Vehiculos`, `Rutas`) en Supabase.
-2.  Se comparan timestamps (`updated_at`).
-3.  Si hay cambios en la nube, se descargan y actualizan en la SQLite local usando `INSERT OR REPLACE`.
+| Canal | Dirección | Payload | Descripción |
+| :--- | :--- | :--- | :--- |
+| `serial:list` | UI -> Main | `void` | Solicita lista de puertos COM. |
+| `serial:open` | UI -> Main | `{port, baud}` | Inicia conexión con báscula. |
+| `serial:data` | Main -> UI | `string` | Emite trama de peso cruda (ej. `)0 1200`). |
+| `db:query` | UI -> Main | `{sql, params}` | Ejecuta consulta SQL segura. |
+| `printer:print` | UI -> Main | `{html, printer}` | Envía trabajo de impresión a ventana oculta. |
 
 ---
 
-## 4. Integración de Hardware
+## 4. Motor de Sincronización (`SyncService`)
 
-### Comunicación Serial (Báscula)
-- **Librería**: `serialport` (Node.js).
-- **Implementación**: El proceso `Main` de Electron abre el puerto.
-- **Eventos**:
-    - `data`: Recibe bytes crudos.
-    - El parser busca el patrón de trama Mettler Toledo.
-    - Se envía un evento IPC `serial-data` al Renderer (React UI).
+El corazón de la capacidad "Offline-First". Funciona en dos direcciones.
 
-### Impresión Térmica
-- **Protocolo**: ESC/POS (Raw bytes).
-- **Implementación**: Se construye un buffer de comandos (texto, saltos de línea, corte de papel) y se escribe directamente al puerto USB/Serial de la impresora o se usa el driver de Windows vía `electron-printer`.
+### 4.1. Upstream (Subida: Local -> Nube)
+1.  **Trigger**: Intervalo de 5 min o evento `navigator.onLine`.
+2.  **Query**: `SELECT * FROM registros WHERE sincronizado = 0`.
+3.  **Acción**: Itera y envía a Supabase usando `upsert` (idempotencia).
+4.  **Confirmación**: Si HTTP 200, marca `sincronizado = 1` localmente.
 
----
-
-## 5. Scripts de Desarrollo
-
-Ubicados en la carpeta `scripts/`:
-- **`scale_simulator.py`**: Script en Python que simula una báscula física. Crea un puerto COM virtual y envía tramas de peso aleatorias. Útil para probar sin hardware.
-- **`convert_manuals_to_pdf.cjs`**: Herramienta interna para generar esta documentación.
+### 4.2. Downstream (Bajada: Nube -> Local)
+1.  **Catálogos**: Descarga `Empresas`, `Vehiculos`, `Rutas` donde `updated_at > last_sync`.
+2.  **Registros**: Descarga registros modificados en otras estaciones.
+3.  **Resolución de Conflictos (Algoritmo)**:
+    *   Si un registro existe en ambos lados, se cuentan los campos llenos (`peso_salida`, `fecha_salida`).
+    *   **Regla de Oro**: "Gana el que tenga más información".
+    *   *Protección*: Si el local tiene cambios pendientes de subir (`sincronizado=0`), se ignora la nube para no perder datos recientes.
 
 ---
 
-**Stack Tecnológico**:
-- Electron 28+
-- React 18
-- TypeScript 5
-- Vite 5
-- Better-SQLite3
-- Supabase JS Client
+## 5. Integración de Hardware
+
+### 5.1. Báscula (Mettler Toledo)
+*   **Parser**: Implementado en `electron/serialport.ts`.
+*   **Lógica**:
+    *   Lee flujo continuo de bytes.
+    *   Detecta delimitador `\r` o `\n`.
+    *   Parsea trama estándar: `[Estado] [Peso] [Tara]`.
+    *   `Estado`: `)` = Estable, `(` = Inestable.
+
+### 5.2. Impresora Térmica
+*   **Renderizado**: No usa comandos ESC/POS directos para el texto.
+*   **Técnica**: Genera un HTML en una `BrowserWindow` oculta (`width: 80mm`) y usa `webContents.print()` al driver del sistema. Esto permite usar CSS para estilos y logos sin lidiar con comandos binarios complejos.
+
+---
+
+## 6. Estructura del Proyecto
+
+```bash
+gravio-electron/
+├── electron/                 # Proceso Principal (Node.js)
+│   ├── main.ts              # Entry point, gestión de ventanas
+│   ├── preload.ts           # Puente de seguridad IPC
+│   ├── database.ts          # Inicialización SQLite
+│   └── serialport.ts        # Driver de báscula
+├── src/                      # Proceso Renderer (React)
+│   ├── application/         # Casos de uso (Clean Arch)
+│   ├── domain/              # Entidades y Reglas de Negocio
+│   ├── infrastructure/      # Repositorios (SQLite/Supabase)
+│   ├── components/          # UI Components (Shadcn)
+│   └── lib/                 # Utilidades compartidas
+└── manuales/                # Documentación generada
+```
+
+---
+
+**Documentación Técnica Generada**: Diciembre 2025
+**Versión de Arquitectura**: 2.1
