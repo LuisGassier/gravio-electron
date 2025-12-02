@@ -52,7 +52,7 @@ export class CreateEntradaUseCase {
         folio: input.folio, // Folio generado offline (si existe)
         fechaEntrada: new Date(),
         tipoPesaje: 'entrada',
-        observaciones: input.observaciones || 'Pesaje de entrada automático',
+        observaciones: input.observaciones,
         sincronizado: false,
       };
 
