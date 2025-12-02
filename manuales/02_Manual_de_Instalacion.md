@@ -1,98 +1,154 @@
-# Manual de Instalación y Configuración - Gravio
+# Manual de Instalación y Configuración Técnica - Gravio
 
-## 1. Requisitos del Sistema
-
-Antes de proceder con la instalación, verifique que el equipo cumpla con los siguientes requisitos mínimos.
-
-### Hardware
-- **Procesador**: Intel Core i3 (8va Gen) o superior / AMD Ryzen 3.
-- **Memoria RAM**: 8 GB recomendados (4 GB mínimo).
-- **Almacenamiento**: 1 GB libre en disco duro (para base de datos local y logs).
-- **Puertos**:
-  - 1 Puerto Serial RS-232 (DB9) nativo o adaptador USB-a-Serial certificado (chipset FTDI recomendado).
-  - 1 Puerto USB para la impresora térmica.
-- **Pantalla**: Resolución mínima de 1366x768 (Optimizado para 1920x1080 y pantallas táctiles).
-
-### Software
-- **Sistema Operativo**: Windows 10 o Windows 11 (64 bits).
-- **Drivers**:
-  - Driver del adaptador USB-Serial (si aplica).
-  - Driver de la impresora térmica (Epson APD o genérico ESC/POS).
+## 1. Introducción
+Este documento está dirigido al **Personal de TI e Infraestructura**. Describe el proceso técnico completo para desplegar el sistema Gravio en una estación de pesaje, incluyendo la configuración de hardware (básculas seriales, impresoras térmicas), variables de entorno y resolución de problemas de red.
 
 ---
 
-## 2. Instalación de Periféricos
+## 2. Requisitos del Sistema (Estación de Trabajo)
 
-### Paso 1: Conexión de la Báscula
-1.  Conecte el cable serial desde el indicador Mettler Toledo al puerto de la PC.
-2.  Si usa un adaptador USB, conéctelo y espere a que Windows lo reconozca.
-3.  Abra el "Administrador de Dispositivos" de Windows (`devmgmt.msc`).
-4.  Despliegue la sección **"Puertos (COM y LPT)"**.
-5.  Identifique el número de puerto asignado (ej. `USB Serial Port (COM3)`). **Anote este número**.
+Para garantizar la estabilidad operativa 24/7, la PC debe cumplir con lo siguiente:
 
-### Paso 2: Conexión de la Impresora
-1.  Conecte la impresora por USB.
-2.  Instale los controladores del fabricante.
-3.  Vaya a "Impresoras y escáneres" en Windows.
-4.  Imprima una **Página de Prueba** desde Windows para confirmar que el driver funciona correctamente.
+### 2.1. Hardware
+*   **Procesador**: Intel Core i3 (8va Gen) o superior / AMD Ryzen 3.
+*   **RAM**: 8 GB mínimo (Recomendado 16 GB si se usa para otras tareas).
+*   **Almacenamiento**: SSD con al menos 10 GB libres. (La base de datos local crece aprox. 100MB por año).
+*   **Puertos**:
+    *   1x Puerto USB para Impresora Térmica.
+    *   1x Puerto Serial DB9 (Nativo) o USB (Adaptador).
+*   **Monitor**: Resolución mínima 1366x768 (Optimizado para 1920x1080).
 
----
+### 2.2. Adaptadores USB-Serial (Crítico)
+Si la PC no tiene puerto serial nativo, **NO use adaptadores genéricos** (chipset CH340). Estos causan desconexiones aleatorias y "congelamiento" del peso.
+*   ✅ **Certificados**: Chipset **FTDI** o **Prolific PL2303**.
+*   ❌ **Evitar**: Cables azules translúcidos genéricos sin marca.
 
-## 3. Instalación del Software Gravio
-
-1.  Obtenga el instalador `Gravio-Setup-1.x.x.exe`.
-2.  Ejecute el archivo como Administrador (Click derecho -> Ejecutar como administrador).
-3.  El asistente instalará la aplicación en `%LOCALAPPDATA%\Programs\gravio-electron`.
-4.  Se creará un acceso directo en el escritorio.
-5.  Al finalizar, la aplicación se abrirá automáticamente.
-
----
-
-## 4. Configuración Inicial
-
-Una vez abierta la aplicación, siga estos pasos obligatorios para dejar el sistema operativo.
-
-### 4.1. Inicio de Sesión
-Ingrese con las credenciales de administrador proporcionadas. Esto es necesario para acceder al menú de configuración.
-
-### 4.2. Configuración de Báscula
-1.  Haga clic en el ícono de **Engranaje ⚙️** (esquina superior derecha).
-2.  Localice la sección **"Puerto Serial"**.
-3.  En la lista desplegable, seleccione el puerto COM que identificó en el paso 2 (ej. `COM3`).
-    - *Si no aparece, haga clic en el botón de refrescar o reinicie la app.*
-4.  Verifique los parámetros de comunicación (estándar Mettler Toledo):
-    - **Baud Rate**: `2400`
-    - **Data Bits**: `8`
-    - **Stop Bits**: `1`
-    - **Parity**: `None`
-5.  Haga clic en **"Probar Conexión"**.
-    - **Éxito**: Verá un mensaje verde "Conexión exitosa" y podrá ver el peso en vivo en el panel de fondo.
-    - **Error**: Verifique que ningún otro software (HyperTerminal, Putty) esté usando el puerto.
-
-### 4.3. Configuración de Impresora
-1.  En el mismo panel de configuración, busque **"Impresora Térmica"**.
-2.  Seleccione su impresora de la lista.
-3.  Active **"Impresión Automática"** si el cliente lo requiere.
-4.  Haga clic en **"Probar Impresión"**. La impresora debería emitir un ticket pequeño de prueba.
-5.  Haga clic en **"Guardar"** al final del panel.
+### 2.3. Software
+*   **SO**: Windows 10 o Windows 11 (64 bits).
+*   **Dependencias**:
+    *   .NET Framework 4.6.2 o superior.
+    *   Visual C++ Redistributable 2015-2022 (x64).
 
 ---
 
-## 5. Verificación de Sincronización
+## 3. Instalación del Software
 
-1.  Asegúrese de que la PC tenga internet.
-2.  En el **Panel de Estado** (ícono de señal en la barra superior o widget en dashboard):
-    - El estado debe decir **"Online"** (verde).
-    - La cola de sincronización debe estar en **0**.
-3.  Si el estado es "Offline" pero tiene internet, verifique que el firewall de Windows no esté bloqueando la aplicación `Gravio`.
+### Paso 1: Descarga y Ejecución
+1.  Obtenga el instalador oficial: `Gravio-Setup-X.Y.Z.exe`.
+2.  Ejecute como **Administrador**.
+3.  Ruta de instalación predeterminada:
+    *   `%LOCALAPPDATA%\Programs\gravio-electron\`
+    *   *(No modificable por el instalador para garantizar permisos de auto-update).*
+
+### Paso 2: Permisos de Firewall
+Al abrir la aplicación por primera vez, Windows Defender solicitará acceso a la red.
+1.  Marque ambas casillas: **Redes Privadas** y **Redes Públicas**.
+2.  Haga clic en **Permitir acceso**.
+    *   *Razón*: La aplicación necesita comunicar con Supabase (Puerto 443) y verificar actualizaciones.
+
+### Paso 3: Ubicación de Datos Locales
+El sistema crea automáticamente las siguientes carpetas críticas. **No las elimine**.
+*   Base de Datos: `%APPDATA%\gravio-electron\databases\gravio.db`
+*   Logs: `%APPDATA%\gravio-electron\logs\`
+*   Configuración: `%APPDATA%\gravio-electron\config.json`
 
 ---
 
-## 6. Mantenimiento Básico
+## 4. Configuración de Periféricos
 
-- **Limpieza de Caché**: Si la aplicación presenta errores visuales, vaya al menú "Ayuda" (si disponible) o borre la carpeta `%APPDATA%\gravio-electron`.
-- **Actualizaciones**: El sistema buscará actualizaciones cada vez que se abra. Si hay una disponible, notifique al usuario para que permita la instalación.
+Esta sección es crítica. Una mala configuración aquí impedirá el pesaje.
+
+### 4.1. Configuración del Puerto Serial (Báscula)
+El sistema usa la librería `serialport` nativa de Node.js.
+
+1.  **Identificar el Puerto en Windows**:
+    *   Abra el **Administrador de Dispositivos** (`devmgmt.msc`).
+    *   Despliegue "Puertos (COM y LPT)".
+    *   Conecte el cable USB-Serial. Note qué puerto aparece (ej. `COM3`).
+    *   *Tip*: Si el puerto es > COM9 (ej. COM15), cámbielo en *Propiedades -> Configuración de puerto -> Opciones avanzadas* a uno libre entre **COM1 y COM9**.
+
+2.  **Configuración en Gravio**:
+    *   Abra Gravio -> **Engranaje (Configuración)**.
+    *   Sección **Hardware**: Seleccione el puerto identificado.
+    *   **Parámetros de Comunicación** (Estándar Mettler Toledo):
+        *   Baud Rate: **2400** (Es el valor más común, aunque algunas básculas usan 9600).
+        *   Data Bits: **8**
+        *   Parity: **None**
+        *   Stop Bits: **1**
+
+3.  **Verificación**:
+    *   Presione **"Probar Conexión"**.
+    *   Debe ver la trama cruda: `)0 1200 000` (Peso estable) o `(0 1200 000` (Inestable).
+    *   Si ve caracteres extraños (``), la velocidad (Baud Rate) es incorrecta.
+
+### 4.2. Configuración de Impresora Térmica
+El sistema utiliza el spooler de Windows (no comandos directos al puerto), lo que permite usar cualquier impresora instalada.
+
+1.  **Instalación en Windows**:
+    *   Instale el driver del fabricante (Epson APD, Xprinter, etc.).
+    *   Configure el tamaño de papel a **80mm x 297mm** (o "Receipt").
+    *   Realice una impresión de prueba desde Windows para confirmar.
+
+2.  **Configuración en Gravio**:
+    *   Vaya a **Configuración** -> **Impresora**.
+    *   Seleccione la impresora de la lista desplegable.
+    *   Haga clic en **"Probar Impresión"**.
+    *   *Nota*: Si el ticket sale cortado a los lados, ajuste los márgenes en las "Preferencias de impresión" de Windows, no en la aplicación.
 
 ---
 
-**Contacto de Soporte de Instalación**: `infraestructura@gravio.com`
+## 5. Configuración de Red y Variables de Entorno
+
+La aplicación ya viene compilada con las llaves de producción, pero si necesita cambiar el entorno (ej. a Staging), puede crear un archivo de anulación.
+
+### Archivo `.env` (Opcional)
+Cree un archivo en la raíz de instalación o en `%APPDATA%\gravio-electron\.env`:
+
+```env
+# Sobrescribir conexión a nube
+VITE_SUPABASE_URL=https://nueva-url.supabase.co
+VITE_SUPABASE_ANON_KEY=nueva-key
+
+# Forzar puerto por defecto
+VITE_DEFAULT_COM_PORT=COM1
+```
+
+### Whitelist de Firewall
+Si la red corporativa es estricta, permita el tráfico HTTPS (443) hacia:
+*   `*.supabase.co` (Sincronización y Auth)
+*   `github.com` (Descarga de actualizaciones)
+
+---
+
+## 6. Mantenimiento y Diagnóstico
+
+### 6.1. Reinicio de Base de Datos Local
+Si la base de datos local se corrompe (ej. apagón durante escritura):
+1.  Cierre la aplicación completamente (verifique en Administrador de Tareas).
+2.  Vaya a `%APPDATA%\gravio-electron\databases\`.
+3.  Renombre `gravio.db` a `gravio.db.bak` (Backup).
+4.  Inicie la aplicación.
+5.  El sistema detectará la ausencia de DB, creará una nueva y **descargará automáticamente** todo el catálogo e historial desde la nube (Sync Down).
+
+### 6.2. Logs de Depuración
+Para reportar errores a desarrollo, adjunte los siguientes archivos:
+*   **Main Process**: `%APPDATA%\gravio-electron\logs\main.log` (Errores de hardware/sistema).
+*   **Renderer**: `%APPDATA%\gravio-electron\logs\renderer.log` (Errores de interfaz).
+
+---
+
+## 7. FAQ de Instalación
+
+**P: La aplicación muestra "Error de Javascript" al iniciar.**
+R: Generalmente es por falta de permisos de escritura en `%APPDATA%` o porque el puerto COM configurado ya no existe (se desconectó el cable). Borre el archivo `config.json` para resetear la configuración.
+
+**P: La báscula funciona un rato y luego deja de enviar datos.**
+R: Es un síntoma clásico de adaptadores USB-Serial baratos o configuración de "Ahorro de energía" en Windows.
+*   Solución: En Administrador de Dispositivos -> Hub USB -> Propiedades -> Energía -> Desmarque "Permitir que el equipo apague este dispositivo".
+
+**P: ¿Cómo actualizo a una versión anterior?**
+R: Desinstale la versión actual desde "Agregar o quitar programas" e instale el ejecutable de la versión deseada. La base de datos local **se conserva** a menos que la borre manualmente.
+
+---
+
+**Versión del Manual**: 2.0
