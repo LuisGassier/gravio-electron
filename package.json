@@ -1,7 +1,7 @@
 {
   "name": "gravio-electron",
   "private": true,
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Sistema de Gestión de Relleno Sanitario",
   "author": "Gravio",
   "main": "dist-electron/main.js",
@@ -18,7 +18,8 @@
     "preview": "vite preview",
     "type-check": "tsc --noEmit",
     "postinstall": "electron-rebuild",
-    "publish:github": "npm run build:electron -- --publish always"
+    "publish:github": "npm run build:electron -- --publish always",
+    "gen:docs": "node scripts/convert_manuals_to_pdf.cjs"
   },
   "build": {
     "appId": "com.gravio.sanitario",

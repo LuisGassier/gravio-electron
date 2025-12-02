@@ -36,9 +36,10 @@ La aplicación Electron debe estar configurada para escuchar en el otro puerto (
 
 Ejemplo con peso fijo:
 ```bash
-python scale_simulator.py --port COM1 --weight 2120
+python scripts/scale_simulator.py --port COM4 --weight 21202
 ```
 
 
 
 python scripts/scale_simulator.py --port COM4
+
