@@ -44,6 +44,7 @@ export class SupabaseRegistroRepository implements IRegistroRepository {
         observaciones: registro.observaciones || null,
         sincronizado: true, // En Supabase siempre es true
         fecha_registro: registro.fechaRegistro.toISOString(),
+        registrado_por: registro.registradoPor || null,
       };
 
       console.log('🔵 SupabaseRegistroRepository.saveEntrada - Datos a enviar:', data);
@@ -381,6 +382,7 @@ export class SupabaseRegistroRepository implements IRegistroRepository {
         fechaRegistro: row.fecha_registro ? new Date(row.fecha_registro) : undefined,
         createdAt: row.created_at ? new Date(row.created_at) : undefined,
         updatedAt: row.updated_at ? new Date(row.updated_at) : undefined,
+        registradoPor: row.registrado_por || undefined,
       };
 
       return Registro.create(props);

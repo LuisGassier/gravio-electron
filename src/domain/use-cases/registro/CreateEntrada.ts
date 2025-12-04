@@ -17,6 +17,7 @@ export interface CreateEntradaInput {
   pesoEntrada: number;
   folio?: string; // Folio generado offline (opcional)
   observaciones?: string;
+  registradoPor?: string; // Email o nombre del usuario que registra
 }
 
 /**
@@ -54,6 +55,7 @@ export class CreateEntradaUseCase {
         tipoPesaje: 'entrada',
         observaciones: input.observaciones,
         sincronizado: false,
+        registradoPor: input.registradoPor, // Usuario que registra
       };
 
       const registroResult = Registro.create(registroProps);

@@ -24,8 +24,8 @@ export class SQLiteRegistroRepository implements IRegistroRepository {
           id, folio, clave_ruta, ruta, placa_vehiculo, numero_economico,
           clave_operador, operador, clave_empresa, clave_concepto, concepto_id,
           peso_entrada, peso_salida, fecha_entrada, fecha_salida, tipo_pesaje, observaciones,
-          sincronizado, fecha_registro, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          sincronizado, fecha_registro, created_at, updated_at, registrado_por
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
 
       const params = [
@@ -50,6 +50,7 @@ export class SQLiteRegistroRepository implements IRegistroRepository {
         now,
         now,
         now,
+        registro.registradoPor || null,
       ];
 
       await window.electron.db.run(query, params);
@@ -406,6 +407,7 @@ export class SQLiteRegistroRepository implements IRegistroRepository {
         fechaRegistro: row.fecha_registro ? new Date(row.fecha_registro) : undefined,
         createdAt: row.created_at ? new Date(row.created_at) : undefined,
         updatedAt: row.updated_at ? new Date(row.updated_at) : undefined,
+        registradoPor: row.registrado_por || undefined,
       };
 
       return Registro.create(props);

@@ -15303,7 +15303,7 @@ if (!IS_WINDOWS) {
 if (IS_LINUX) {
   Signals.push("SIGIO", "SIGPOLL", "SIGPWR", "SIGSTKFLT");
 }
-class Interceptor {
+let Interceptor$1 = class Interceptor {
   /* CONSTRUCTOR */
   constructor() {
     this.callbacks = /* @__PURE__ */ new Set();
@@ -15340,9 +15340,9 @@ class Interceptor {
     };
     this.hook();
   }
-}
-const Interceptor$1 = new Interceptor();
-const whenExit = Interceptor$1.register;
+};
+const Interceptor2 = new Interceptor$1();
+const whenExit = Interceptor2.register;
 const Temp = {
   /* VARIABLES */
   store: {},
@@ -30994,9 +30994,20 @@ function createTables() {
       observaciones TEXT,
       sincronizado INTEGER DEFAULT 0,
       created_at INTEGER DEFAULT (strftime('%s', 'now')),
-      updated_at INTEGER DEFAULT (strftime('%s', 'now'))
+      updated_at INTEGER DEFAULT (strftime('%s', 'now')),
+      registrado_por TEXT
     )
   `);
+  try {
+    const tableInfo = db.pragma("table_info(registros)");
+    const hasRegistradoPor = tableInfo.some((col) => col.name === "registrado_por");
+    if (!hasRegistradoPor) {
+      db.exec("ALTER TABLE registros ADD COLUMN registrado_por TEXT");
+      console.log("✅ Columna registrado_por agregada a tabla registros");
+    }
+  } catch (error2) {
+    console.warn("⚠️ Error al verificar/agregar columna registrado_por:", error2);
+  }
   db.exec(`
     CREATE TABLE IF NOT EXISTS operadores_empresas (
       operador_id TEXT NOT NULL,

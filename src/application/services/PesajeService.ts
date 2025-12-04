@@ -8,6 +8,7 @@ import type { CompleteWithSalidaInput } from '../../domain/use-cases/registro/Co
 import { FindPendingRegistrosUseCase } from '../../domain/use-cases/registro/FindPendingRegistros';
 import type { IWeightReader } from '../../domain/hardware/IWeightReader';
 import type { FolioService } from './FolioService';
+import { getCurrentUser } from '../../lib/supabase';
 
 /**
  * Servicio de aplicación para gestión de pesajes
@@ -37,7 +38,7 @@ export class PesajeService {
   /**
    * Registra una entrada con el peso actual de la báscula
    */
-  async registrarEntrada(input: Omit<CreateEntradaInput, 'pesoEntrada'>): Promise<Result<Registro>> {
+  async registrarEntrada(input: Omit<CreateEntradaInput, 'pesoEntrada' | 'registradoPor'>): Promise<Result<Registro>> {
     try {
       // Obtener el peso actual de la báscula
       const pesoActual = this.weightReader.getCurrentWeight();
@@ -77,11 +78,25 @@ export class PesajeService {
         // Continuar sin folio
       }
 
+      // 👤 Obtener usuario actual
+      let registradoPor: string | undefined;
+      try {
+        const currentUser = await getCurrentUser();
+        if (currentUser) {
+          registradoPor = currentUser.email || currentUser.nombre;
+          console.log(`👤 Registro será guardado por: ${registradoPor}`);
+        }
+      } catch (error) {
+        console.warn(`⚠️ No se pudo obtener usuario actual:`, error);
+        // Continuar sin registradoPor
+      }
+
       // Crear el registro de entrada con el folio generado (o undefined si hubo error)
       const result = await this.createEntradaUseCase.execute({
         ...input,
         pesoEntrada: pesoActual,
         folio: folioGenerado,
+        registradoPor,
       });
 
       return result;

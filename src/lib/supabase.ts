@@ -28,13 +28,15 @@ export const supabase = hasValidCredentials
 // Estado de autenticación
 let isAuthenticated = false
 let currentUserId: string | null = null
+let currentUserEmail: string | null = null
+let currentUserName: string | null = null
 
 /**
  * Autenticar usuario con email y PIN o contraseña
  */
 export async function authenticateUser(
-  email: string, 
-  pin?: string, 
+  email: string,
+  pin?: string,
   password?: string
 ): Promise<{ success: boolean; user?: any; error?: string }> {
   if (!supabase) {
@@ -60,6 +62,8 @@ export async function authenticateUser(
     const user = data[0]
     isAuthenticated = true
     currentUserId = user.user_id
+    currentUserEmail = user.email
+    currentUserName = user.nombre
 
     // Guardar sesión localmente
     if (window.electron) {
@@ -85,11 +89,13 @@ export async function authenticateUser(
 export async function signOut() {
   isAuthenticated = false
   currentUserId = null
-  
+  currentUserEmail = null
+  currentUserName = null
+
   if (window.electron) {
     await window.electron.storage.delete('supabase_user')
   }
-  
+
   console.log('✅ Sesión cerrada')
 }
 
@@ -108,6 +114,46 @@ export function getCurrentUserId(): string | null {
 }
 
 /**
+ * Obtener email del usuario actual
+ */
+export function getCurrentUserEmail(): string | null {
+  return currentUserEmail
+}
+
+/**
+ * Obtener nombre del usuario actual
+ */
+export function getCurrentUserName(): string | null {
+  return currentUserName
+}
+
+/**
+ * Obtener información completa del usuario actual desde storage
+ */
+export async function getCurrentUser(): Promise<{
+  id: string
+  email: string
+  nombre: string
+} | null> {
+  if (!window.electron) return null
+
+  try {
+    const savedUser = await window.electron.storage.get('supabase_user')
+    if (savedUser && savedUser.id) {
+      return {
+        id: savedUser.id,
+        email: savedUser.email,
+        nombre: savedUser.nombre,
+      }
+    }
+  } catch (error) {
+    console.error('❌ Error al obtener usuario actual:', error)
+  }
+
+  return null
+}
+
+/**
  * Restaurar sesión guardada
  */
 export async function restoreSession(): Promise<boolean> {
@@ -118,6 +164,8 @@ export async function restoreSession(): Promise<boolean> {
     if (savedUser && savedUser.id) {
       isAuthenticated = true
       currentUserId = savedUser.id
+      currentUserEmail = savedUser.email
+      currentUserName = savedUser.nombre
       console.log('✅ Sesión restaurada:', savedUser.email)
       return true
     }

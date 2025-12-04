@@ -153,9 +153,22 @@ function createTables() {
       observaciones TEXT,
       sincronizado INTEGER DEFAULT 0,
       created_at INTEGER DEFAULT (strftime('%s', 'now')),
-      updated_at INTEGER DEFAULT (strftime('%s', 'now'))
+      updated_at INTEGER DEFAULT (strftime('%s', 'now')),
+      registrado_por TEXT
     )
   `)
+
+  // Migración: Agregar columna registrado_por si no existe
+  try {
+    const tableInfo = db.pragma('table_info(registros)')
+    const hasRegistradoPor = tableInfo.some((col: any) => col.name === 'registrado_por')
+    if (!hasRegistradoPor) {
+      db.exec('ALTER TABLE registros ADD COLUMN registrado_por TEXT')
+      console.log('✅ Columna registrado_por agregada a tabla registros')
+    }
+  } catch (error) {
+    console.warn('⚠️ Error al verificar/agregar columna registrado_por:', error)
+  }
 
   // Tabla de operadores-empresas (relación muchos-a-muchos)
   db.exec(`

@@ -25,6 +25,7 @@ export interface RegistroProps {
   fechaRegistro?: Date;
   createdAt?: Date;
   updatedAt?: Date;
+  registradoPor?: string;
 }
 
 export class Registro {
@@ -49,6 +50,7 @@ export class Registro {
   readonly fechaRegistro: Date;
   readonly createdAt: Date;
   readonly updatedAt: Date;
+  readonly registradoPor: string | undefined;
 
   private constructor(
     id: string | undefined,
@@ -71,7 +73,8 @@ export class Registro {
     sincronizado: boolean,
     fechaRegistro: Date,
     createdAt: Date,
-    updatedAt: Date
+    updatedAt: Date,
+    registradoPor: string | undefined
   ) {
     this.id = id;
     this.folio = folio;
@@ -94,6 +97,7 @@ export class Registro {
     this.fechaRegistro = fechaRegistro;
     this.createdAt = createdAt;
     this.updatedAt = updatedAt;
+    this.registradoPor = registradoPor;
   }
 
   static create(props: RegistroProps): Result<Registro> {
@@ -187,7 +191,8 @@ export class Registro {
         props.sincronizado ?? false,
         props.fechaRegistro || now,
         props.createdAt || now,
-        props.updatedAt || now
+        props.updatedAt || now,
+        props.registradoPor
       )
     );
   }
@@ -266,7 +271,8 @@ export class Registro {
       true, // sincronizado
       this.fechaRegistro,
       this.createdAt,
-      new Date() // updated_at
+      new Date(), // updated_at
+      this.registradoPor
     );
   }
 
@@ -293,6 +299,7 @@ export class Registro {
       fechaRegistro: this.fechaRegistro,
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,
+      registradoPor: this.registradoPor,
     };
   }
 }

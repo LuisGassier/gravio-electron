@@ -203,8 +203,8 @@ export async function downloadRegistros() {
             id, folio, clave_ruta, ruta, placa_vehiculo, numero_economico,
             clave_operador, operador, clave_empresa, clave_concepto, concepto_id,
             peso_entrada, peso_salida, fecha_entrada, fecha_salida,
-            tipo_pesaje, observaciones, sincronizado, fecha_registro, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            tipo_pesaje, observaciones, sincronizado, fecha_registro, created_at, updated_at, registrado_por
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             reg.id,
             reg.folio,
@@ -226,7 +226,8 @@ export async function downloadRegistros() {
             reg.sincronizado !== undefined ? (reg.sincronizado ? 1 : 0) : 1,
             reg.fecha_registro || reg.created_at,
             reg.created_at,
-            reg.updated_at || new Date().toISOString()
+            reg.updated_at || new Date().toISOString(),
+            reg.registrado_por || null
           ]
         )
         updated++
