@@ -805,24 +805,8 @@ export function WeighingPanel() {
           <CardDescription>Complete los datos del vehículo</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Row 1: Ruta y Vehículo */}
+          {/* Row 1: Vehículo y Ruta */}
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Ruta</Label>
-              <Combobox
-                key={`ruta-${selectedEmpresa || 'all'}`}
-                options={rutaOptions}
-                value={selectedRuta}
-                onValueChange={handleRutaChange}
-                placeholder="Buscar ruta..."
-                searchPlaceholder="Buscar..."
-                emptyText="No se encontraron rutas"
-                icon={<Route className="w-4 h-4" />}
-                showCount={true}
-                countLabel="Ruta"
-              />
-            </div>
-
             <div className="space-y-2">
               <Label className="text-sm font-medium">Vehículo</Label>
               <Combobox
@@ -838,6 +822,22 @@ export function WeighingPanel() {
                 countLabel="Vehículo"
                 allowCustomValue={true}
                 customValueLabel="Usar número económico"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Ruta</Label>
+              <Combobox
+                key={`ruta-${selectedEmpresa || 'all'}`}
+                options={rutaOptions}
+                value={selectedRuta}
+                onValueChange={handleRutaChange}
+                placeholder="Buscar ruta..."
+                searchPlaceholder="Buscar..."
+                emptyText="No se encontraron rutas"
+                icon={<Route className="w-4 h-4" />}
+                showCount={true}
+                countLabel="Ruta"
               />
             </div>
           </div>
