@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Scale, AlertCircle, Truck, Route, FileText, X } from 'lucide-react'
+import { Scale, AlertCircle, Truck, Route, FileText, X, RefreshCw } from 'lucide-react'
 import { Label } from '@/components/ui/label'
 import { Combobox } from '@/components/ui/combobox'
 import { container } from '@/application'
@@ -73,6 +73,7 @@ export function WeighingPanel() {
   const [completedEmpresaClave, setCompletedEmpresaClave] = useState<number>(0)
   const [completedConceptoClave, setCompletedConceptoClave] = useState<number>(0)
   const [completedConceptoNombre, setCompletedConceptoNombre] = useState<string>('')
+  const [isSyncing, setIsSyncing] = useState(false)
 
   useEffect(() => {
     loadFormData()
@@ -86,14 +87,11 @@ export function WeighingPanel() {
       })
     }
 
-    // 🔄 Auto-refresh cada 5 segundos para obtener datos nuevos de Supabase
+    // 🔄 Auto-refresh cada 30 segundos para obtener datos nuevos de Supabase
     const refreshInterval = setInterval(() => {
-
       // Primero sincronizar con Supabase
       syncDataFromSupabase()
-      // Luego recargar datos locales
-      loadFormData()
-    }, 5000) // 5 segundos
+    }, 30000) // 30 segundos (tiempo más razonable)
 
     // Sincronización inicial inmediata
     syncDataFromSupabase()
@@ -195,30 +193,58 @@ export function WeighingPanel() {
   }
 
   const syncDataFromSupabase = async () => {
+    if (isSyncing) return
+
     try {
+      setIsSyncing(true)
+
       // 1. Descargar registros actualizados de Supabase (otras PCs)
       const { downloadRegistros } = await import('@/lib/sync')
       await downloadRegistros()
-      
+
       // 2. Subir registros pendientes a Supabase
       await container.syncService.syncNow()
-      
+
       // 3. Sincronizar entidades maestras desde Supabase
       const { syncAllEntities } = await import('@/lib/syncEntities')
       const results = await syncAllEntities()
-      
-      const totalSynced = 
+
+      const totalSynced =
         results.vehiculos.synced +
         results.operadores.synced +
         results.rutas.synced +
         results.conceptos.synced +
         results.empresas.synced
-      
-      if (totalSynced > 0) {
 
+      if (totalSynced > 0) {
+        console.log(`✅ Sincronizados ${totalSynced} registros de catálogos`)
+
+        // 4. Recargar datos en los combobox
+        await loadFormData()
       }
     } catch (error) {
       console.warn('⚠️ Error en sincronización automática:', error)
+    } finally {
+      setIsSyncing(false)
+    }
+  }
+
+  const handleManualSync = async () => {
+    if (isSyncing) {
+      toast.info('Sincronización en curso...')
+      return
+    }
+
+    toast.loading('Sincronizando catálogos...', { id: 'sync-toast' })
+
+    try {
+      await syncDataFromSupabase()
+      toast.success('Catálogos actualizados', { id: 'sync-toast' })
+    } catch (error) {
+      toast.error('Error al sincronizar', {
+        id: 'sync-toast',
+        description: error instanceof Error ? error.message : 'Error desconocido'
+      })
     }
   }
 
@@ -714,23 +740,35 @@ export function WeighingPanel() {
               {isSalidaMode ? 'Registro de SALIDA' : 'Registro de Pesaje'}
             </h2>
             <p className="text-sm text-muted-foreground">
-              {isSalidaMode 
-                ? `Vehículo: ${currentRegistro?.placaVehiculo}` 
+              {isSalidaMode
+                ? `Vehículo: ${currentRegistro?.placaVehiculo}`
                 : 'Sistema de báscula industrial'}
             </p>
           </div>
         </div>
-        {isSalidaMode && (
+        <div className="flex gap-2">
           <Button
-            variant="destructive"
+            variant="outline"
             size="default"
-            onClick={cancelarSalida}
-            className="bg-destructive hover:bg-destructive/90 font-semibold shadow-lg"
+            onClick={handleManualSync}
+            disabled={isSyncing}
+            className="border-primary/30 text-primary hover:bg-primary/10 font-semibold"
           >
-            <X className="w-5 h-5 mr-2" />
-            Cancelar
+            <RefreshCw className={`w-4 h-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
+            {isSyncing ? 'Sincronizando...' : 'Actualizar'}
           </Button>
-        )}
+          {isSalidaMode && (
+            <Button
+              variant="destructive"
+              size="default"
+              onClick={cancelarSalida}
+              className="bg-destructive hover:bg-destructive/90 font-semibold shadow-lg"
+            >
+              <X className="w-5 h-5 mr-2" />
+              Cancelar
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Scale Connection Warning */}
