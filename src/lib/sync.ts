@@ -603,11 +603,23 @@ export function setAutoSyncEnabled(enabled: boolean) {
 }
 
 /**
+ * Actualizar el timestamp de última sincronización (llamado desde SyncService)
+ */
+export function updateLastSyncTimestamp(lastSync: Date) {
+  syncStatus.lastSync = lastSync
+  notifyStatusChange()
+}
+
+/**
  * Inicializar sincronización
  */
 export async function initSync() {
   // Actualizar estado inicial de conexión
   syncStatus.isOnline = navigator.onLine
+
+  // Registrar callback para que SyncService actualice nuestro estado
+  const { registerGlobalSyncUpdate } = await import('@/application/services/SyncService')
+  registerGlobalSyncUpdate(updateLastSyncTimestamp)
 
   // Intentar restaurar sesión guardada
   if (supabase) {

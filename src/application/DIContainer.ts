@@ -297,12 +297,15 @@ class DIContainer {
     // Iniciar sincronización automática SOLO si está habilitada (no bloqueante)
     try {
       const autoSyncEnabled = localStorage.getItem('autoSyncEnabled') === 'true';
+      console.log(`🔍 DIContainer: localStorage.autoSyncEnabled = "${localStorage.getItem('autoSyncEnabled')}" → ${autoSyncEnabled}`);
+
       if (autoSyncEnabled) {
         console.log('🔄 Iniciando sincronización automática...');
         this.syncService.startAutoSync();
         console.log('✅ Sincronización automática iniciada');
       } else {
         console.log('📋 Sincronización automática deshabilitada (modo manual)');
+        console.log('ℹ️ Para activarla, ve a Configuración > Sincronización con la Nube');
       }
     } catch (error) {
       console.warn('⚠️ Error al iniciar sincronización automática:', error);

@@ -87,13 +87,25 @@ export function StatusPanel() {
   }
 
   const formatLastSync = (lastSyncDate: Date | null) => {
-    if (!lastSyncDate) return 'Ahora mismo'
+    if (!lastSyncDate) return 'Nunca'
+
     const timestamp = lastSyncDate.getTime()
     const seconds = Math.floor((Date.now() - timestamp) / 1000)
+
+    if (seconds < 10) return 'Ahora mismo'
     if (seconds < 60) return 'Hace unos segundos'
+
     const minutes = Math.floor(seconds / 60)
     if (minutes === 1) return 'Hace 1 minuto'
-    return `Hace ${minutes} minutos`
+    if (minutes < 60) return `Hace ${minutes} minutos`
+
+    const hours = Math.floor(minutes / 60)
+    if (hours === 1) return 'Hace 1 hora'
+    if (hours < 24) return `Hace ${hours} horas`
+
+    const days = Math.floor(hours / 24)
+    if (days === 1) return 'Hace 1 día'
+    return `Hace ${days} días`
   }
 
   const getGreeting = () => {

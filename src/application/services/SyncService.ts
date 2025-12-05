@@ -1,6 +1,14 @@
 import { SyncRegistrosUseCase } from '../../domain/use-cases/sync/SyncRegistros';
 import type { FolioService } from './FolioService';
 
+// Importar funciones para actualizar el estado global de sync
+let updateGlobalSyncStatus: ((lastSync: Date) => void) | null = null;
+
+// Función para registrar el callback de actualización
+export function registerGlobalSyncUpdate(callback: (lastSync: Date) => void) {
+  updateGlobalSyncStatus = callback;
+}
+
 export interface SyncResult {
   success: boolean;
   synced: number;
@@ -109,6 +117,11 @@ export class SyncService {
       };
 
       this.lastSyncResult = syncResult;
+
+      // Actualizar estado global de sync.ts
+      if (updateGlobalSyncStatus) {
+        updateGlobalSyncStatus(syncResult.timestamp);
+      }
 
       if (syncResult.synced > 0) {
         console.log(`✅ Sincronización exitosa: ${syncResult.synced} registros`);
