@@ -87,17 +87,28 @@ export function WeighingPanel() {
       })
     }
 
-    // 🔄 Auto-refresh cada 30 segundos para obtener datos nuevos de Supabase
-    const refreshInterval = setInterval(() => {
-      // Primero sincronizar con Supabase
-      syncDataFromSupabase()
-    }, 30000) // 30 segundos (tiempo más razonable)
+    // 🔄 Auto-refresh SOLO si la sincronización automática está habilitada
+    let refreshInterval: ReturnType<typeof setInterval> | null = null
 
-    // Sincronización inicial inmediata
-    syncDataFromSupabase()
+    const autoSyncEnabled = localStorage.getItem('autoSyncEnabled') === 'true'
+
+    if (autoSyncEnabled) {
+      // Sincronización inicial inmediata
+      syncDataFromSupabase()
+
+      refreshInterval = setInterval(() => {
+        syncDataFromSupabase()
+      }, 30000) // 30 segundos
+
+      console.log('🔄 Auto-refresh de catálogos habilitado (cada 30s)')
+    } else {
+      console.log('📋 Auto-refresh de catálogos deshabilitado (modo manual)')
+    }
 
     return () => {
-      clearInterval(refreshInterval)
+      if (refreshInterval) {
+        clearInterval(refreshInterval)
+      }
     }
   }, [])
 

@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
-import { Printer, Scale, RefreshCw, Save, X, Download, CheckCircle } from 'lucide-react'
+import { Printer, Scale, RefreshCw, Save, X, Download, CheckCircle, Cloud } from 'lucide-react'
 import { container } from '@/application/DIContainer'
+import { isAutoSyncEnabled, setAutoSyncEnabled, syncNow } from '@/lib/sync'
 
 type SerialPort = {
   path: string
@@ -26,6 +27,7 @@ type AppSettings = {
   parity: 'none' | 'even' | 'odd' | 'mark' | 'space'
   printerName: string
   autoPrint: boolean
+  autoSync: boolean
 }
 
 interface SettingsPanelProps {
@@ -42,11 +44,13 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
     stopBits: 1,
     parity: 'none',
     printerName: '',
-    autoPrint: true
+    autoPrint: true,
+    autoSync: false
   })
   const [loading, setLoading] = useState(false)
   const [saved, setSaved] = useState(false)
   const [manualPortEntry, setManualPortEntry] = useState(false)
+  const [syncing, setSyncing] = useState(false)
   
   // Estado de actualización
   const [updateAvailable, setUpdateAvailable] = useState(false)
@@ -97,7 +101,8 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
       stopBits: savedStopBits || 1,
       parity: savedParity || 'none',
       printerName: savedPrinter || '',
-      autoPrint: savedAutoPrint
+      autoPrint: savedAutoPrint,
+      autoSync: isAutoSyncEnabled()
     })
   }
 
@@ -168,6 +173,20 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
       if (!autoPrintResult.success) {
         toast.error(`Error al guardar configuración de impresión: ${autoPrintResult.error.message}`)
         return
+      }
+
+      // Guardar configuración de sincronización automática
+      setAutoSyncEnabled(settings.autoSync)
+
+      // Controlar SyncService según configuración
+      if (settings.autoSync) {
+        if (!container.syncService.isAutoSyncActive()) {
+          container.syncService.startAutoSync()
+        }
+      } else {
+        if (container.syncService.isAutoSyncActive()) {
+          container.syncService.stopAutoSync()
+        }
       }
 
       setSaved(true)
@@ -534,6 +553,65 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
               </p>
             </div>
           )}
+        </div>
+      </div>
+
+      {/* Sincronización */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2 text-lg font-medium">
+          <div className="p-2 bg-primary/10 rounded-md text-primary">
+            <Cloud className="w-5 h-5" />
+          </div>
+          <h3>Sincronización con la Nube</h3>
+        </div>
+
+        <div className="space-y-4 pl-2">
+          <div className="flex items-center justify-between p-4 bg-secondary/30 rounded-lg">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-primary/10 rounded-md text-primary">
+                <RefreshCw className="w-4 h-4" />
+              </div>
+              <div>
+                <p className="font-medium">Sincronización Automática</p>
+                <p className="text-xs text-muted-foreground">
+                  {settings.autoSync
+                    ? 'Cada 30 minutos'
+                    : 'Solo manual - ahorra datos'}
+                </p>
+              </div>
+            </div>
+            <Switch
+              checked={settings.autoSync}
+              onCheckedChange={(checked) => setSettings({ ...settings, autoSync: checked })}
+            />
+          </div>
+
+          <Button
+            onClick={async () => {
+              setSyncing(true)
+              try {
+                await syncNow()
+                toast.success('Sincronización completada')
+              } catch (error) {
+                toast.error('Error al sincronizar')
+              } finally {
+                setSyncing(false)
+              }
+            }}
+            disabled={syncing}
+            variant="outline"
+            className="w-full border-primary/50 text-primary hover:bg-primary/10"
+          >
+            <RefreshCw className={`w-4 h-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
+            {syncing ? 'Sincronizando...' : 'Sincronizar Ahora'}
+          </Button>
+
+          <div className="bg-muted/30 rounded-lg p-3">
+            <p className="text-xs text-muted-foreground">
+              💡 <strong>Consejo:</strong> Desactiva la sincronización automática para reducir el consumo de datos.
+              Puedes sincronizar manualmente cuando lo necesites.
+            </p>
+          </div>
         </div>
       </div>
 

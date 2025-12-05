@@ -294,11 +294,16 @@ class DIContainer {
       console.warn('ℹ️ Se generarán folios offline cuando sea necesario');
     }
 
-    // Iniciar sincronización automática (no bloqueante)
+    // Iniciar sincronización automática SOLO si está habilitada (no bloqueante)
     try {
-      console.log('🔄 Iniciando sincronización automática...');
-      this.syncService.startAutoSync();
-      console.log('✅ Sincronización automática iniciada');
+      const autoSyncEnabled = localStorage.getItem('autoSyncEnabled') === 'true';
+      if (autoSyncEnabled) {
+        console.log('🔄 Iniciando sincronización automática...');
+        this.syncService.startAutoSync();
+        console.log('✅ Sincronización automática iniciada');
+      } else {
+        console.log('📋 Sincronización automática deshabilitada (modo manual)');
+      }
     } catch (error) {
       console.warn('⚠️ Error al iniciar sincronización automática:', error);
     }
