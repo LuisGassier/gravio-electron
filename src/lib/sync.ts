@@ -106,96 +106,129 @@ async function syncTransactions() {
 /**
  * Descargar registros actualizados de Supabase a SQLite local
  * Esto permite ver cambios hechos en otras PCs (como registros de salida)
+ * @param forceFullSync Si es true, descarga registros de las últimas 7 días en lugar de solo desde la última sync
  */
-export async function downloadRegistros() {
+export async function downloadRegistros(forceFullSync = false) {
   if (!supabase) return
 
   try {
-    // Obtener última sincronización desde localStorage
+    // PASO 1: Obtener IDs de registros pendientes localmente
+    const pendingLocalIds: string[] = []
+    if (window.electron) {
+      const pendingLocal = await window.electron.db.all(
+        'SELECT id FROM registros WHERE peso_salida IS NULL AND fecha_salida IS NULL'
+      )
+      pendingLocalIds.push(...pendingLocal.map((r: any) => r.id))
+    }
+
+    // PASO 2: Descargar registros actualizados recientemente
     const lastSyncKey = 'lastRegistrosSync'
     const lastSync = localStorage.getItem(lastSyncKey)
-    const sinceDate = lastSync ? new Date(lastSync) : new Date(Date.now() - 24 * 60 * 60 * 1000)
+
+    // Si forceFullSync es true, descargar últimos 7 días para asegurar que obtenemos todo
+    const sinceDate = forceFullSync
+      ? new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) // 7 días
+      : (lastSync ? new Date(lastSync) : new Date(Date.now() - 24 * 60 * 60 * 1000))
 
     const { data: registros, error } = await supabase
       .from('registros')
       .select('*')
       .gte('updated_at', sinceDate.toISOString())
       .order('updated_at', { ascending: false })
-      .limit(100) // Reducido de 500 a 100 para optimizar egress
-    
+      .limit(200)
+
     if (error) {
       console.error('❌ Error al descargar registros:', error)
       return
     }
-    
-    if (!registros || registros.length === 0) {
-      console.log('📋 No hay registros nuevos para descargar')
+
+    let allRegistros = registros || []
+
+    // PASO 3: Buscar específicamente los registros pendientes localmente en Supabase
+    // para ver si tienen salida registrada en otra PC
+    if (pendingLocalIds.length > 0) {
+      // Supabase tiene un límite de elementos en el filtro 'in', así que procesamos en lotes
+      const batchSize = 100
+      for (let i = 0; i < pendingLocalIds.length; i += batchSize) {
+        const batch = pendingLocalIds.slice(i, i + batchSize)
+        const { data: pendingInSupabase, error: pendingError } = await supabase
+          .from('registros')
+          .select('*')
+          .in('id', batch)
+
+        if (!pendingError && pendingInSupabase) {
+          // Agregar solo los que no estén ya en la lista de registros descargados
+          const existingIds = new Set(allRegistros.map((r: any) => r.id))
+          const newRegistros = pendingInSupabase.filter((r: any) => !existingIds.has(r.id))
+          allRegistros = [...allRegistros, ...newRegistros]
+        }
+      }
+    }
+
+    if (!allRegistros || allRegistros.length === 0) {
       return
     }
-    
 
-    
     let updated = 0
     let skipped = 0
 
-    for (const reg of registros) {
+    for (const reg of allRegistros) {
       try {
-        // 🛡️ PROTECCIÓN: Verificar registro local completo
         const localResult = await window.electron.db.get(
           `SELECT * FROM registros WHERE id = ?`,
           [reg.id]
         )
 
         if (localResult) {
-          // Contar campos críticos llenos en cada versión
-          const localFilledFields = [
-            localResult.peso_entrada,
-            localResult.peso_salida,
-            localResult.fecha_entrada,
-            localResult.fecha_salida,
-            localResult.placa_vehiculo,
-            localResult.operador,
-            localResult.ruta
-          ].filter(field => field !== null && field !== undefined && field !== '').length
+          // 🔥 REGLA 0 (PRIORIDAD MÁXIMA): Si Supabase tiene salida y local NO, SIEMPRE actualizar
+          // Esto es crítico para sincronizar salidas registradas en otras PCs
+          if (reg.peso_salida && reg.fecha_salida && !localResult.peso_salida && !localResult.fecha_salida) {
+            // Continuar a la actualización (no hacer continue aquí)
+          } else {
+            // Contar campos críticos llenos en cada versión
+            const localFilledFields = [
+              localResult.peso_entrada,
+              localResult.peso_salida,
+              localResult.fecha_entrada,
+              localResult.fecha_salida,
+              localResult.placa_vehiculo,
+              localResult.operador,
+              localResult.ruta
+            ].filter(field => field !== null && field !== undefined && field !== '').length
 
-          const remoteFilledFields = [
-            reg.peso_entrada,
-            reg.peso_salida,
-            reg.fecha_entrada,
-            reg.fecha_salida,
-            reg.placa_vehiculo,
-            reg.operador,
-            reg.ruta
-          ].filter(field => field !== null && field !== undefined && field !== '').length
+            const remoteFilledFields = [
+              reg.peso_entrada,
+              reg.peso_salida,
+              reg.fecha_entrada,
+              reg.fecha_salida,
+              reg.placa_vehiculo,
+              reg.operador,
+              reg.ruta
+            ].filter(field => field !== null && field !== undefined && field !== '').length
 
-          // ✅ REGLA 1: Si local tiene MÁS campos llenos, proteger
-          if (localFilledFields > remoteFilledFields) {
-            console.log(`🛡️ PROTEGIDO: Registro local más completo (${localFilledFields} campos) que Supabase (${remoteFilledFields} campos) - ${reg.placa_vehiculo}`)
-            skipped++
-            continue
-          }
-
-          // ✅ REGLA 2: Si tienen la misma cantidad de campos, verificar updated_at
-          if (localFilledFields === remoteFilledFields) {
-            const localUpdatedAt = new Date(localResult.updated_at).getTime()
-            const remoteUpdatedAt = new Date(reg.updated_at).getTime()
-
-            if (localUpdatedAt > remoteUpdatedAt) {
-              console.log(`🛡️ PROTEGIDO: Registro local más reciente (${new Date(localUpdatedAt).toISOString()}) - ${reg.placa_vehiculo}`)
+            // ✅ REGLA 1: Si local tiene MÁS campos llenos, proteger
+            if (localFilledFields > remoteFilledFields) {
               skipped++
               continue
             }
 
-            // Si son iguales en fecha pero local tiene cambios sin sincronizar, proteger
-            if (localUpdatedAt === remoteUpdatedAt && localResult.sincronizado === 0) {
-              console.log(`🛡️ PROTEGIDO: Registro local con cambios pendientes de sincronizar - ${reg.placa_vehiculo}`)
-              skipped++
-              continue
+            // ✅ REGLA 2: Si tienen la misma cantidad de campos, verificar updated_at
+            if (localFilledFields === remoteFilledFields) {
+              const localUpdatedAt = new Date(localResult.updated_at).getTime()
+              const remoteUpdatedAt = new Date(reg.updated_at).getTime()
+
+              if (localUpdatedAt > remoteUpdatedAt) {
+                skipped++
+                continue
+              }
+
+              // Si son iguales en fecha pero local tiene cambios sin sincronizar, proteger
+              if (localUpdatedAt === remoteUpdatedAt && localResult.sincronizado === 0) {
+                skipped++
+                continue
+              }
             }
           }
-
-          // ✅ REGLA 3: Si Supabase tiene MÁS campos llenos, actualizar
-          console.log(`📥 Actualizando: Supabase más completo (${remoteFilledFields} campos) vs local (${localFilledFields} campos) - ${reg.placa_vehiculo}`)
         }
 
         // ✅ Actualizar con datos de Supabase (es más completo, más reciente, o no existe local)
@@ -236,20 +269,8 @@ export async function downloadRegistros() {
         console.error(`❌ Error al actualizar registro ${reg.id}:`, err)
       }
     }
-    
-    if (updated > 0) {
-      console.log(`✅ Actualizados ${updated} registros desde Supabase`)
-      // Guardar timestamp de última sincronización exitosa
-      localStorage.setItem('lastRegistrosSync', new Date().toISOString())
-    }
 
-    if (skipped > 0) {
-      console.log(`🛡️ Protegidos ${skipped} registros locales con datos completos`)
-    }
-
-    if (updated === 0 && skipped === 0) {
-      console.log('✅ No hay registros nuevos para actualizar')
-      // Aún así, actualizar timestamp para evitar re-descargar
+    if (updated > 0 || skipped > 0) {
       localStorage.setItem('lastRegistrosSync', new Date().toISOString())
     }
   } catch (error) {

@@ -6,6 +6,7 @@ import { container } from '@/application'
 import type { Registro } from '@/domain'
 import { usePesaje } from '@/contexts/PesajeContext'
 import { toast } from 'sonner'
+import { downloadRegistros } from '@/lib/sync'
 
 export function PendingTrucksPanel() {
   const [pendingTrucks, setPendingTrucks] = useState<Registro[]>([])
@@ -65,13 +66,20 @@ export function PendingTrucksPanel() {
     setIsSyncing(true)
     try {
       toast.info('🔄 Sincronizando con servidor...')
+
+      // PRIMERO: Descargar registros actualizados desde Supabase
+      // Esto incluye salidas registradas en otras PCs
+      // Usamos forceFullSync=true para descargar últimos 7 días y asegurar que capturamos todo
+      await downloadRegistros(true)
+
+      // SEGUNDO: Subir cambios locales pendientes a Supabase
       const result = await container.syncService.syncNow()
       if (result.success) {
         toast.success('✅ Sincronización completada')
         await loadPendingTrucks()
       } else {
-        const errorMsg = result.errors && result.errors.length > 0 
-          ? result.errors[0].error 
+        const errorMsg = result.errors && result.errors.length > 0
+          ? result.errors[0].error
           : 'Error desconocido'
         toast.error(`Error al sincronizar: ${errorMsg}`)
       }
