@@ -694,6 +694,19 @@ export async function initSync() {
     console.warn('⚠️ Error en limpieza automática:', error)
   }
 
+  // 📦 Precargar caché de catálogos (empresas y conceptos)
+  try {
+    const { catalogCache } = await import('./catalogCache')
+    await Promise.all([
+      catalogCache.preloadEmpresas(),
+      catalogCache.preloadConceptos()
+    ])
+    const cacheStats = catalogCache.getStats()
+    console.log(`📦 Caché precargado: ${cacheStats.empresas} empresas, ${cacheStats.conceptos} conceptos (${cacheStats.size})`)
+  } catch (error) {
+    console.warn('⚠️ Error al precargar caché:', error)
+  }
+
   // Iniciar sincronización automática SOLO si está habilitada
   if (syncStatus.isOnline && isAutoSyncEnabled()) {
     startAutoSync()

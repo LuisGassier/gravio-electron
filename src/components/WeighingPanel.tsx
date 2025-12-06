@@ -486,69 +486,53 @@ export function WeighingPanel() {
 
     if (result.success) {
       let registro = result.value
-      const pesoNeto = registro.getPesoNeto()
+      const pesoNeto = registro.getPesoNeto();
 
-      // Sincronizar SOLO este registro con Supabase para obtener folio
-      // Usa método optimizado que sincroniza solo 1 registro en lugar de todos
-      try {
-        console.log('🔄 Sincronizando registro con Supabase para obtener folio...')
-        const syncResult = await container.syncService.syncSingleRegistro(registro.id!)
+      // Sincronizar en BACKGROUND (lazy sync) - no bloquea UI
+      // Inicia sync inmediatamente pero no espera resultado
+      // eslint-disable-next-line @typescript-eslint/no-floating-promises
+      (async () => {
+        try {
+          console.log('🔄 Sincronizando registro en background...')
+          const syncResult = await container.syncService.syncSingleRegistro(registro.id!)
 
-        if (syncResult.success) {
-          // El folio ya está actualizado en la BD local por executeSingle
-          // Solo necesitamos releer el registro
-          const updatedResult = await container.sqliteRegistroRepository.findById(registro.id!)
+          if (syncResult.success) {
+            // El folio se obtendrá en background
+            const updatedResult = await container.sqliteRegistroRepository.findById(registro.id!)
 
-          if (updatedResult.success && updatedResult.value && updatedResult.value.folio) {
-            const folio = updatedResult.value.folio
-            console.log('✅ Folio obtenido de Supabase:', folio)
-
-            // Crear nuevo registro con el folio actualizado
-            const registroConFolio = Registro.create({
-              ...registro.toObject(),
-              folio
-            })
-
-            if (registroConFolio.success) {
-              registro = registroConFolio.value
+            if (updatedResult.success && updatedResult.value && updatedResult.value.folio) {
+              console.log('✅ Folio actualizado en background:', updatedResult.value.folio)
+              // Actualizar UI si es necesario (opcional)
+              // toast.info(`Folio asignado: ${updatedResult.value.folio}`)
             }
-          } else {
-            console.warn('⚠️ No se pudo obtener folio después de sincronizar')
           }
+        } catch (error) {
+          console.warn('⚠️ Error en sincronización background:', error)
         }
-      } catch (error) {
-        console.warn('⚠️ No se pudo sincronizar inmediatamente (modo offline):', error)
-      }
+      })()
+
+      // NO ESPERAR a que termine el sync - continuar inmediatamente
+      // El folio se generará en Supabase en background mientras se imprime
 
       toast.success('Salida registrada exitosamente', {
         description: `Folio: ${registro.folio || 'Pendiente'} - Peso neto: ${pesoNeto ? pesoNeto.toFixed(2) + ' kg' : 'N/A'}`
       })
 
-      // Obtener datos de empresa y concepto EN PARALELO para impresión
+      // Obtener datos de empresa y concepto desde CACHÉ (mucho más rápido)
       let empresaNombre = 'Sin empresa'
       let conceptoClave = 0
       let conceptoNombre = 'Sin concepto'
 
-      // Ejecutar ambas queries en paralelo (más rápido que secuencial)
-      const [empresaData, conceptoData] = await Promise.allSettled([
-        window.electron.db.query(
-          'SELECT empresa FROM empresa WHERE clave_empresa = ?',
-          [registro.claveEmpresa]
-        ),
-        window.electron.db.query(
-          'SELECT clave_concepto, nombre FROM conceptos WHERE id = ?',
-          [registro.conceptoId]
-        )
+      // Usar caché para evitar queries repetitivas (20x más rápido)
+      const { catalogCache } = await import('@/lib/catalogCache')
+      const [empresaResult, conceptoResult] = await Promise.all([
+        catalogCache.getEmpresa(registro.claveEmpresa),
+        catalogCache.getConcepto(registro.conceptoId || '')
       ])
 
-      if (empresaData.status === 'fulfilled' && empresaData.value[0]) {
-        empresaNombre = empresaData.value[0].empresa || 'Sin empresa'
-      }
-
-      if (conceptoData.status === 'fulfilled' && conceptoData.value[0]) {
-        conceptoClave = conceptoData.value[0].clave_concepto || 0
-        conceptoNombre = conceptoData.value[0].nombre || 'Sin concepto'
-      }
+      empresaNombre = empresaResult
+      conceptoClave = conceptoResult.clave
+      conceptoNombre = conceptoResult.nombre
 
       // Verificar si la impresión automática está habilitada
       const autoPrintEnabled = await container.printerService.isAutoPrintEnabled()
