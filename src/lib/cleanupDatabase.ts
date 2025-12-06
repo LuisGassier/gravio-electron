@@ -23,9 +23,44 @@ export async function cleanupOldRecords(): Promise<{
     today.setHours(0, 0, 0, 0)
     const yesterday = new Date(today)
     yesterday.setDate(yesterday.getDate() - 1)
-    const yesterdayTimestamp = Math.floor(yesterday.getTime() / 1000)
+
+    // Convertir a ISO string para comparar con los registros (que están en formato ISO)
+    const yesterdayISO = yesterday.toISOString()
 
     console.log('🧹 Iniciando limpieza de registros antiguos (>2 días)...')
+    console.log(`📅 Fecha actual: ${today.toLocaleString('es-MX')}`)
+    console.log(`📅 Inicio de ayer: ${yesterday.toLocaleString('es-MX')}`)
+    console.log(`⏱️ Timestamp ISO de ayer: ${yesterdayISO}`)
+
+    // DEBUG: Ver muestras de registros y sus timestamps
+    const sampleRecords = await window.electron.db.query(
+      `SELECT id, fecha_entrada, peso_salida, sincronizado
+       FROM registros
+       ORDER BY fecha_entrada DESC
+       LIMIT 5`
+    )
+    console.log('📊 Últimos 5 registros (más recientes):', sampleRecords)
+
+    const oldSampleRecords = await window.electron.db.query(
+      `SELECT id, fecha_entrada, peso_salida, sincronizado
+       FROM registros
+       ORDER BY fecha_entrada ASC
+       LIMIT 5`
+    )
+    console.log('📊 Primeros 5 registros (más antiguos):', oldSampleRecords)
+
+    // DEBUG: Ver cuántos cumplen cada condición
+    const debugStats = await window.electron.db.get(`
+      SELECT
+        COUNT(*) as total,
+        SUM(CASE WHEN fecha_entrada < ? THEN 1 ELSE 0 END) as older_than_yesterday,
+        SUM(CASE WHEN peso_salida IS NOT NULL THEN 1 ELSE 0 END) as with_exit_weight,
+        SUM(CASE WHEN sincronizado = 1 THEN 1 ELSE 0 END) as synced,
+        SUM(CASE WHEN fecha_entrada < ? AND peso_salida IS NOT NULL THEN 1 ELSE 0 END) as old_and_complete,
+        SUM(CASE WHEN fecha_entrada < ? AND peso_salida IS NOT NULL AND sincronizado = 1 THEN 1 ELSE 0 END) as should_delete
+      FROM registros
+    `, [yesterdayISO, yesterdayISO, yesterdayISO])
+    console.log('🔍 Estadísticas de condiciones:', debugStats)
 
     // 1. Contar registros a eliminar
     const countResult = await window.electron.db.get(
@@ -34,13 +69,14 @@ export async function cleanupOldRecords(): Promise<{
        WHERE fecha_entrada < ?
        AND peso_salida IS NOT NULL
        AND sincronizado = 1`,
-      [yesterdayTimestamp]
+      [yesterdayISO]
     )
 
     const recordsToDelete = countResult?.count || 0
 
     if (recordsToDelete === 0) {
       console.log('✅ No hay registros antiguos para limpiar')
+      console.log('ℹ️ Esto puede ser normal si todos los registros son de hoy o ayer')
       return { success: true, deleted: 0 }
     }
 
@@ -53,7 +89,7 @@ export async function cleanupOldRecords(): Promise<{
        WHERE fecha_entrada < ?
        AND peso_salida IS NOT NULL
        AND sincronizado = 1`,
-      [yesterdayTimestamp]
+      [yesterdayISO]
     )
 
     // 3. Optimizar base de datos

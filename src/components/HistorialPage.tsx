@@ -344,7 +344,7 @@ export function HistorialPage({ onNavigate }: HistorialPageProps) {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredRegistros.map((registro) => (
+                    {paginatedRegistros.map((registro) => (
                       <tr 
                         key={registro.id} 
                         className="border-b hover:bg-muted/30 cursor-pointer transition-colors"
@@ -390,9 +390,67 @@ export function HistorialPage({ onNavigate }: HistorialPageProps) {
             </div>
           )}
 
-          <div className="text-sm text-muted-foreground text-right">
-            Total: {filteredRegistros.length} registro(s)
-          </div>
+          {/* Paginación */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between">
+              <div className="text-sm text-muted-foreground">
+                Mostrando {startIndex + 1}-{Math.min(endIndex, filteredRegistros.length)} de {filteredRegistros.length} registro(s)
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  Anterior
+                </Button>
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    // Mostrar páginas alrededor de la actual
+                    let pageNum: number
+                    if (totalPages <= 5) {
+                      pageNum = i + 1
+                    } else if (currentPage <= 3) {
+                      pageNum = i + 1
+                    } else if (currentPage >= totalPages - 2) {
+                      pageNum = totalPages - 4 + i
+                    } else {
+                      pageNum = currentPage - 2 + i
+                    }
+
+                    return (
+                      <Button
+                        key={pageNum}
+                        variant={currentPage === pageNum ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setCurrentPage(pageNum)}
+                        className="w-10"
+                      >
+                        {pageNum}
+                      </Button>
+                    )
+                  })}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages}
+                >
+                  Siguiente
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {!totalPages && (
+            <div className="text-sm text-muted-foreground text-right">
+              Total: {filteredRegistros.length} registro(s)
+            </div>
+          )}
         </CardContent>
       </Card>
 
