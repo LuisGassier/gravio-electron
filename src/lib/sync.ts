@@ -126,16 +126,17 @@ export async function downloadRegistros(forceFullSync = false) {
     const lastSync = localStorage.getItem(lastSyncKey)
 
     // Si forceFullSync es true, descargar últimos 7 días para asegurar que obtenemos todo
+    // Si no, solo descargar desde la última sincronización (más eficiente)
     const sinceDate = forceFullSync
       ? new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) // 7 días
-      : (lastSync ? new Date(lastSync) : new Date(Date.now() - 24 * 60 * 60 * 1000))
+      : (lastSync ? new Date(lastSync) : new Date(Date.now() - 2 * 60 * 60 * 1000)) // Solo últimas 2 horas por defecto
 
     const { data: registros, error } = await supabase
       .from('registros')
       .select('*')
       .gte('updated_at', sinceDate.toISOString())
       .order('updated_at', { ascending: false })
-      .limit(200)
+      .limit(forceFullSync ? 500 : 50) // 50 en sync normal, 500 en full sync
 
     if (error) {
       console.error('❌ Error al descargar registros:', error)
@@ -302,7 +303,13 @@ async function downloadCacheData() {
 
   try {
     // 🔄 PRIMERO: Sincronizar registros actualizados (salidas registradas en otras PCs)
-    await downloadRegistros()
+    // Usar try-catch individual para evitar que un error detenga todo el proceso
+    try {
+      await downloadRegistros()
+    } catch (error) {
+      console.error('❌ Error al descargar registros (continuando con catálogos):', error)
+      // No lanzar el error, continuar con los catálogos
+    }
 
     // Obtener timestamps de última descarga de catálogos
     const lastEmpresasSync = localStorage.getItem('lastEmpresasSync')
@@ -393,26 +400,31 @@ async function downloadCacheData() {
     }
 
     // Descargar relación operadores_empresas
-    const { data: operadoresEmpresas, error: oeError } = await supabase
-      .from('operadores_empresas')
-      .select('*')
-      .limit(5000)
-    
-    if (oeError) {
-      if (oeError.code === '42P01' || oeError.code === 'PGRST116' || oeError.message.includes('does not exist')) {
-        console.warn('⚠️ Tabla "operadores_empresas" no existe en Supabase.')
-      } else {
-        console.error('❌ Error al descargar operadores_empresas:', oeError)
+    try {
+      const { data: operadoresEmpresas, error: oeError } = await supabase
+        .from('operadores_empresas')
+        .select('*')
+        .limit(5000)
+
+      if (oeError) {
+        if (oeError.code === '42P01' || oeError.code === 'PGRST116' || oeError.message.includes('does not exist')) {
+          console.warn('⚠️ Tabla "operadores_empresas" no existe en Supabase.')
+        } else {
+          console.error('❌ Error al descargar operadores_empresas:', oeError)
+        }
+      } else if (operadoresEmpresas && operadoresEmpresas.length > 0) {
+        for (const oe of operadoresEmpresas) {
+          await window.electron.db.query(
+            `INSERT OR REPLACE INTO operadores_empresas (operador_id, clave_empresa)
+             VALUES (?, ?)`,
+            [oe.operador_id, oe.clave_empresa]
+          )
+        }
+        console.log(`✅ Descargadas ${operadoresEmpresas.length} relaciones operadores-empresas`)
       }
-    } else if (operadoresEmpresas && operadoresEmpresas.length > 0) {
-      for (const oe of operadoresEmpresas) {
-        await window.electron.db.query(
-          `INSERT OR REPLACE INTO operadores_empresas (operador_id, clave_empresa) 
-           VALUES (?, ?)`,
-          [oe.operador_id, oe.clave_empresa]
-        )
-      }
-      console.log(`✅ Descargadas ${operadoresEmpresas.length} relaciones operadores-empresas`)
+    } catch (error) {
+      console.error('❌ Error al sincronizar operadores_empresas (continuando):', error)
+      // No interrumpir el flujo por este error
     }
     
     // Descargar rutas solo si es necesario
@@ -468,26 +480,31 @@ async function downloadCacheData() {
     }
 
     // Descargar relación conceptos_empresas
-    const { data: conceptosEmpresas, error: ceError } = await supabase
-      .from('conceptos_empresas')
-      .select('*')
-      .limit(5000)
-    
-    if (ceError) {
-      if (ceError.code === '42P01' || ceError.code === 'PGRST116' || ceError.message.includes('does not exist')) {
-        console.warn('⚠️ Tabla "conceptos_empresas" no existe en Supabase.')
-      } else {
-        console.error('❌ Error al descargar conceptos_empresas:', ceError)
+    try {
+      const { data: conceptosEmpresas, error: ceError } = await supabase
+        .from('conceptos_empresas')
+        .select('*')
+        .limit(5000)
+
+      if (ceError) {
+        if (ceError.code === '42P01' || ceError.code === 'PGRST116' || ceError.message.includes('does not exist')) {
+          console.warn('⚠️ Tabla "conceptos_empresas" no existe en Supabase.')
+        } else {
+          console.error('❌ Error al descargar conceptos_empresas:', ceError)
+        }
+      } else if (conceptosEmpresas && conceptosEmpresas.length > 0) {
+        for (const ce of conceptosEmpresas) {
+          await window.electron.db.query(
+            `INSERT OR REPLACE INTO conceptos_empresas (concepto_id, clave_empresa)
+             VALUES (?, ?)`,
+            [ce.concepto_id, ce.clave_empresa]
+          )
+        }
+        console.log(`✅ Descargadas ${conceptosEmpresas.length} relaciones conceptos-empresas`)
       }
-    } else if (conceptosEmpresas && conceptosEmpresas.length > 0) {
-      for (const ce of conceptosEmpresas) {
-        await window.electron.db.query(
-          `INSERT OR REPLACE INTO conceptos_empresas (concepto_id, clave_empresa) 
-           VALUES (?, ?)`,
-          [ce.concepto_id, ce.clave_empresa]
-        )
-      }
-      console.log(`✅ Descargadas ${conceptosEmpresas.length} relaciones conceptos-empresas`)
+    } catch (error) {
+      console.error('❌ Error al sincronizar conceptos_empresas (continuando):', error)
+      // No interrumpir el flujo por este error
     }
     
     // Descargar usuarios (tabla 'usuarios' en Supabase)
@@ -651,6 +668,30 @@ export async function initSync() {
     } else {
       console.warn('⚠️ No hay sesión guardada. Inicia sesión para sincronizar con Supabase.')
     }
+  }
+
+  // 🧹 Limpiar registros antiguos si es necesario (evita saturación local)
+  try {
+    const { shouldCleanup, cleanupOldRecords, getDatabaseStats } = await import('./cleanupDatabase')
+    const needsCleanup = await shouldCleanup()
+
+    if (needsCleanup) {
+      console.log('🧹 Iniciando limpieza de registros antiguos...')
+      const result = await cleanupOldRecords()
+      if (result.success && result.deleted > 0) {
+        console.log(`✅ Limpiados ${result.deleted} registros antiguos (>30 días)`)
+      }
+    }
+
+    // Mostrar estadísticas
+    const stats = await getDatabaseStats()
+    console.log('📊 Estadísticas de base de datos local:', {
+      total: stats.totalRecords,
+      completos: stats.completedRecords,
+      pendientes: stats.pendingRecords,
+    })
+  } catch (error) {
+    console.warn('⚠️ Error en limpieza automática:', error)
   }
 
   // Iniciar sincronización automática SOLO si está habilitada

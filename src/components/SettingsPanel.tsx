@@ -2,9 +2,10 @@ import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
-import { Printer, Scale, RefreshCw, Save, X, Download, CheckCircle, Cloud } from 'lucide-react'
+import { Printer, Scale, RefreshCw, Save, X, Download, CheckCircle, Cloud, Trash2 } from 'lucide-react'
 import { container } from '@/application/DIContainer'
 import { isAutoSyncEnabled, setAutoSyncEnabled, syncNow } from '@/lib/sync'
+import { cleanupOldRecords, getDatabaseStats } from '@/lib/cleanupDatabase'
 
 type SerialPort = {
   path: string
@@ -51,7 +52,9 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
   const [saved, setSaved] = useState(false)
   const [manualPortEntry, setManualPortEntry] = useState(false)
   const [syncing, setSyncing] = useState(false)
-  
+  const [cleaning, setCleaning] = useState(false)
+  const [dbStats, setDbStats] = useState({ totalRecords: 0, completedRecords: 0, pendingRecords: 0 })
+
   // Estado de actualización
   const [updateAvailable, setUpdateAvailable] = useState(false)
   const [updateDownloaded, setUpdateDownloaded] = useState(false)
@@ -63,25 +66,35 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
     loadSettings()
     refreshPorts()
     refreshPrinters()
-    
+    loadDatabaseStats()
+
     // Suscribirse a eventos de actualización
     if (window.electron) {
       const unsubAvailable = window.electron.updater.onUpdateAvailable((info) => {
         setUpdateAvailable(true)
         setUpdateInfo(info)
       })
-      
+
       const unsubDownloaded = window.electron.updater.onUpdateDownloaded((info) => {
         setUpdateDownloaded(true)
         setUpdateInfo(info)
       })
-      
+
       return () => {
         unsubAvailable()
         unsubDownloaded()
       }
     }
   }, [])
+
+  const loadDatabaseStats = async () => {
+    const stats = await getDatabaseStats()
+    setDbStats({
+      totalRecords: stats.totalRecords,
+      completedRecords: stats.completedRecords,
+      pendingRecords: stats.pendingRecords,
+    })
+  }
 
   const loadSettings = async () => {
     if (!window.electron) return
@@ -610,6 +623,69 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
             <p className="text-xs text-muted-foreground">
               💡 <strong>Consejo:</strong> Desactiva la sincronización automática para reducir el consumo de datos.
               Puedes sincronizar manualmente cuando lo necesites.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Limpieza de Base de Datos */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2 text-lg font-medium">
+          <div className="p-2 bg-warning/10 rounded-md text-warning">
+            <Trash2 className="w-5 h-5" />
+          </div>
+          <h3>Mantenimiento de Base de Datos</h3>
+        </div>
+
+        <div className="space-y-4 pl-2">
+          <div className="p-4 bg-secondary/30 rounded-lg space-y-3">
+            <div className="grid grid-cols-3 gap-3 text-center">
+              <div>
+                <p className="text-2xl font-bold text-foreground">{dbStats.totalRecords}</p>
+                <p className="text-xs text-muted-foreground">Total</p>
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-success">{dbStats.completedRecords}</p>
+                <p className="text-xs text-muted-foreground">Completos</p>
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-warning">{dbStats.pendingRecords}</p>
+                <p className="text-xs text-muted-foreground">Pendientes</p>
+              </div>
+            </div>
+          </div>
+
+          <Button
+            onClick={async () => {
+              setCleaning(true)
+              try {
+                const result = await cleanupOldRecords()
+                if (result.success) {
+                  toast.success(`🧹 Limpieza completada`, {
+                    description: `Se eliminaron ${result.deleted} registros antiguos`
+                  })
+                  await loadDatabaseStats()
+                } else {
+                  toast.error('Error al limpiar la base de datos')
+                }
+              } catch (error) {
+                toast.error('Error al limpiar la base de datos')
+              } finally {
+                setCleaning(false)
+              }
+            }}
+            disabled={cleaning}
+            variant="outline"
+            className="w-full border-warning/50 text-warning hover:bg-warning/10"
+          >
+            <Trash2 className={`w-4 h-4 mr-2 ${cleaning ? 'animate-pulse' : ''}`} />
+            {cleaning ? 'Limpiando...' : 'Limpiar Registros Antiguos'}
+          </Button>
+
+          <div className="bg-muted/30 rounded-lg p-3">
+            <p className="text-xs text-muted-foreground">
+              🧹 <strong>Limpieza automática:</strong> Mantiene solo registros de hoy y ayer.
+              Elimina registros anteriores completos y sincronizados para liberar espacio.
             </p>
           </div>
         </div>

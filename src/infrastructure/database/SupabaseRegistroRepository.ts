@@ -58,6 +58,12 @@ export class SupabaseRegistroRepository implements IRegistroRepository {
       console.log('🔵 SupabaseRegistroRepository.saveEntrada - Respuesta:', { savedData, error });
 
       if (error) {
+        // No lanzar error por problemas de RLS o permisos - loguear y continuar
+        if (error.code === '42501' || error.message.includes('policy')) {
+          console.warn('⚠️ Error de política RLS (continuando):', error.message);
+          // Retornar el registro original sin sincronizar
+          return ResultFactory.ok(registro);
+        }
         return ResultFactory.fail(new Error(`Error al guardar en Supabase: ${error.message}`));
       }
 
@@ -102,6 +108,12 @@ export class SupabaseRegistroRepository implements IRegistroRepository {
         .single();
 
       if (error) {
+        // No lanzar error por problemas de RLS o permisos - loguear y continuar
+        if (error.code === '42501' || error.message.includes('policy')) {
+          console.warn('⚠️ Error de política RLS al actualizar (continuando):', error.message);
+          // Retornar un error suave que no interrumpa el flujo
+          return ResultFactory.fail(new Error('Pendiente de sincronización'));
+        }
         return ResultFactory.fail(new Error(`Error al actualizar en Supabase: ${error.message}`));
       }
 
@@ -135,6 +147,11 @@ export class SupabaseRegistroRepository implements IRegistroRepository {
       if (error) {
         if (error.code === 'PGRST116') {
           // No encontrado
+          return ResultFactory.ok(null);
+        }
+        // Error de RLS - retornar null en lugar de fallar
+        if (error.code === '42501' || error.message.includes('policy')) {
+          console.warn('⚠️ Error de política RLS al buscar (retornando null):', error.message);
           return ResultFactory.ok(null);
         }
         return ResultFactory.fail(new Error(`Error al buscar registro: ${error.message}`));

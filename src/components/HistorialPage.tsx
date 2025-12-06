@@ -4,10 +4,11 @@ import { Button } from './ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog'
 import { Input } from './ui/input'
 import { Label } from './ui/label'
-import { Printer, Search, Calendar, ArrowLeft } from 'lucide-react'
+import { Printer, Search, Calendar, ArrowLeft, Trash2, ChevronLeft, ChevronRight } from 'lucide-react'
 import { toast } from 'sonner'
 import { container } from '@/application/DIContainer'
 import type { Registro } from '@/domain/entities/Registro'
+import { cleanupOldRecords, getDatabaseStats } from '@/lib/cleanupDatabase'
 
 interface HistorialPageProps {
   onNavigate?: (view: string) => void
@@ -42,6 +43,12 @@ export function HistorialPage({ onNavigate }: HistorialPageProps) {
   const [searchTerm, setSearchTerm] = useState('')
   const [isLoading, setIsLoading] = useState(true)
   const [isPrinting, setIsPrinting] = useState(false)
+  const [cleaning, setCleaning] = useState(false)
+  const [dbStats, setDbStats] = useState({ totalRecords: 0, completedRecords: 0, pendingRecords: 0 })
+
+  // Paginación
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage] = useState(50) // 50 registros por página
 
   // Cargar registros completados (con entrada y salida)
   const loadHistorial = async () => {
@@ -117,17 +124,28 @@ export function HistorialPage({ onNavigate }: HistorialPageProps) {
 
   useEffect(() => {
     loadHistorial()
+    loadDatabaseStats()
   }, [])
+
+  const loadDatabaseStats = async () => {
+    const stats = await getDatabaseStats()
+    setDbStats({
+      totalRecords: stats.totalRecords,
+      completedRecords: stats.completedRecords,
+      pendingRecords: stats.pendingRecords,
+    })
+  }
 
   // Filtrar registros por búsqueda
   useEffect(() => {
     if (!searchTerm) {
       setFilteredRegistros(registros)
+      setCurrentPage(1) // Reset a página 1 al limpiar búsqueda
       return
     }
 
     const term = searchTerm.toLowerCase()
-    const filtered = registros.filter(r => 
+    const filtered = registros.filter(r =>
       r.folio?.toLowerCase().includes(term) ||
       r.placa.toLowerCase().includes(term) ||
       r.nombreOperador?.toLowerCase().includes(term) ||
@@ -136,7 +154,38 @@ export function HistorialPage({ onNavigate }: HistorialPageProps) {
       r.claveRuta.toString().includes(term)
     )
     setFilteredRegistros(filtered)
+    setCurrentPage(1) // Reset a página 1 al filtrar
   }, [searchTerm, registros])
+
+  // Calcular registros paginados
+  const totalPages = Math.ceil(filteredRegistros.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const paginatedRegistros = filteredRegistros.slice(startIndex, endIndex)
+
+  const handleCleanup = async () => {
+    if (!window.confirm('¿Estás seguro de eliminar los registros antiguos? Se mantendrán solo los registros de hoy y ayer.')) {
+      return
+    }
+
+    setCleaning(true)
+    try {
+      const result = await cleanupOldRecords()
+      if (result.success) {
+        toast.success(`🧹 Limpieza completada`, {
+          description: `Se eliminaron ${result.deleted} registros antiguos`
+        })
+        await loadDatabaseStats()
+        await loadHistorial() // Recargar historial
+      } else {
+        toast.error('Error al limpiar la base de datos')
+      }
+    } catch (error) {
+      toast.error('Error al limpiar la base de datos')
+    } finally {
+      setCleaning(false)
+    }
+  }
 
   const handleViewDetails = (registro: RegistroConNombres) => {
     setSelectedRegistro(registro)
@@ -220,6 +269,44 @@ export function HistorialPage({ onNavigate }: HistorialPageProps) {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Estadísticas y botón de limpieza */}
+          <div className="grid grid-cols-4 gap-4">
+            <Card className="bg-muted/30">
+              <CardContent className="pt-4 pb-3">
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-foreground">{dbStats.totalRecords}</p>
+                  <p className="text-xs text-muted-foreground">Total Local</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="bg-success/10">
+              <CardContent className="pt-4 pb-3">
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-success">{dbStats.completedRecords}</p>
+                  <p className="text-xs text-muted-foreground">Completos</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="bg-warning/10">
+              <CardContent className="pt-4 pb-3">
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-warning">{dbStats.pendingRecords}</p>
+                  <p className="text-xs text-muted-foreground">Pendientes</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="bg-destructive/10 cursor-pointer hover:bg-destructive/20 transition-colors" onClick={handleCleanup}>
+              <CardContent className="pt-4 pb-3">
+                <div className="text-center">
+                  <Trash2 className={`w-6 h-6 mx-auto mb-1 text-destructive ${cleaning ? 'animate-pulse' : ''}`} />
+                  <p className="text-xs font-medium text-destructive">
+                    {cleaning ? 'Limpiando...' : 'Limpiar BD'}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
           {/* Barra de búsqueda */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />

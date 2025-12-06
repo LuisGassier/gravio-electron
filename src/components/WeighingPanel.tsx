@@ -209,12 +209,13 @@ export function WeighingPanel() {
     try {
       setIsSyncing(true)
 
-      // 1. Descargar registros actualizados de Supabase (otras PCs)
-      const { downloadRegistros } = await import('@/lib/sync')
-      await downloadRegistros()
-
-      // 2. Subir registros pendientes a Supabase
+      // 1. Subir registros pendientes a Supabase PRIMERO
       await container.syncService.syncNow()
+
+      // 2. Solo descargar registros de salida recientes (últimas 2 horas)
+      // NO descargar todo el historial para evitar saturación
+      const { downloadRegistros } = await import('@/lib/sync')
+      await downloadRegistros(false) // false = solo cambios recientes
 
       // 3. Sincronizar entidades maestras desde Supabase
       const { syncAllEntities } = await import('@/lib/syncEntities')
@@ -364,11 +365,11 @@ export function WeighingPanel() {
       clave_empresa: selectedEmpresa || undefined
     },
     ...filteredOperadores
-      .filter(o => o.clave_empresa && o.empresa) // Filtrar los que no tienen empresa
+      .filter(o => o.clave_empresa) // Solo filtrar los que tienen clave_empresa (permite empresa null temporalmente)
       .map(o => ({
         value: `${o.id}-${o.clave_empresa}`,
         label: `${o.operador}`,
-        subtitle: `${o.empresa} - Clave: ${o.clave_operador}`,
+        subtitle: `${o.empresa || '(Sin empresa)'} - Clave: ${o.clave_operador}`,
         clave_empresa: o.clave_empresa
       }))
   ]
@@ -487,14 +488,15 @@ export function WeighingPanel() {
       let registro = result.value
       const pesoNeto = registro.getPesoNeto()
 
-      // Sincronizar y esperar activamente por el folio de Supabase
+      // Sincronizar SOLO este registro con Supabase para obtener folio
+      // NO descargar todos los registros, solo sincronizar el actual
       try {
-        console.log('🔄 Sincronizando con Supabase para obtener folio...')
+        console.log('🔄 Sincronizando registro con Supabase para obtener folio...')
         const syncResult = await container.syncService.syncNow()
 
-        if (syncResult.success) {
-          // Esperar activamente por el folio (máximo 5 segundos)
-          const maxAttempts = 10
+        if (syncResult.success && syncResult.synced > 0) {
+          // Esperar activamente por el folio (máximo 3 segundos)
+          const maxAttempts = 6
           let attempts = 0
 
           while (attempts < maxAttempts) {
@@ -536,20 +538,32 @@ export function WeighingPanel() {
         description: `Folio: ${registro.folio || 'Pendiente'} - Peso neto: ${pesoNeto ? pesoNeto.toFixed(2) + ' kg' : 'N/A'}`
       })
 
-      // Obtener el nombre de la empresa
-      const empresaResult = await window.electron.db.query(
-        'SELECT empresa FROM empresa WHERE clave_empresa = ?',
-        [registro.claveEmpresa]
-      )
-      const empresaNombre = empresaResult[0]?.empresa || 'Sin empresa'
+      // Obtener el nombre de la empresa (con manejo de errores)
+      let empresaNombre = 'Sin empresa'
+      let conceptoClave = 0
+      let conceptoNombre = 'Sin concepto'
 
-      // Obtener el concepto
-      const conceptoResult = await window.electron.db.query(
-        'SELECT clave_concepto, nombre FROM conceptos WHERE id = ?',
-        [registro.conceptoId]
-      )
-      const conceptoClave = conceptoResult[0]?.clave_concepto || 0
-      const conceptoNombre = conceptoResult[0]?.nombre || 'Sin concepto'
+      try {
+        const empresaResult = await window.electron.db.query(
+          'SELECT empresa FROM empresa WHERE clave_empresa = ?',
+          [registro.claveEmpresa]
+        )
+        empresaNombre = empresaResult[0]?.empresa || 'Sin empresa'
+      } catch (error) {
+        console.warn('⚠️ Error al obtener empresa (continuando):', error)
+      }
+
+      // Obtener el concepto (con manejo de errores)
+      try {
+        const conceptoResult = await window.electron.db.query(
+          'SELECT clave_concepto, nombre FROM conceptos WHERE id = ?',
+          [registro.conceptoId]
+        )
+        conceptoClave = conceptoResult[0]?.clave_concepto || 0
+        conceptoNombre = conceptoResult[0]?.nombre || 'Sin concepto'
+      } catch (error) {
+        console.warn('⚠️ Error al obtener concepto (continuando):', error)
+      }
 
       // Verificar si la impresión automática está habilitada
       const autoPrintEnabled = await container.printerService.isAutoPrintEnabled()
