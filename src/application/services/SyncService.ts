@@ -76,6 +76,44 @@ export class SyncService {
   }
 
   /**
+   * Sincroniza SOLO un registro específico (optimizado para flujo de pesaje)
+   * @param registroId ID del registro a sincronizar
+   */
+  async syncSingleRegistro(registroId: string): Promise<SyncResult> {
+    try {
+      // No bloquear si hay sincronización en progreso, esto es prioritario
+      const result = await this.syncRegistrosUseCase.executeSingle(registroId);
+
+      const syncResult: SyncResult = {
+        success: result.success,
+        synced: result.success ? 1 : 0,
+        failed: result.success ? 0 : 1,
+        errors: result.success ? [] : [{ registroId, error: result.error.message }],
+        timestamp: new Date(),
+      };
+
+      if (syncResult.success) {
+        console.log(`✅ Registro ${registroId} sincronizado exitosamente`);
+      }
+
+      return syncResult;
+    } catch (error) {
+      return {
+        success: false,
+        synced: 0,
+        failed: 1,
+        errors: [
+          {
+            registroId,
+            error: error instanceof Error ? error.message : String(error),
+          },
+        ],
+        timestamp: new Date(),
+      };
+    }
+  }
+
+  /**
    * Ejecuta una sincronización inmediata
    */
   async syncNow(): Promise<SyncResult> {

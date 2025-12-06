@@ -227,11 +227,17 @@ function createTables() {
     CREATE INDEX IF NOT EXISTS idx_registros_sincronizado ON registros(sincronizado);
     CREATE INDEX IF NOT EXISTS idx_registros_fecha ON registros(fecha_registro);
     CREATE INDEX IF NOT EXISTS idx_registros_placa ON registros(placa_vehiculo);
+    CREATE INDEX IF NOT EXISTS idx_registros_id ON registros(id);
+    CREATE INDEX IF NOT EXISTS idx_registros_fecha_entrada ON registros(fecha_entrada);
+    CREATE INDEX IF NOT EXISTS idx_registros_pending ON registros(peso_salida) WHERE peso_salida IS NULL;
+    CREATE INDEX IF NOT EXISTS idx_registros_unsynced ON registros(sincronizado, updated_at) WHERE sincronizado = 0;
     CREATE INDEX IF NOT EXISTS idx_sync_queue_table ON sync_queue(table_name);
     CREATE INDEX IF NOT EXISTS idx_usuarios_email ON usuarios(email);
     CREATE INDEX IF NOT EXISTS idx_vehiculos_placas ON vehiculos(placas);
     CREATE INDEX IF NOT EXISTS idx_operadores_clave ON operadores(clave_operador);
     CREATE INDEX IF NOT EXISTS idx_rutas_clave ON rutas(clave_ruta);
+    CREATE INDEX IF NOT EXISTS idx_empresa_clave ON empresa(clave_empresa);
+    CREATE INDEX IF NOT EXISTS idx_conceptos_id ON conceptos(id);
   `)
 
   // Rehabilitar foreign keys (pero sin constraints estrictos para offline-first)

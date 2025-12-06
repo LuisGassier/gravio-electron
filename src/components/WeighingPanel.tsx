@@ -489,44 +489,30 @@ export function WeighingPanel() {
       const pesoNeto = registro.getPesoNeto()
 
       // Sincronizar SOLO este registro con Supabase para obtener folio
-      // NO descargar todos los registros, solo sincronizar el actual
+      // Usa método optimizado que sincroniza solo 1 registro en lugar de todos
       try {
         console.log('🔄 Sincronizando registro con Supabase para obtener folio...')
-        const syncResult = await container.syncService.syncNow()
+        const syncResult = await container.syncService.syncSingleRegistro(registro.id!)
 
-        if (syncResult.success && syncResult.synced > 0) {
-          // Esperar activamente por el folio (máximo 3 segundos)
-          const maxAttempts = 6
-          let attempts = 0
+        if (syncResult.success) {
+          // El folio ya está actualizado en la BD local por executeSingle
+          // Solo necesitamos releer el registro
+          const updatedResult = await container.sqliteRegistroRepository.findById(registro.id!)
 
-          while (attempts < maxAttempts) {
-            const updatedResult = await container.sqliteRegistroRepository.findById(registro.id!)
+          if (updatedResult.success && updatedResult.value && updatedResult.value.folio) {
+            const folio = updatedResult.value.folio
+            console.log('✅ Folio obtenido de Supabase:', folio)
 
-            if (updatedResult.success && updatedResult.value && updatedResult.value.folio) {
-              // Solo actualizar el folio, NO reemplazar todo el registro
-              // para no perder el peso de salida que acabamos de registrar
-              const folio = updatedResult.value.folio
-              console.log('✅ Folio obtenido de Supabase:', folio)
+            // Crear nuevo registro con el folio actualizado
+            const registroConFolio = Registro.create({
+              ...registro.toObject(),
+              folio
+            })
 
-              // Crear nuevo registro con el folio actualizado pero conservando todos los demás datos
-              const registroConFolio = Registro.create({
-                ...registro.toObject(),
-                folio
-              })
-
-              if (registroConFolio.success) {
-                registro = registroConFolio.value
-              }
-              break
+            if (registroConFolio.success) {
+              registro = registroConFolio.value
             }
-
-            attempts++
-            if (attempts < maxAttempts) {
-              await new Promise(resolve => setTimeout(resolve, 500))
-            }
-          }
-
-          if (!registro.folio) {
+          } else {
             console.warn('⚠️ No se pudo obtener folio después de sincronizar')
           }
         }
@@ -538,31 +524,30 @@ export function WeighingPanel() {
         description: `Folio: ${registro.folio || 'Pendiente'} - Peso neto: ${pesoNeto ? pesoNeto.toFixed(2) + ' kg' : 'N/A'}`
       })
 
-      // Obtener el nombre de la empresa (con manejo de errores)
+      // Obtener datos de empresa y concepto EN PARALELO para impresión
       let empresaNombre = 'Sin empresa'
       let conceptoClave = 0
       let conceptoNombre = 'Sin concepto'
 
-      try {
-        const empresaResult = await window.electron.db.query(
+      // Ejecutar ambas queries en paralelo (más rápido que secuencial)
+      const [empresaData, conceptoData] = await Promise.allSettled([
+        window.electron.db.query(
           'SELECT empresa FROM empresa WHERE clave_empresa = ?',
           [registro.claveEmpresa]
-        )
-        empresaNombre = empresaResult[0]?.empresa || 'Sin empresa'
-      } catch (error) {
-        console.warn('⚠️ Error al obtener empresa (continuando):', error)
-      }
-
-      // Obtener el concepto (con manejo de errores)
-      try {
-        const conceptoResult = await window.electron.db.query(
+        ),
+        window.electron.db.query(
           'SELECT clave_concepto, nombre FROM conceptos WHERE id = ?',
           [registro.conceptoId]
         )
-        conceptoClave = conceptoResult[0]?.clave_concepto || 0
-        conceptoNombre = conceptoResult[0]?.nombre || 'Sin concepto'
-      } catch (error) {
-        console.warn('⚠️ Error al obtener concepto (continuando):', error)
+      ])
+
+      if (empresaData.status === 'fulfilled' && empresaData.value[0]) {
+        empresaNombre = empresaData.value[0].empresa || 'Sin empresa'
+      }
+
+      if (conceptoData.status === 'fulfilled' && conceptoData.value[0]) {
+        conceptoClave = conceptoData.value[0].clave_concepto || 0
+        conceptoNombre = conceptoData.value[0].nombre || 'Sin concepto'
       }
 
       // Verificar si la impresión automática está habilitada

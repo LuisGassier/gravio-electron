@@ -29,6 +29,44 @@ export class SyncRegistrosUseCase {
     this.remoteRepository = remoteRepository;
   }
 
+  /**
+   * Sincroniza un ÚNICO registro específico (optimizado para flujo de pesaje)
+   * @param registroId ID del registro a sincronizar
+   */
+  async executeSingle(registroId: string): Promise<Result<{ folio?: string }>> {
+    try {
+      // 1. Obtener el registro local
+      const registroResult = await this.localRepository.findById(registroId);
+
+      if (!registroResult.success || !registroResult.value) {
+        return ResultFactory.fail(new Error(`Registro ${registroId} no encontrado localmente`));
+      }
+
+      const registro = registroResult.value;
+
+      // 2. Sincronizar con Supabase
+      const remoteResult = await this.remoteRepository.saveEntrada(registro);
+
+      if (!remoteResult.success) {
+        return ResultFactory.fail(remoteResult.error);
+      }
+
+      // 3. Actualizar folio localmente si se generó
+      const registroConFolio = remoteResult.value;
+      if (registroConFolio.folio) {
+        console.log(`📝 Folio obtenido: ${registroConFolio.folio} para registro ${registroId}`);
+        await this.localRepository.saveEntrada(registroConFolio);
+      }
+
+      // 4. Marcar como sincronizado
+      await this.localRepository.markAsSynced(registroId);
+
+      return ResultFactory.ok({ folio: registroConFolio.folio });
+    } catch (error) {
+      return ResultFactory.fromError(error);
+    }
+  }
+
   async execute(): Promise<Result<SyncRegistrosOutput>> {
     try {
       let synced = 0;
