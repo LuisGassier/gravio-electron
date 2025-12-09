@@ -11,14 +11,18 @@ import { supabase } from '../../lib/supabase';
  */
 export class SupabaseRegistroRepository implements IRegistroRepository {
   /**
-   * Guarda un registro en Supabase
+   * Guarda un registro de ENTRADA en Supabase (INSERT puro)
    * El trigger generar_folio() se ejecutará automáticamente si folio es null
+   *
+   * IMPORTANTE: Solo usa INSERT para crear nuevos registros
+   * Para actualizar con salida, usar updateWithSalida()
    */
   async saveEntrada(registro: Registro): Promise<Result<Registro>> {
     try {
       console.log('🔵 SupabaseRegistroRepository.saveEntrada - Intentando guardar:', {
         id: registro.id,
         placaVehiculo: registro.placaVehiculo,
+        folio: registro.folio || 'NULL (Supabase lo generará)',
         claveOperador: registro.claveOperador,
         claveRuta: registro.claveRuta,
         claveConcepto: registro.claveConcepto,
@@ -26,7 +30,7 @@ export class SupabaseRegistroRepository implements IRegistroRepository {
 
       const data = {
         id: registro.id,
-        folio: registro.folio || null, // Dejar null para que Supabase genere el folio
+        folio: registro.folio || null, // NULL para que Supabase genere el folio
         clave_ruta: registro.claveRuta,
         ruta: registro.ruta,
         placa_vehiculo: registro.placaVehiculo,
@@ -37,10 +41,10 @@ export class SupabaseRegistroRepository implements IRegistroRepository {
         clave_concepto: registro.claveConcepto,
         concepto_id: registro.conceptoId || null,
         peso_entrada: registro.pesoEntrada || null,
-        peso_salida: registro.pesoSalida || null,
+        peso_salida: null, // Entrada NUNCA tiene peso_salida
         fecha_entrada: registro.fechaEntrada?.toISOString() || null,
-        fecha_salida: registro.fechaSalida?.toISOString() || null,
-        tipo_pesaje: registro.tipoPesaje,
+        fecha_salida: null, // Entrada NUNCA tiene fecha_salida
+        tipo_pesaje: 'entrada', // Forzar tipo entrada
         observaciones: registro.observaciones || null,
         sincronizado: true, // En Supabase siempre es true
         fecha_registro: registro.fechaRegistro.toISOString(),
@@ -49,21 +53,35 @@ export class SupabaseRegistroRepository implements IRegistroRepository {
 
       console.log('🔵 SupabaseRegistroRepository.saveEntrada - Datos a enviar:', data);
 
+      // ⚠️ USAR INSERT EN LUGAR DE UPSERT
+      // Esto previene sobrescribir registros existentes
       const { data: savedData, error } = await supabase
         .from('registros')
-        .upsert(data, { onConflict: 'id' })
+        .insert(data)  // ← INSERT puro, NO UPSERT
         .select()
         .single();
 
       console.log('🔵 SupabaseRegistroRepository.saveEntrada - Respuesta:', { savedData, error });
 
       if (error) {
+        // Manejar error de duplicado (23505 = unique_violation)
+        if (error.code === '23505') {
+          console.warn('⚠️ Registro duplicado - ya existe en Supabase:', registro.id);
+          // Buscar el registro existente para retornar el folio generado
+          const existingResult = await this.findById(registro.id);
+          if (existingResult.success && existingResult.value) {
+            console.log('✅ Retornando registro existente con folio:', existingResult.value.folio);
+            return ResultFactory.ok(existingResult.value);
+          }
+        }
+
         // No lanzar error por problemas de RLS o permisos - loguear y continuar
         if (error.code === '42501' || error.message.includes('policy')) {
           console.warn('⚠️ Error de política RLS (continuando):', error.message);
           // Retornar el registro original sin sincronizar
           return ResultFactory.ok(registro);
         }
+
         return ResultFactory.fail(new Error(`Error al guardar en Supabase: ${error.message}`));
       }
 
@@ -73,10 +91,12 @@ export class SupabaseRegistroRepository implements IRegistroRepository {
 
       // El folio fue generado por Supabase, mapeamos el resultado
       const mappedResult = await this.mapRowToRegistro(savedData);
-      
+
       if (!mappedResult.success || !mappedResult.value) {
         return ResultFactory.fail(new Error('Error al mapear registro guardado'));
       }
+
+      console.log('✅ Registro guardado en Supabase con folio:', mappedResult.value.folio);
 
       return ResultFactory.ok(mappedResult.value);
     } catch (error) {

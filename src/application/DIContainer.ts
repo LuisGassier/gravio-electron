@@ -27,6 +27,7 @@ import { PesajeService } from '../application/services/PesajeService';
 import { SyncService } from '../application/services/SyncService';
 import { FolioService } from '../application/services/FolioService';
 import { NetworkService } from '../application/services/NetworkService';
+import { RealtimeSyncService } from '../application/services/RealtimeSyncService';
 
 /**
  * Singleton container para toda la aplicación
@@ -71,6 +72,7 @@ class DIContainer {
   private _syncService?: SyncService;
   private _folioService?: FolioService;
   private _networkService?: NetworkService;
+  private _realtimeSyncService?: RealtimeSyncService;
 
   // Repositories - Registro
   get sqliteRegistroRepository(): SQLiteRegistroRepository {
@@ -259,6 +261,17 @@ class DIContainer {
     return this._networkService;
   }
 
+  get realtimeSyncService(): RealtimeSyncService {
+    if (!this._realtimeSyncService) {
+      this._realtimeSyncService = new RealtimeSyncService(
+        this.networkService,
+        this.syncService,
+        this.folioService
+      );
+    }
+    return this._realtimeSyncService;
+  }
+
   /**
    * Inicializa todos los servicios necesarios
    */
@@ -321,6 +334,16 @@ class DIContainer {
       console.warn('⚠️ Error al iniciar sincronización automática:', error);
     }
 
+    // Iniciar sincronización en tiempo real con Supabase (no bloqueante)
+    try {
+      console.log('📡 Iniciando sincronización en tiempo real...');
+      await this.realtimeSyncService.start();
+      console.log('✅ Sincronización en tiempo real iniciada');
+    } catch (error) {
+      console.warn('⚠️ Error al iniciar sincronización en tiempo real:', error);
+      console.warn('ℹ️ Los cambios remotos no se sincronizarán automáticamente');
+    }
+
     console.log('✅ Contenedor de dependencias inicializado');
   }
 
@@ -331,9 +354,14 @@ class DIContainer {
     console.log('🧹 Limpiando recursos...');
 
     try {
-      // Detener sincronización
+      // Detener sincronización periódica
       if (this._syncService) {
         this._syncService.stopAutoSync();
+      }
+
+      // Detener sincronización en tiempo real
+      if (this._realtimeSyncService) {
+        await this._realtimeSyncService.stop();
       }
 
       // Cerrar báscula

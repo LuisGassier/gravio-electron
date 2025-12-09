@@ -11,16 +11,64 @@ import { v4 as uuidv4 } from 'uuid';
  */
 export class SQLiteRegistroRepository implements IRegistroRepository {
   /**
-   * Guarda un nuevo registro de entrada en SQLite
+   * Guarda un registro de entrada en SQLite
+   *
+   * Estrategia híbrida:
+   * - Si el registro NO existe: INSERT puro
+   * - Si el registro existe y viene de sincronización (folio actualizado): UPDATE solo campos específicos
+   *
+   * Esto previene sobrescribir peso_salida o fecha_salida si se registró en otra PC
    */
   async saveEntrada(registro: Registro): Promise<Result<Registro>> {
     try {
       const id = registro.id || uuidv4();
       const now = new Date().toISOString();
 
-      // Usar INSERT OR REPLACE para permitir actualizaciones (como agregar folio)
+      // 1. Verificar si el registro ya existe
+      const existing = await window.electron.db.get(
+        'SELECT id, peso_salida, fecha_salida, folio FROM registros WHERE id = ?',
+        [id]
+      );
+
+      if (existing) {
+        // El registro YA EXISTE - solo actualizar campos seguros
+        console.log(`🔄 Registro ${id} ya existe - actualizando solo folio y metadatos`)
+
+        const updates: string[] = [];
+        const params: any[] = [];
+
+        // Solo actualizar folio si viene en el registro y no existe en local
+        if (registro.folio && !existing.folio) {
+          updates.push('folio = ?');
+          params.push(registro.folio);
+        }
+
+        // Marcar como sincronizado si viene de Supabase
+        if (registro.sincronizado) {
+          updates.push('sincronizado = ?');
+          params.push(1);
+        }
+
+        // Siempre actualizar updated_at
+        updates.push('updated_at = ?');
+        params.push(now);
+
+        if (updates.length > 0) {
+          const updateQuery = `UPDATE registros SET ${updates.join(', ')} WHERE id = ?`;
+          params.push(id);
+          await window.electron.db.run(updateQuery, params);
+        }
+
+        // Retornar el registro actualizado
+        const updatedResult = await this.findById(id);
+        return updatedResult.value ? ResultFactory.ok(updatedResult.value) : ResultFactory.fail(new Error('No se pudo recuperar el registro actualizado'));
+      }
+
+      // 2. El registro NO EXISTE - hacer INSERT puro
+      console.log(`✨ Creando nuevo registro ${id}`);
+
       const query = `
-        INSERT OR REPLACE INTO registros (
+        INSERT INTO registros (
           id, folio, clave_ruta, ruta, placa_vehiculo, numero_economico,
           clave_operador, operador, clave_empresa, clave_concepto, concepto_id,
           peso_entrada, peso_salida, fecha_entrada, fecha_salida, tipo_pesaje, observaciones,
@@ -41,10 +89,10 @@ export class SQLiteRegistroRepository implements IRegistroRepository {
         registro.claveConcepto,
         registro.conceptoId || null,
         registro.pesoEntrada || null,
-        registro.pesoSalida || null,
+        null, // peso_salida SIEMPRE null en entrada
         registro.fechaEntrada?.toISOString() || null,
-        registro.fechaSalida?.toISOString() || null,
-        registro.tipoPesaje,
+        null, // fecha_salida SIEMPRE null en entrada
+        'entrada', // tipo_pesaje SIEMPRE 'entrada'
         registro.observaciones || null,
         registro.sincronizado ? 1 : 0,
         now,
