@@ -68,10 +68,12 @@ export class SupabaseRegistroRepository implements IRegistroRepository {
         if (error.code === '23505') {
           console.warn('⚠️ Registro duplicado - ya existe en Supabase:', registro.id);
           // Buscar el registro existente para retornar el folio generado
-          const existingResult = await this.findById(registro.id);
-          if (existingResult.success && existingResult.value) {
-            console.log('✅ Retornando registro existente con folio:', existingResult.value.folio);
-            return ResultFactory.ok(existingResult.value);
+          if (registro.id) {
+            const existingResult = await this.findById(registro.id);
+            if (existingResult.success && existingResult.value) {
+              console.log('✅ Retornando registro existente con folio:', existingResult.value.folio);
+              return ResultFactory.ok(existingResult.value);
+            }
           }
         }
 

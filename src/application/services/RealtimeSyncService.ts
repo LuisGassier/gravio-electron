@@ -104,7 +104,7 @@ export class RealtimeSyncService {
           schema: 'public',
           table: 'registros'
         },
-        async (payload) => {
+        async (payload: any) => {
           console.log('📡 Cambio detectado en Supabase:', payload)
 
           if (payload.eventType === 'INSERT') {
@@ -116,7 +116,7 @@ export class RealtimeSyncService {
           }
         }
       )
-      .subscribe((status) => {
+      .subscribe((status: string) => {
         if (status === 'SUBSCRIBED') {
           this.isSubscribed = true
           console.log('✅ Suscrito a cambios en registros')
@@ -143,7 +143,7 @@ export class RealtimeSyncService {
           schema: 'public',
           table: 'folio_sequences'
         },
-        async (payload) => {
+        async (payload: any) => {
           console.log('📡 Secuencia de folio actualizada:', payload)
 
           const { clave_empresa, ultimo_numero } = payload.new
@@ -155,7 +155,7 @@ export class RealtimeSyncService {
           this.onFolioUpdatedCallbacks.forEach(cb => cb(clave_empresa, ultimo_numero))
         }
       )
-      .subscribe((status) => {
+      .subscribe((status: string) => {
         if (status === 'SUBSCRIBED') {
           console.log('✅ Suscrito a cambios en secuencias de folios')
         }
@@ -193,7 +193,7 @@ export class RealtimeSyncService {
    * Manejar UPDATE remoto desde Supabase
    * Supabase gana si tiene más información (peso_salida, folio, etc.)
    */
-  private async handleRemoteUpdate(newData: any, oldData: any): Promise<void> {
+  private async handleRemoteUpdate(newData: any, _oldData: any): Promise<void> {
     try {
       const localRegistro = await window.electron.db.get(
         'SELECT * FROM registros WHERE id = ?',

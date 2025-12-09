@@ -61,7 +61,10 @@ export class SQLiteRegistroRepository implements IRegistroRepository {
 
         // Retornar el registro actualizado
         const updatedResult = await this.findById(id);
-        return updatedResult.value ? ResultFactory.ok(updatedResult.value) : ResultFactory.fail(new Error('No se pudo recuperar el registro actualizado'));
+        if (!updatedResult.success || !updatedResult.value) {
+          return ResultFactory.fail(new Error('No se pudo recuperar el registro actualizado'));
+        }
+        return ResultFactory.ok(updatedResult.value);
       }
 
       // 2. El registro NO EXISTE - hacer INSERT puro
