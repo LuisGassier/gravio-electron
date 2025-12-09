@@ -6,7 +6,6 @@ import Store from 'electron-store'
 import fs from 'fs'
 import https from 'https'
 import { exec } from 'child_process'
-import * as XLSX from 'xlsx'
 
 // Importar módulos
 import {
@@ -322,6 +321,9 @@ function registerIpcHandlers() {
   // Export to Excel
   ipcMain.handle('export:toExcel', async (_event, tableName?: string) => {
     try {
+      // Importar xlsx dinámicamente para evitar problemas con ESM
+      const XLSX = await import('xlsx')
+
       // Mostrar diálogo para guardar archivo
       const result = await dialog.showSaveDialog(mainWindow!, {
         title: 'Exportar base de datos a Excel',

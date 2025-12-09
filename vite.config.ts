@@ -17,7 +17,7 @@ export default defineConfig({
         vite: {
           build: {
             rollupOptions: {
-              external: ['serialport', 'better-sqlite3', '@serialport/parser-readline'],
+              external: ['serialport', 'better-sqlite3', '@serialport/parser-readline', 'xlsx'],
             },
           },
         },
