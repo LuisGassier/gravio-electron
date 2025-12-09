@@ -27,7 +27,7 @@ Propuesta: implementar una Supabase Edge Function (TypeScript) programada (cron)
    - Registros de otras empresas en el mismo puerto de descarga/horarios para evitar choques.
    - Listas de `operadores`, `rutas`, `conceptos` y `vehiculos` disponibles para OOSLMP.
 2. Calcula el déficit de toneladas para el periodo mensual y el número objetivo de registros diarios.
-3. Genera timestamps candidatos espaciados aleatoriamente dentro de ventanas válidas (respetando domingos 07:00–16:00) y evitando choques con otros registros por un buffer configurable (p. ej. ±2 min).
+3. Genera timestamps candidatos espaciados aleatoriamente dentro de ventanas válidas (respetando domingos 07:00–16:00) y evitando choques con otros registros por un buffer configurable (p. ej. `COLLISION_BUFFER_MINUTES`, valor por defecto recomendado: `8` minutos).
 4. Para cada registro a crear, selecciona aleatoriamente (pero distribuido) un operador, ruta y concepto válidos, y genera pesos plausibles (distribución normal truncada) para `peso_entrada` y `peso_salida` junto con hora entrada y hora salida de entre 12-22 minutos de diferencia.
 5. Inserta las filas en `registros` con `sincronizado = false` y metadata (folio, registrado_por, created_at, updated_at).
 6. Registra logs y métricas para auditoría (cuántos generados, total kg generados, muestra de pesos).
@@ -42,7 +42,9 @@ Parámetros configurables:
 - `target_month_total_kg`: 380000 +- 10000kg y no debe de ser exacto, debe de haber pequeñas variaciones cada mes.
 - `target_daily_count_mean`: 10 (límite: min 9, max 11)
 - `sunday_no_weigh_from`: `07:00` y `sunday_no_weigh_to`: `16:00`
-- `collision_buffer_minutes`: 2 (mínimo tiempo entre registros en la misma instalación) de diferentes empresas.
+- `collision_buffer_minutes`: configurable (recomendado por defecto: `8`). Nota: en pruebas se puede reducir a `2`, pero valores tan bajos pueden provocar solapamientos con flujos reales.
+- `timezone`: Zona horaria a usar para ventanas horarias y generación de timestamps (p. ej. `America/Mexico_City`). Se almacenan timestamps en UTC en la DB.
+- `allow_backfill`: boolean — si `true` la función puede generar registros para días pasados; si `false` solo para el día actual.
 - `peso_mean_kg`: estimado a partir de datos históricos o configurable
 - `peso_std_kg`: desviación típica para generación aleatoria
 
@@ -55,7 +57,7 @@ Pasos (pseudocódigo):
 5. Para cada día, calcular cuántos registros crear: objetivo diario = aleatorio alrededor de `target_daily_count_mean` (9–11) pero adaptado al kg diario (kg/día ÷ peso esperado por camión ≈ n_camiones). Respetar mínimo 0.
 6. Para cada registro a crear:
    a. Seleccionar timestamp candidato en la ventana horaria del día (evitando domingos 07–16). Generarlo aleatoriamente dentro de la ventana y aplicar `collision_buffer_minutes`.
-   b. Validar choque: consultar `registros` (tanto OOSLMP como otras empresas) en `[ts - buffer, ts + buffer]` — si hay colisión, reintentar con nuevo timestamp (n intentos) o ampliar el buffer.
+   b. Validar choque: consultar `registros` (tanto OOSLMP como otras empresas) en `[ts - buffer, ts + buffer]` — si hay colisión, reintentar con nuevo timestamp (n intentos) o ampliar el buffer. Dado que la Edge Function se ejecutará periódicamente durante el día (p. ej. cada 10–30 minutos) y añadirá registros "uno por uno" en cada ejecución, el algoritmo debe ser eficiente, idempotente y tolerante a reintentos.
    c. Seleccionar `operador`, `ruta`, `concepto` y `vehículo` de las listas vinculadas a `clave_empresa = 4`. Preferir rotación uniforme.
    d. Generar `peso` como número aleatorio positivo siguiendo distribución normal truncada (o log-normal) con media y desviación configurables; ajustar pesos para que la suma diaria aprox. coincida con lo asignado.
    e. Construir `folio` consistente (prefijo de empresa + fecha + secuencia) y otros campos `registrado_por`, `numero_economico`, `placa_vehiculo`.
@@ -66,7 +68,7 @@ Pasos (pseudocódigo):
 ## 5. Consideraciones para que parezca natural
 
 - Usar datos reales de `operadores` y `vehiculos` (evitar crear nombres inventados salvo si faltan). SImepre usar datos existentes de los catalogos que pertenezcan a `clave_empresa = 4`.
-- Espaciar camiones al menos `collision_buffer_minutes` (p. ej. 10 min) de cualquier otro registro en la misma instalación.
+- Espaciar camiones al menos `collision_buffer_minutes` (valor por defecto recomendado `8` min) de cualquier otro registro en la misma instalación.
 - Evitar horas en las que históricamente no hay entradas (analizar histórico para ventanas activas y priorizarlas).
 - Generar pesos con dispersión similar a la histórica (si hay datos). Si no, usar media = target_month_total_kg / (expected_total_trucks_month) como estimador inicial.
 - No generar registros con timestamps futuros fuera del día de ejecución si la política exige solo backfilling; definir si la función genera para días anteriores o futuros (configurable).
@@ -76,7 +78,7 @@ Pasos (pseudocódigo):
 - Tipo: `Edge Function` de Supabase escrita en TypeScript. Programar su ejecución con Cron (Supabase permite funciones programadas o usar un servicio externo con `curl` a la function endpoint).
 - Permisos DB: la función debe ejecutar inserts en `registros`. Configurar una role o policy para que la función pueda insertar sólo `clave_empresa = 4` y campos permitidos. Registrar una API key de servicio con permisos mínimos.
 - Transacciones: usar transacciones para evitar media-insert parcial en caso de fallo.
-- Telemetría:  crear una tabla `generated_records_audit` con: `id`, `function_run_at`, `period`, `registros_creados`, `kg_generados`, `notes`.
+- Telemetría:  crear una tabla `generated_records_audit` con: `id`, `function_run_at`, `period`, `registros_creados`, `kg_generados`, `notes`. Además, cada registro insertado en `registros` por la función deberá llevar `generated_by_run_id` apuntando a la fila de auditoría para facilitar trazabilidad.
 
 ## 7. Pruebas y simulación
 
