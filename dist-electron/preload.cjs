@@ -1,1 +1,77 @@
-"use strict";const e=require("electron");e.contextBridge.exposeInMainWorld("electron",{getVersion:()=>e.ipcRenderer.invoke("app:getVersion"),getPlatform:()=>e.ipcRenderer.invoke("app:getPlatform"),serialPort:{list:()=>e.ipcRenderer.invoke("serial:list"),open:(r,n)=>e.ipcRenderer.invoke("serial:open",r,n),close:()=>e.ipcRenderer.invoke("serial:close"),read:()=>e.ipcRenderer.invoke("serial:read"),getPortInfo:()=>e.ipcRenderer.invoke("serial:getPortInfo"),onData:r=>{const n=(i,t)=>r(t);return e.ipcRenderer.on("serial:data",n),()=>e.ipcRenderer.removeListener("serial:data",n)}},printer:{list:()=>e.ipcRenderer.invoke("printer:list"),print:r=>e.ipcRenderer.invoke("printer:print",r)},db:{query:(r,n)=>e.ipcRenderer.invoke("db:query",r,n),exec:r=>e.ipcRenderer.invoke("db:exec",r),transaction:r=>e.ipcRenderer.invoke("db:transaction",r),get:(r,n)=>e.ipcRenderer.invoke("db:get",r,n),run:(r,n)=>e.ipcRenderer.invoke("db:run",r,n),all:(r,n)=>e.ipcRenderer.invoke("db:all",r,n),atomicIncrementFolio:(r,n)=>e.ipcRenderer.invoke("db:atomicIncrementFolio",r,n)},sync:{start:()=>e.ipcRenderer.invoke("sync:start"),stop:()=>e.ipcRenderer.invoke("sync:stop"),getStatus:()=>e.ipcRenderer.invoke("sync:getStatus"),onStatusChange:r=>{e.ipcRenderer.on("sync:statusChange",(n,i)=>r(i))}},storage:{get:r=>e.ipcRenderer.invoke("storage:get",r),set:(r,n)=>e.ipcRenderer.invoke("storage:set",r,n),delete:r=>e.ipcRenderer.invoke("storage:delete",r),clear:()=>e.ipcRenderer.invoke("storage:clear")},updater:{check:()=>e.ipcRenderer.invoke("updater:check"),download:()=>e.ipcRenderer.invoke("updater:download"),installAndRestart:()=>e.ipcRenderer.invoke("updater:installAndRestart"),openExternal:r=>e.ipcRenderer.invoke("updater:openExternal",r),onUpdateAvailable:r=>{const n=(i,t)=>r(t);return e.ipcRenderer.on("update-available",n),()=>e.ipcRenderer.removeListener("update-available",n)},onDownloadProgress:r=>{const n=(i,t)=>r(t);return e.ipcRenderer.on("update-download-progress",n),()=>e.ipcRenderer.removeListener("update-download-progress",n)},onUpdateDownloaded:r=>{const n=(i,t)=>r(t);return e.ipcRenderer.on("update-downloaded",n),()=>e.ipcRenderer.removeListener("update-downloaded",n)}},export:{toExcel:r=>e.ipcRenderer.invoke("export:toExcel",r)}});
+"use strict";
+const electron = require("electron");
+electron.contextBridge.exposeInMainWorld("electron", {
+  // Info de la app
+  getVersion: () => electron.ipcRenderer.invoke("app:getVersion"),
+  getPlatform: () => electron.ipcRenderer.invoke("app:getPlatform"),
+  // Serial Port (Báscula)
+  serialPort: {
+    list: () => electron.ipcRenderer.invoke("serial:list"),
+    open: (port, baudRate) => electron.ipcRenderer.invoke("serial:open", port, baudRate),
+    close: () => electron.ipcRenderer.invoke("serial:close"),
+    read: () => electron.ipcRenderer.invoke("serial:read"),
+    getPortInfo: () => electron.ipcRenderer.invoke("serial:getPortInfo"),
+    onData: (callback) => {
+      const listener = (_event, data) => callback(data);
+      electron.ipcRenderer.on("serial:data", listener);
+      return () => electron.ipcRenderer.removeListener("serial:data", listener);
+    }
+  },
+  // Printer (Impresora Térmica)
+  printer: {
+    list: () => electron.ipcRenderer.invoke("printer:list"),
+    print: (data) => electron.ipcRenderer.invoke("printer:print", data)
+  },
+  // Database (SQLite Offline)
+  db: {
+    query: (sql, params) => electron.ipcRenderer.invoke("db:query", sql, params),
+    exec: (sql) => electron.ipcRenderer.invoke("db:exec", sql),
+    transaction: (queries) => electron.ipcRenderer.invoke("db:transaction", queries),
+    get: (sql, params) => electron.ipcRenderer.invoke("db:get", sql, params),
+    run: (sql, params) => electron.ipcRenderer.invoke("db:run", sql, params),
+    all: (sql, params) => electron.ipcRenderer.invoke("db:all", sql, params),
+    atomicIncrementFolio: (claveEmpresa, prefijoEmpresa) => electron.ipcRenderer.invoke("db:atomicIncrementFolio", claveEmpresa, prefijoEmpresa)
+  },
+  // Sync
+  sync: {
+    start: () => electron.ipcRenderer.invoke("sync:start"),
+    stop: () => electron.ipcRenderer.invoke("sync:stop"),
+    getStatus: () => electron.ipcRenderer.invoke("sync:getStatus"),
+    onStatusChange: (callback) => {
+      electron.ipcRenderer.on("sync:statusChange", (_event, status) => callback(status));
+    }
+  },
+  // Storage (archivos locales)
+  storage: {
+    get: (key) => electron.ipcRenderer.invoke("storage:get", key),
+    set: (key, value) => electron.ipcRenderer.invoke("storage:set", key, value),
+    delete: (key) => electron.ipcRenderer.invoke("storage:delete", key),
+    clear: () => electron.ipcRenderer.invoke("storage:clear")
+  },
+  // Updater (Auto-update con GitHub Releases)
+  updater: {
+    check: () => electron.ipcRenderer.invoke("updater:check"),
+    download: () => electron.ipcRenderer.invoke("updater:download"),
+    installAndRestart: () => electron.ipcRenderer.invoke("updater:installAndRestart"),
+    openExternal: (url) => electron.ipcRenderer.invoke("updater:openExternal", url),
+    onUpdateAvailable: (callback) => {
+      const listener = (_event, info) => callback(info);
+      electron.ipcRenderer.on("update-available", listener);
+      return () => electron.ipcRenderer.removeListener("update-available", listener);
+    },
+    onDownloadProgress: (callback) => {
+      const listener = (_event, progress) => callback(progress);
+      electron.ipcRenderer.on("update-download-progress", listener);
+      return () => electron.ipcRenderer.removeListener("update-download-progress", listener);
+    },
+    onUpdateDownloaded: (callback) => {
+      const listener = (_event, info) => callback(info);
+      electron.ipcRenderer.on("update-downloaded", listener);
+      return () => electron.ipcRenderer.removeListener("update-downloaded", listener);
+    }
+  },
+  // Export (Exportar datos)
+  export: {
+    toExcel: (tableName) => electron.ipcRenderer.invoke("export:toExcel", tableName)
+  }
+});

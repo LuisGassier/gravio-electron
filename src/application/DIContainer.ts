@@ -224,6 +224,7 @@ class DIContainer {
         this.createEntradaUseCase,
         this.completeWithSalidaUseCase,
         this.findPendingRegistrosUseCase,
+        this.syncRegistrosUseCase,
         this.mettlerToledoScale,
         this.folioService
       );

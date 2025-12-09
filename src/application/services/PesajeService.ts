@@ -6,6 +6,7 @@ import type { CreateEntradaInput } from '../../domain/use-cases/registro/CreateE
 import { CompleteWithSalidaUseCase } from '../../domain/use-cases/registro/CompleteWithSalida';
 import type { CompleteWithSalidaInput } from '../../domain/use-cases/registro/CompleteWithSalida';
 import { FindPendingRegistrosUseCase } from '../../domain/use-cases/registro/FindPendingRegistros';
+import { SyncRegistrosUseCase } from '../../domain/use-cases/sync/SyncRegistros';
 import type { IWeightReader } from '../../domain/hardware/IWeightReader';
 import type { FolioService } from './FolioService';
 import { getCurrentUser } from '../../lib/supabase';
@@ -18,6 +19,7 @@ export class PesajeService {
   private readonly createEntradaUseCase: CreateEntradaUseCase;
   private readonly completeWithSalidaUseCase: CompleteWithSalidaUseCase;
   private readonly findPendingUseCase: FindPendingRegistrosUseCase;
+  private readonly syncRegistrosUseCase: SyncRegistrosUseCase;
   private readonly weightReader: IWeightReader;
   private readonly folioService: FolioService;
 
@@ -25,12 +27,14 @@ export class PesajeService {
     createEntradaUseCase: CreateEntradaUseCase,
     completeWithSalidaUseCase: CompleteWithSalidaUseCase,
     findPendingUseCase: FindPendingRegistrosUseCase,
+    syncRegistrosUseCase: SyncRegistrosUseCase,
     weightReader: IWeightReader,
     folioService: FolioService
   ) {
     this.createEntradaUseCase = createEntradaUseCase;
     this.completeWithSalidaUseCase = completeWithSalidaUseCase;
     this.findPendingUseCase = findPendingUseCase;
+    this.syncRegistrosUseCase = syncRegistrosUseCase;
     this.weightReader = weightReader;
     this.folioService = folioService;
   }
@@ -99,6 +103,27 @@ export class PesajeService {
         registradoPor,
       });
 
+      if (!result.success) {
+        return result;
+      }
+
+      // 🚀 Sincronizar INMEDIATAMENTE con Supabase
+      const registroCreado = result.value;
+      if (registroCreado.id) {
+        console.log(`🚀 Sincronizando entrada ${registroCreado.id} con Supabase...`);
+        try {
+          const syncResult = await this.syncRegistrosUseCase.executeSingle(registroCreado.id);
+          if (syncResult.success) {
+            console.log(`✅ Entrada sincronizada con Supabase - Folio: ${syncResult.value.folio || folioGenerado}`);
+          } else {
+            console.warn(`⚠️ No se pudo sincronizar entrada con Supabase:`, syncResult.error?.message);
+            console.warn(`ℹ️ El registro se sincronizará automáticamente más tarde`);
+          }
+        } catch (error) {
+          console.warn(`⚠️ Error al sincronizar entrada:`, error);
+        }
+      }
+
       return result;
     } catch (error) {
       return ResultFactory.fromError(error);
@@ -160,6 +185,21 @@ export class PesajeService {
           pesoSalida: result.value.pesoSalida,
           pesoNeto: result.value.getPesoNeto()
         });
+
+        // 🚀 Sincronizar INMEDIATAMENTE con Supabase
+        if (result.value.id) {
+          console.log(`🚀 Sincronizando salida ${result.value.id} con Supabase...`);
+          try {
+            const syncResult = await this.syncRegistrosUseCase.executeSingle(result.value.id);
+            if (syncResult.success) {
+              console.log(`✅ Salida sincronizada con Supabase`);
+            } else {
+              console.warn(`⚠️ No se pudo sincronizar salida con Supabase:`, syncResult.error?.message);
+            }
+          } catch (error) {
+            console.warn(`⚠️ Error al sincronizar salida:`, error);
+          }
+        }
       } else {
         console.error('❌ PesajeService - Error al actualizar:', result.error);
       }

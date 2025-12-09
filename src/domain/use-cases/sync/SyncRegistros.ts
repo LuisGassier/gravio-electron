@@ -44,24 +44,49 @@ export class SyncRegistrosUseCase {
 
       const registro = registroResult.value;
 
-      // 2. Sincronizar con Supabase
-      const remoteResult = await this.remoteRepository.saveEntrada(registro);
+      // 2. Verificar si el registro ya existe en Supabase
+      const existingRemote = await this.remoteRepository.findById(registroId);
+      let remoteResult: Result<any>;
+      
+      if (existingRemote.success && existingRemote.value) {
+        // 🔍 Ya existe en Supabase
+        console.log(`✅ Registro ${registroId} ya existe en Supabase`);
+        
+        if (registro.isCompleto() && !existingRemote.value.pesoSalida) {
+          // Tiene salida local pero no remota - actualizar
+          console.log(`🔄 Actualizando salida en Supabase para registro ${registroId}`);
+          remoteResult = await this.remoteRepository.updateWithSalida(
+            registroId,
+            registro.pesoSalida!,
+            registro.fechaSalida!,
+            registro.observaciones
+          );
+        } else {
+          // Ya está sincronizado - retornar el existente
+          console.log(`⏭️ Registro ${registroId} ya sincronizado en Supabase`);
+          remoteResult = ResultFactory.ok(existingRemote.value);
+        }
+      } else {
+        // 📥 No existe en Supabase - crear nuevo
+        console.log(`📥 Creando entrada en Supabase para registro ${registroId}`);
+        remoteResult = await this.remoteRepository.saveEntrada(registro);
+      }
 
       if (!remoteResult.success) {
         return ResultFactory.fail(remoteResult.error);
       }
 
       // 3. Actualizar folio localmente si se generó
-      const registroConFolio = remoteResult.value;
-      if (registroConFolio.folio) {
-        console.log(`📝 Folio obtenido: ${registroConFolio.folio} para registro ${registroId}`);
-        await this.localRepository.saveEntrada(registroConFolio);
+      const registroRemoto = remoteResult.value;
+      if (registroRemoto.folio && registroRemoto.folio !== registro.folio) {
+        console.log(`📝 Actualizando folio local: ${registroRemoto.folio} para registro ${registroId}`);
+        await this.localRepository.saveEntrada(registroRemoto);
       }
 
       // 4. Marcar como sincronizado
       await this.localRepository.markAsSynced(registroId);
 
-      return ResultFactory.ok({ folio: registroConFolio.folio });
+      return ResultFactory.ok({ folio: registroRemoto.folio });
     } catch (error) {
       return ResultFactory.fromError(error);
     }
