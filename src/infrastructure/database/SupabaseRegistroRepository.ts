@@ -220,16 +220,23 @@ export class SupabaseRegistroRepository implements IRegistroRepository {
   }
 
   /**
-   * Obtiene todos los registros pendientes (sin salida)
+   * Obtiene registros pendientes (sin salida) de las últimas 48 horas
+   * Optimizado para sincronización inicial - solo trae registros recientes
    */
   async findAllPending(): Promise<Result<Registro[]>> {
     try {
+      // Solo traer registros de las últimas 48 horas (2 días)
+      const twoDaysAgo = new Date();
+      twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+
       const { data, error } = await supabase
         .from('registros')
         .select('*')
         .eq('tipo_pesaje', 'entrada')
         .is('peso_salida', null)
-        .order('fecha_entrada', { ascending: false });
+        .gte('fecha_entrada', twoDaysAgo.toISOString()) // Solo últimas 48 horas
+        .order('fecha_entrada', { ascending: false })
+        .limit(100); // Límite de seguridad: máximo 100 registros pendientes
 
       if (error) {
         return ResultFactory.fail(new Error(`Error al buscar registros: ${error.message}`));
@@ -243,6 +250,8 @@ export class SupabaseRegistroRepository implements IRegistroRepository {
           registros.push(registroResult.value);
         }
       }
+
+      console.log(`📥 Descargados ${registros.length} registros pendientes de las últimas 48 horas`);
 
       return ResultFactory.ok(registros);
     } catch (error) {

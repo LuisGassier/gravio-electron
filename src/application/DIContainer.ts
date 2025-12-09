@@ -294,17 +294,27 @@ class DIContainer {
       console.warn('ℹ️ Se generarán folios offline cuando sea necesario');
     }
 
+    // Realizar sincronización inicial (solo una vez al abrir la app)
+    try {
+      console.log('🔄 Ejecutando sincronización inicial...');
+      await this.syncService.syncNow();
+      console.log('✅ Sincronización inicial completada');
+    } catch (error) {
+      console.warn('⚠️ Error en sincronización inicial:', error);
+      console.warn('ℹ️ La aplicación continuará funcionando en modo offline');
+    }
+
     // Iniciar sincronización automática SOLO si está habilitada (no bloqueante)
     try {
       const autoSyncEnabled = localStorage.getItem('autoSyncEnabled') === 'true';
       console.log(`🔍 DIContainer: localStorage.autoSyncEnabled = "${localStorage.getItem('autoSyncEnabled')}" → ${autoSyncEnabled}`);
 
       if (autoSyncEnabled) {
-        console.log('🔄 Iniciando sincronización automática...');
+        console.log('🔄 Iniciando sincronización automática periódica...');
         this.syncService.startAutoSync();
-        console.log('✅ Sincronización automática iniciada');
+        console.log('✅ Sincronización automática periódica iniciada');
       } else {
-        console.log('📋 Sincronización automática deshabilitada (modo manual)');
+        console.log('📋 Sincronización automática periódica deshabilitada (modo manual)');
         console.log('ℹ️ Para activarla, ve a Configuración > Sincronización con la Nube');
       }
     } catch (error) {
