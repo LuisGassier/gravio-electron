@@ -186,8 +186,8 @@ export class SupabaseFolioSequenceRepository implements IFolioSequenceRepository
    * Supabase is used only for reconciliation, not generation
    */
   async incrementAndGetNext(
-    claveEmpresa: number,
-    prefijoEmpresa: string
+    _claveEmpresa: number,
+    _prefijoEmpresa: string
   ): Promise<Result<{ folio: string; sequence: FolioSequence }>> {
     return ResultFactory.fail(
       new Error('incrementAndGetNext not supported for Supabase repository - use local repository')

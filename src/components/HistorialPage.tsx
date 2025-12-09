@@ -4,7 +4,7 @@ import { Button } from './ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog'
 import { Input } from './ui/input'
 import { Label } from './ui/label'
-import { Printer, Search, Calendar, ArrowLeft, Trash2, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Printer, Search, Calendar, ArrowLeft, Trash2, ChevronLeft, ChevronRight, FileSpreadsheet, Copy } from 'lucide-react'
 import { toast } from 'sonner'
 import { container } from '@/application/DIContainer'
 import type { Registro } from '@/domain/entities/Registro'
@@ -45,6 +45,8 @@ export function HistorialPage({ onNavigate }: HistorialPageProps) {
   const [isPrinting, setIsPrinting] = useState(false)
   const [cleaning, setCleaning] = useState(false)
   const [dbStats, setDbStats] = useState({ totalRecords: 0, completedRecords: 0, pendingRecords: 0 })
+  const [isExporting, setIsExporting] = useState(false)
+  const [showDuplicatesOnly, setShowDuplicatesOnly] = useState(false)
 
   // Paginación
   const [currentPage, setCurrentPage] = useState(1)
@@ -162,6 +164,68 @@ export function HistorialPage({ onNavigate }: HistorialPageProps) {
   const startIndex = (currentPage - 1) * itemsPerPage
   const endIndex = startIndex + itemsPerPage
   const paginatedRegistros = filteredRegistros.slice(startIndex, endIndex)
+
+  const handleExportToExcel = async () => {
+    setIsExporting(true)
+    try {
+      const result = await window.electron.export.toExcel()
+
+      if (result.success) {
+        toast.success('Base de datos exportada', {
+          description: result.message
+        })
+      } else {
+        toast.error('Error al exportar', {
+          description: result.message
+        })
+      }
+    } catch (error) {
+      console.error('Error exporting to Excel:', error)
+      toast.error('Error al exportar a Excel')
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
+  const findDuplicates = () => {
+    // Buscar duplicados por folio
+    const folioCount = new Map<string, number>()
+    const duplicateFolios = new Set<string>()
+
+    registros.forEach(r => {
+      if (r.folio) {
+        const count = (folioCount.get(r.folio) || 0) + 1
+        folioCount.set(r.folio, count)
+        if (count > 1) {
+          duplicateFolios.add(r.folio)
+        }
+      }
+    })
+
+    if (duplicateFolios.size === 0) {
+      toast.info('No se encontraron duplicados', {
+        description: 'Todos los folios son únicos'
+      })
+      setShowDuplicatesOnly(false)
+      return
+    }
+
+    // Filtrar solo duplicados
+    const duplicates = registros.filter(r => r.folio && duplicateFolios.has(r.folio))
+    setFilteredRegistros(duplicates)
+    setShowDuplicatesOnly(true)
+    setCurrentPage(1)
+
+    toast.warning(`Se encontraron ${duplicates.length} registros duplicados`, {
+      description: `${duplicateFolios.size} folios tienen duplicados`
+    })
+  }
+
+  const clearDuplicatesFilter = () => {
+    setShowDuplicatesOnly(false)
+    setFilteredRegistros(registros)
+    setCurrentPage(1)
+  }
 
   const handleCleanup = async () => {
     if (!window.confirm('¿Estás seguro de eliminar los registros antiguos? Se mantendrán solo los registros de hoy y ayer.')) {
@@ -307,15 +371,32 @@ export function HistorialPage({ onNavigate }: HistorialPageProps) {
             </Card>
           </div>
 
-          {/* Barra de búsqueda */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar por folio, placa, operador o ruta..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-            />
+          {/* Barra de búsqueda y acciones */}
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por folio, placa, operador o ruta..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            <Button
+              variant="outline"
+              onClick={handleExportToExcel}
+              disabled={isExporting}
+            >
+              <FileSpreadsheet className="w-4 h-4 mr-2" />
+              {isExporting ? 'Exportando...' : 'Exportar Excel'}
+            </Button>
+            <Button
+              variant={showDuplicatesOnly ? 'default' : 'outline'}
+              onClick={showDuplicatesOnly ? clearDuplicatesFilter : findDuplicates}
+            >
+              <Copy className="w-4 h-4 mr-2" />
+              {showDuplicatesOnly ? 'Mostrar Todos' : 'Ver Duplicados'}
+            </Button>
           </div>
 
           {/* Tabla de registros */}

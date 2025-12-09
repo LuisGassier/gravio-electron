@@ -84,6 +84,11 @@ contextBridge.exposeInMainWorld('electron', {
       return () => ipcRenderer.removeListener('update-downloaded', listener)
     },
   },
+
+  // Export (Exportar datos)
+  export: {
+    toExcel: (tableName?: string) => ipcRenderer.invoke('export:toExcel', tableName),
+  },
 })
 
 // Types para TypeScript
@@ -134,6 +139,13 @@ export type ElectronAPI = {
     onUpdateAvailable: (callback: (info: any) => void) => () => void
     onDownloadProgress: (callback: (progress: any) => void) => () => void
     onUpdateDownloaded: (callback: (info: any) => void) => () => void
+  }
+  export: {
+    toExcel: (tableName?: string) => Promise<{
+      success: boolean
+      message: string
+      filePath?: string
+    }>
   }
 }
 

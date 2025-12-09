@@ -82,6 +82,13 @@ export type ElectronAPI = {
     onDownloadProgress: (callback: (progress: any) => void) => () => void
     onUpdateDownloaded: (callback: (info: any) => void) => () => void
   }
+  export: {
+    toExcel: (tableName?: string) => Promise<{
+      success: boolean
+      message: string
+      filePath?: string
+    }>
+  }
 }
 
 declare global {

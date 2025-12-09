@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, shell, dialog } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import path from 'path'
 import { fileURLToPath } from 'url'
@@ -6,6 +6,7 @@ import Store from 'electron-store'
 import fs from 'fs'
 import https from 'https'
 import { exec } from 'child_process'
+import * as XLSX from 'xlsx'
 
 // Importar módulos
 import {
@@ -316,6 +317,87 @@ function registerIpcHandlers() {
   // Abrir URL en el navegador externo
   ipcMain.handle('updater:openExternal', async (_event, url: string) => {
     await shell.openExternal(url)
+  })
+
+  // Export to Excel
+  ipcMain.handle('export:toExcel', async (_event, tableName?: string) => {
+    try {
+      // Mostrar diálogo para guardar archivo
+      const result = await dialog.showSaveDialog(mainWindow!, {
+        title: 'Exportar base de datos a Excel',
+        defaultPath: `gravio-export-${new Date().toISOString().split('T')[0]}.xlsx`,
+        filters: [
+          { name: 'Excel Files', extensions: ['xlsx'] },
+          { name: 'All Files', extensions: ['*'] }
+        ]
+      })
+
+      if (result.canceled || !result.filePath) {
+        return { success: false, message: 'Exportación cancelada' }
+      }
+
+      // Crear un nuevo libro de trabajo
+      const workbook = XLSX.utils.book_new()
+
+      // Definir tablas a exportar
+      const tablesToExport = tableName
+        ? [tableName]
+        : ['registros', 'vehiculos', 'operadores', 'rutas', 'empresa', 'conceptos', 'usuarios']
+
+      // Exportar cada tabla
+      for (const table of tablesToExport) {
+        try {
+          const data = await getAll(`SELECT * FROM ${table}`, [])
+
+          if (data && data.length > 0) {
+            // Convertir timestamps Unix a fechas legibles
+            const processedData = data.map((row: any) => {
+              const newRow = { ...row }
+
+              // Convertir campos de timestamp a formato legible
+              const timestampFields = ['created_at', 'updated_at', 'fecha_entrada', 'fecha_salida', 'fecha_registro', 'pin_expires_at', 'last_attempt', 'created']
+              timestampFields.forEach(field => {
+                if (newRow[field] && typeof newRow[field] === 'number') {
+                  newRow[field] = new Date(newRow[field] * 1000).toLocaleString('es-MX')
+                }
+              })
+
+              // Convertir valores booleanos
+              Object.keys(newRow).forEach(key => {
+                if (newRow[key] === 0 || newRow[key] === 1) {
+                  if (key === 'sincronizado' || key === 'activo') {
+                    newRow[key] = newRow[key] === 1 ? 'Sí' : 'No'
+                  }
+                }
+              })
+
+              return newRow
+            })
+
+            const worksheet = XLSX.utils.json_to_sheet(processedData)
+            XLSX.utils.book_append_sheet(workbook, worksheet, table)
+          }
+        } catch (error) {
+          console.warn(`⚠️ No se pudo exportar la tabla ${table}:`, error)
+        }
+      }
+
+      // Guardar el archivo usando buffer y fs
+      const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' })
+      fs.writeFileSync(result.filePath, buffer)
+
+      return {
+        success: true,
+        message: `Base de datos exportada exitosamente`,
+        filePath: result.filePath
+      }
+    } catch (error: any) {
+      console.error('❌ Error al exportar a Excel:', error)
+      return {
+        success: false,
+        message: `Error al exportar: ${error.message}`
+      }
+    }
   })
 }
 
