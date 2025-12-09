@@ -171,17 +171,19 @@ export class SupabaseRegistroRepository implements IRegistroRepository {
           // No encontrado
           return ResultFactory.ok(null);
         }
-        // Error de RLS - retornar null en lugar de fallar
-        if (error.code === '42501' || error.message.includes('policy')) {
-          console.warn('⚠️ Error de política RLS al buscar (retornando null):', error.message);
+        // Error de RLS o 406 - retornar null en lugar de fallar
+        if (error.code === '42501' || error.code === 'PGRST301' || error.message.includes('policy') || error.message.includes('406')) {
+          console.warn('⚠️ Error de acceso al buscar (retornando null):', error.message);
           return ResultFactory.ok(null);
         }
-        return ResultFactory.fail(new Error(`Error al buscar registro: ${error.message}`));
+        console.warn('⚠️ Error desconocido al buscar registro:', error);
+        return ResultFactory.ok(null); // Retornar null en lugar de fallar
       }
 
       return this.mapRowToRegistro(data);
     } catch (error) {
-      return ResultFactory.fromError(error);
+      console.warn('⚠️ Excepción al buscar registro:', error);
+      return ResultFactory.ok(null); // Retornar null en lugar de fallar
     }
   }
 

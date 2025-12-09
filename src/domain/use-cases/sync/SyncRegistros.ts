@@ -44,30 +44,26 @@ export class SyncRegistrosUseCase {
 
       const registro = registroResult.value;
 
-      // 2. Verificar si el registro ya existe en Supabase
-      const existingRemote = await this.remoteRepository.findById(registroId);
+      // 2. Intentar insertar/actualizar en Supabase
       let remoteResult: Result<any>;
       
-      if (existingRemote.success && existingRemote.value) {
-        // 🔍 Ya existe en Supabase
-        console.log(`✅ Registro ${registroId} ya existe en Supabase`);
+      if (registro.isCompleto()) {
+        // 🔄 Tiene salida - intentar UPDATE primero
+        console.log(`🔄 Intentando actualizar salida en Supabase para registro ${registroId}`);
+        remoteResult = await this.remoteRepository.updateWithSalida(
+          registroId,
+          registro.pesoSalida!,
+          registro.fechaSalida!,
+          registro.observaciones
+        );
         
-        if (registro.isCompleto() && !existingRemote.value.pesoSalida) {
-          // Tiene salida local pero no remota - actualizar
-          console.log(`🔄 Actualizando salida en Supabase para registro ${registroId}`);
-          remoteResult = await this.remoteRepository.updateWithSalida(
-            registroId,
-            registro.pesoSalida!,
-            registro.fechaSalida!,
-            registro.observaciones
-          );
-        } else {
-          // Ya está sincronizado - retornar el existente
-          console.log(`⏭️ Registro ${registroId} ya sincronizado en Supabase`);
-          remoteResult = ResultFactory.ok(existingRemote.value);
+        // Si el UPDATE falla porque no existe, intentar INSERT
+        if (!remoteResult.success && remoteResult.error?.message.includes('no rows')) {
+          console.log(`📥 Registro no existe, creando entrada completa en Supabase`);
+          remoteResult = await this.remoteRepository.saveEntrada(registro);
         }
       } else {
-        // 📥 No existe en Supabase - crear nuevo
+        // 📥 Solo entrada - intentar INSERT
         console.log(`📥 Creando entrada en Supabase para registro ${registroId}`);
         remoteResult = await this.remoteRepository.saveEntrada(registro);
       }
