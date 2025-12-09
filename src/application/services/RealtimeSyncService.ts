@@ -365,7 +365,10 @@ export class RealtimeSyncService {
 
   /**
    * Configurar listener de conectividad
-   * Sincroniza pendientes cuando se detecta conexión
+   * Sincroniza pendientes cuando se detecta conexión (INDEPENDIENTE del modo manual/automático)
+   * 
+   * Este listener se ejecuta SIEMPRE para recuperar registros offline
+   * No depende de la configuración autoSyncEnabled
    */
   private setupNetworkListener(): void {
     let wasOffline = false
@@ -374,17 +377,31 @@ export class RealtimeSyncService {
       const isOnline = await this.networkService.isOnline()
 
       if (isOnline && wasOffline) {
-        console.log('🌐 Conexión detectada - Sincronizando pendientes...')
+        console.log('🌐 Conexión restaurada después de estar offline')
+        console.log('🔄 Sincronizando registros pendientes automáticamente...')
 
-        // Sincronizar registros pendientes
-        await this.syncService.syncNow()
+        // Sincronizar registros pendientes (SIEMPRE, independiente de autoSync)
+        try {
+          const syncResult = await this.syncService.syncNow()
+          if (syncResult.success && syncResult.synced > 0) {
+            console.log(`✅ Sincronizados ${syncResult.synced} registros offline`)
+          }
+        } catch (error) {
+          console.error('❌ Error al sincronizar registros offline:', error)
+        }
 
         // Sincronizar secuencias de folios
-        await this.folioService.syncSequences()
+        try {
+          await this.folioService.syncSequences()
+          console.log('✅ Secuencias de folios actualizadas')
+        } catch (error) {
+          console.error('❌ Error al sincronizar folios:', error)
+        }
 
         wasOffline = false
       } else if (!isOnline && !wasOffline) {
-        console.log('📴 Sin conexión - Modo offline')
+        console.log('📴 Sin conexión - Modo offline activado')
+        console.log('ℹ️  Los registros se guardarán localmente y se sincronizarán al reconectar')
         wasOffline = true
       }
     }, 5000) // Verificar cada 5 segundos

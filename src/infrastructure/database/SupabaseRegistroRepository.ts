@@ -162,7 +162,7 @@ export class SupabaseRegistroRepository implements IRegistroRepository {
     try {
       const { data, error } = await supabase
         .from('registros')
-        .select('*')
+        .select('id,folio,clave_ruta,ruta,placa_vehiculo,numero_economico,clave_operador,operador,clave_empresa,clave_concepto,concepto_id,peso_entrada,peso_salida,fecha_entrada,fecha_salida,tipo_pesaje,observaciones,sincronizado,fecha_registro,created_at,updated_at,registrado_por')
         .eq('id', id)
         .single();
 
@@ -194,7 +194,7 @@ export class SupabaseRegistroRepository implements IRegistroRepository {
     try {
       const { data, error } = await supabase
         .from('registros')
-        .select('*')
+        .select('id,folio,clave_ruta,ruta,placa_vehiculo,numero_economico,clave_operador,operador,clave_empresa,clave_concepto,concepto_id,peso_entrada,peso_salida,fecha_entrada,fecha_salida,tipo_pesaje,observaciones,sincronizado,fecha_registro,created_at,updated_at,registrado_por')
         .eq('folio', folio)
         .single();
 
@@ -218,11 +218,11 @@ export class SupabaseRegistroRepository implements IRegistroRepository {
     try {
       const { data, error } = await supabase
         .from('registros')
-        .select('*')
+        .select('id,folio,clave_ruta,ruta,placa_vehiculo,numero_economico,clave_operador,operador,clave_empresa,clave_concepto,concepto_id,peso_entrada,peso_salida,fecha_entrada,fecha_salida,tipo_pesaje,observaciones,sincronizado,fecha_registro,created_at,updated_at,registrado_por')
         .eq('placa_vehiculo', placa.toUpperCase())
         .eq('tipo_pesaje', 'entrada')
         .is('peso_salida', null)
-        .order('fecha_entrada', { ascending: false });
+        .order('fecha_entrada', { ascending: false});
 
       if (error) {
         return ResultFactory.fail(new Error(`Error al buscar registros: ${error.message}`));

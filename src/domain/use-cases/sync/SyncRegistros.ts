@@ -94,52 +94,13 @@ export class SyncRegistrosUseCase {
       let failed = 0;
       const errors: Array<{ registroId: string; error: string }> = [];
 
-      // FASE 1: Descargar registros pendientes de Supabase → SQLite
-      try {
-        const remotePendingResult = await this.remoteRepository.findAllPending();
-        
-        if (remotePendingResult.success && remotePendingResult.value.length > 0) {
-          
-          for (const remoteRegistro of remotePendingResult.value) {
-            try {
-              // Verificar si el registro ya existe localmente
-              const localExistingResult = await this.localRepository.findById(remoteRegistro.id!);
-              
-              // Si existe localmente y ya tiene salida, NO sobrescribir
-              if (localExistingResult.success && localExistingResult.value) {
-                const localRegistro = localExistingResult.value;
-                if (localRegistro.pesoSalida && localRegistro.fechaSalida) {
-                  // El registro local tiene salida, no sobrescribir con la versión pendiente de Supabase
-                  continue;
-                }
-              }
-              
-              // Guardar/actualizar en SQLite local solo si no tiene salida local
-              const localResult = await this.localRepository.saveEntrada(remoteRegistro);
-              
-              if (localResult.success) {
-                synced++;
-              } else {
-                failed++;
-                errors.push({
-                  registroId: remoteRegistro.id || 'unknown',
-                  error: `Error al guardar localmente: ${localResult.error.message}`,
-                });
-              }
-            } catch (error) {
-              failed++;
-              errors.push({
-                registroId: remoteRegistro.id || 'unknown',
-                error: error instanceof Error ? error.message : String(error),
-              });
-            }
-          }
-        }
-      } catch (error) {
-        // Silenciar error de descarga
-      }
+      // ⚡ OPTIMIZACIÓN: Solo subir registros no sincronizados
+      // La descarga de registros pendientes se hace vía Realtime
+      // Esto reduce dramáticamente el uso de ancho de banda
 
-      // FASE 2: Subir registros no sincronizados de SQLite → Supabase
+      console.log('🔄 Sincronizando registros no sincronizados...');
+
+      // Subir registros no sincronizados de SQLite → Supabase
       const unsyncedResult = await this.localRepository.findUnsynchronized();
 
       if (!unsyncedResult.success) {
