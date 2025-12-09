@@ -56,6 +56,10 @@ export type ElectronAPI = {
     get: (sql: string, params?: any[]) => Promise<any | undefined>
     run: (sql: string, params?: any[]) => Promise<void>
     all: (sql: string, params?: any[]) => Promise<any[]>
+    atomicIncrementFolio: (claveEmpresa: number, prefijoEmpresa: string) => Promise<{
+      folio: string
+      ultimoNumero: number
+    }>
   }
   sync: {
     start: () => Promise<void>

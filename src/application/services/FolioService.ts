@@ -99,19 +99,41 @@ export class FolioService {
 
   /**
    * Genera el siguiente folio en modo ONLINE
-   * Consulta Supabase para obtener el último folio usado
+   * Usa generación local atómica incluso cuando hay conexión
+   * Supabase se usa solo para reconciliación, no para generación
    */
   private async getNextFolioOnline(claveEmpresa: number): Promise<Result<string>> {
     try {
-      // 1. Obtener el máximo número desde Supabase (tabla registros)
-      const maxRemoteResult = await this.remoteRepository.getMaxFolioNumberFromRegistros(claveEmpresa)
-      if (!maxRemoteResult.success) {
-        return ResultFactory.fail(maxRemoteResult.error)
+      // 1. Primero sincronizar secuencia con Supabase (obtener máximo remoto)
+      const syncResult = await this.syncSequenceForEmpresa(claveEmpresa)
+      if (!syncResult.success) {
+        console.warn(`⚠️ No se pudo sincronizar secuencia con Supabase, usando local:`, syncResult.error?.message)
+        // Continuar con generación local aunque falle sincronización
       }
 
-      const maxRemote = maxRemoteResult.value
+      // 2. Generar folio usando operación atómica local
+      // Esto garantiza que el folio es único localmente
+      const folioResult = await this.getNextFolioOffline(claveEmpresa)
 
-      // 2. Obtener información de la empresa para el prefijo
+      if (!folioResult.success) {
+        return folioResult
+      }
+
+      console.log(`📋 Folio online (sincronizado + local): ${folioResult.value}`)
+
+      return folioResult
+    } catch (error) {
+      return ResultFactory.fromError(error)
+    }
+  }
+
+  /**
+   * Genera el siguiente folio en modo OFFLINE
+   * Usa operación atómica para prevenir condiciones de carrera
+   */
+  private async getNextFolioOffline(claveEmpresa: number): Promise<Result<string>> {
+    try {
+      // 1. Obtener información de la empresa para el prefijo
       const empresaResult = await this.empresaRepository.findByClave(claveEmpresa)
       if (!empresaResult.success) {
         return ResultFactory.fail(empresaResult.error)
@@ -122,89 +144,22 @@ export class FolioService {
         return ResultFactory.fail(new Error(`Empresa ${claveEmpresa} no encontrada`))
       }
 
-      // 3. Crear o actualizar secuencia local con el número remoto
-      const sequenceResult = FolioSequence.create({
-        claveEmpresa: empresa.claveEmpresa,
-        prefijoEmpresa: empresa.prefijo,
-        ultimoNumero: maxRemote,
-        sincronizado: true, // Viene de Supabase, está sincronizado
-        updatedAt: new Date(),
-      })
+      // 2. Incrementar atómicamente y obtener siguiente folio
+      // Esta operación es atómica: mutex + transacción + incremento
+      const result = await this.localRepository.incrementAndGetNext(
+        claveEmpresa,
+        empresa.prefijo
+      )
 
-      if (!sequenceResult.success) {
-        return ResultFactory.fail(sequenceResult.error)
+      if (!result.success) {
+        return ResultFactory.fail(result.error)
       }
 
-      let sequence = sequenceResult.value
+      const { folio, sequence } = result.value
 
-      // 4. Incrementar para obtener el siguiente folio
-      const nextFolio = sequence.getNextFolio()
+      console.log(`📋 Folio offline (atómico): ${folio} (ultimo_numero: ${sequence.ultimoNumero})`)
 
-      // 5. Guardar secuencia incrementada localmente
-      const incrementedResult = sequence.increment()
-      if (!incrementedResult.success) {
-        return ResultFactory.fail(incrementedResult.error)
-      }
-
-      // Marcar como sincronizado porque acabamos de consultar Supabase
-      const syncedResult = incrementedResult.value.markAsSynchronized()
-      if (!syncedResult.success) {
-        return ResultFactory.fail(syncedResult.error)
-      }
-
-      const saveResult = await this.localRepository.save(syncedResult.value)
-      if (!saveResult.success) {
-        return ResultFactory.fail(saveResult.error)
-      }
-
-      console.log(`📋 Folio online: ${nextFolio} (remoto: ${maxRemote}, siguiente: ${syncedResult.value.ultimoNumero})`)
-
-      return ResultFactory.ok(nextFolio)
-    } catch (error) {
-      return ResultFactory.fromError(error)
-    }
-  }
-
-  /**
-   * Genera el siguiente folio en modo OFFLINE
-   * Usa solo la base de datos SQLite local
-   */
-  private async getNextFolioOffline(claveEmpresa: number): Promise<Result<string>> {
-    try {
-      // 1. Buscar secuencia existente en local
-      const existingResult = await this.localRepository.findByClaveEmpresa(claveEmpresa)
-      if (!existingResult.success) {
-        return ResultFactory.fail(existingResult.error)
-      }
-
-      let sequence = existingResult.value
-
-      // 2. Si no existe, crear nueva secuencia
-      if (!sequence) {
-        const initResult = await this.initializeSequenceForEmpresa(claveEmpresa)
-        if (!initResult.success) {
-          return ResultFactory.fail(initResult.error)
-        }
-        sequence = initResult.value
-      }
-
-      // 3. Incrementar y obtener folio
-      const nextFolio = sequence.getNextFolio()
-
-      // 4. Guardar secuencia incrementada (marcada como NO sincronizada)
-      const incrementedResult = sequence.increment()
-      if (!incrementedResult.success) {
-        return ResultFactory.fail(incrementedResult.error)
-      }
-
-      const saveResult = await this.localRepository.save(incrementedResult.value)
-      if (!saveResult.success) {
-        return ResultFactory.fail(saveResult.error)
-      }
-
-      console.log(`📋 Folio offline: ${nextFolio} (local: ${incrementedResult.value.ultimoNumero}, sincronizado: false)`)
-
-      return ResultFactory.ok(nextFolio)
+      return ResultFactory.ok(folio)
     } catch (error) {
       return ResultFactory.fromError(error)
     }

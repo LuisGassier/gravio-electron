@@ -182,6 +182,19 @@ export class SupabaseFolioSequenceRepository implements IFolioSequenceRepository
   }
 
   /**
+   * Not implemented for Supabase - folio generation is always local
+   * Supabase is used only for reconciliation, not generation
+   */
+  async incrementAndGetNext(
+    claveEmpresa: number,
+    prefijoEmpresa: string
+  ): Promise<Result<{ folio: string; sequence: FolioSequence }>> {
+    return ResultFactory.fail(
+      new Error('incrementAndGetNext not supported for Supabase repository - use local repository')
+    )
+  }
+
+  /**
    * Mapea una fila de Supabase a entidad FolioSequence
    */
   private mapRowToSequence(row: any): Result<FolioSequence> {

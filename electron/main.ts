@@ -17,6 +17,7 @@ import {
   getOne,
   getAll,
   runCommand,
+  atomicIncrementFolioSequence,
 } from './database'
 
 import {
@@ -38,6 +39,41 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 // Variables globales
 let mainWindow: BrowserWindow | null = null
 const store = new Store()
+
+// Mutex for serializing folio generation per empresa
+const folioMutexes = new Map<number, Promise<any>>()
+
+/**
+ * Wraps an async operation with a mutex lock per empresa
+ * Ensures serial execution even if multiple IPC calls arrive
+ */
+async function withFolioMutex<T>(
+  claveEmpresa: number,
+  operation: () => Promise<T>
+): Promise<T> {
+  // Wait for any pending operation for this empresa
+  const pending = folioMutexes.get(claveEmpresa)
+  if (pending) {
+    await pending.catch(() => {}) // Ignore errors from previous operations
+  }
+
+  // Create new promise that will be resolved when operation completes
+  let resolveMutex: () => void
+  const mutex = new Promise<void>((resolve) => {
+    resolveMutex = resolve
+  })
+  folioMutexes.set(claveEmpresa, mutex)
+
+  try {
+    // Execute the operation
+    const result = await operation()
+    return result
+  } finally {
+    // Release mutex
+    resolveMutex!()
+    folioMutexes.delete(claveEmpresa)
+  }
+}
 
 // Constantes
 const isDev = process.env.NODE_ENV === 'development'
@@ -209,6 +245,13 @@ function registerIpcHandlers() {
   
   ipcMain.handle('db:all', (_event, sql: string, params?: any[]) => {
     return getAll(sql, params)
+  })
+
+  // Atomic folio increment (prevents race conditions)
+  ipcMain.handle('db:atomicIncrementFolio', async (_event, claveEmpresa: number, prefijoEmpresa: string) => {
+    return withFolioMutex(claveEmpresa, async () => {
+      return atomicIncrementFolioSequence(claveEmpresa, prefijoEmpresa)
+    })
   })
 
   // Printer (Impresora Térmica)

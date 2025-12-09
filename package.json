@@ -1,7 +1,7 @@
 {
   "name": "gravio-electron",
   "private": true,
-  "version": "1.2.3",
+  "version": "1.2.4",
   "description": "Sistema de Gestión de Relleno Sanitario",
   "author": "Gravio",
   "main": "dist-electron/main.js",

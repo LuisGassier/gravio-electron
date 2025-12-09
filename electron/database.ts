@@ -233,6 +233,8 @@ function createTables() {
     CREATE INDEX IF NOT EXISTS idx_registros_unsynced ON registros(sincronizado, updated_at) WHERE sincronizado = 0;
     CREATE INDEX IF NOT EXISTS idx_registros_empresa_folio ON registros(clave_empresa, folio DESC) WHERE folio IS NOT NULL;
     CREATE INDEX IF NOT EXISTS idx_registros_folio_lookup ON registros(folio) WHERE folio IS NOT NULL;
+    -- Unique constraint on folio per empresa (prevents duplicates)
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_registros_unique_folio ON registros(clave_empresa, folio) WHERE folio IS NOT NULL;
     CREATE INDEX IF NOT EXISTS idx_sync_queue_table ON sync_queue(table_name);
     CREATE INDEX IF NOT EXISTS idx_usuarios_email ON usuarios(email);
     CREATE INDEX IF NOT EXISTS idx_vehiculos_placas ON vehiculos(placas);
@@ -334,6 +336,69 @@ export function executeTransaction(queries: Array<{ sql: string; params?: any[] 
     console.error('❌ Error en transacción:', error)
     throw error
   }
+}
+
+/**
+ * Atomically increments folio sequence and returns next folio
+ * Uses immediate transaction to prevent race conditions
+ *
+ * @param claveEmpresa - Company key
+ * @param prefijoEmpresa - Company prefix (e.g., "PALA")
+ * @returns Object with folio and ultimoNumero
+ */
+export function atomicIncrementFolioSequence(
+  claveEmpresa: number,
+  prefijoEmpresa: string
+): { folio: string; ultimoNumero: number } {
+  if (!db) {
+    throw new Error('Base de datos no inicializada')
+  }
+
+  // Create immediate transaction (acquires write lock before first operation)
+  const transaction = db.transaction(() => {
+    // Check if sequence exists
+    const existing = db!.prepare(
+      'SELECT * FROM folio_sequences WHERE clave_empresa = ?'
+    ).get(claveEmpresa) as any
+
+    let ultimoNumero: number
+
+    if (!existing) {
+      // Initialize new sequence starting at 1
+      ultimoNumero = 1
+      const id = `seq-${claveEmpresa}`
+      const now = new Date().toISOString()
+
+      db!.prepare(`
+        INSERT INTO folio_sequences
+        (id, clave_empresa, prefijo_empresa, ultimo_numero, sincronizado, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(id, claveEmpresa, prefijoEmpresa, ultimoNumero, 0, now)
+
+      console.log(`📋 Nueva secuencia inicializada para empresa ${claveEmpresa}: ${ultimoNumero}`)
+    } else {
+      // Increment existing sequence
+      ultimoNumero = existing.ultimo_numero + 1
+      const now = new Date().toISOString()
+
+      db!.prepare(`
+        UPDATE folio_sequences
+        SET ultimo_numero = ?, sincronizado = 0, updated_at = ?
+        WHERE clave_empresa = ?
+      `).run(ultimoNumero, now, claveEmpresa)
+
+      console.log(`📋 Secuencia incrementada para empresa ${claveEmpresa}: ${existing.ultimo_numero} → ${ultimoNumero}`)
+    }
+
+    // Format folio: PREF-0000001
+    const folio = `${prefijoEmpresa}-${ultimoNumero.toString().padStart(7, '0')}`
+
+    return { folio, ultimoNumero }
+  })
+
+  // Execute as immediate transaction (BEGIN IMMEDIATE)
+  // This acquires write lock at transaction start, preventing concurrent reads
+  return transaction.immediate()
 }
 
 // Obtener transacciones no sincronizadas

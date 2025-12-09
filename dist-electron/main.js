@@ -31058,6 +31058,10 @@ function createTables() {
     CREATE INDEX IF NOT EXISTS idx_registros_fecha_entrada ON registros(fecha_entrada);
     CREATE INDEX IF NOT EXISTS idx_registros_pending ON registros(peso_salida) WHERE peso_salida IS NULL;
     CREATE INDEX IF NOT EXISTS idx_registros_unsynced ON registros(sincronizado, updated_at) WHERE sincronizado = 0;
+    CREATE INDEX IF NOT EXISTS idx_registros_empresa_folio ON registros(clave_empresa, folio DESC) WHERE folio IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS idx_registros_folio_lookup ON registros(folio) WHERE folio IS NOT NULL;
+    -- Unique constraint on folio per empresa (prevents duplicates)
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_registros_unique_folio ON registros(clave_empresa, folio) WHERE folio IS NOT NULL;
     CREATE INDEX IF NOT EXISTS idx_sync_queue_table ON sync_queue(table_name);
     CREATE INDEX IF NOT EXISTS idx_usuarios_email ON usuarios(email);
     CREATE INDEX IF NOT EXISTS idx_vehiculos_placas ON vehiculos(placas);
@@ -31065,6 +31069,7 @@ function createTables() {
     CREATE INDEX IF NOT EXISTS idx_rutas_clave ON rutas(clave_ruta);
     CREATE INDEX IF NOT EXISTS idx_empresa_clave ON empresa(clave_empresa);
     CREATE INDEX IF NOT EXISTS idx_conceptos_id ON conceptos(id);
+    CREATE INDEX IF NOT EXISTS idx_folio_sequences_empresa ON folio_sequences(clave_empresa);
   `);
   db.pragma("foreign_keys = OFF");
   console.log("✅ Tablas de base de datos creadas (estructura compatible con Supabase)");
@@ -31134,6 +31139,40 @@ function executeTransaction(queries) {
     console.error("❌ Error en transacción:", error2);
     throw error2;
   }
+}
+function atomicIncrementFolioSequence(claveEmpresa, prefijoEmpresa) {
+  if (!db) {
+    throw new Error("Base de datos no inicializada");
+  }
+  const transaction = db.transaction(() => {
+    const existing = db.prepare(
+      "SELECT * FROM folio_sequences WHERE clave_empresa = ?"
+    ).get(claveEmpresa);
+    let ultimoNumero;
+    if (!existing) {
+      ultimoNumero = 1;
+      const id2 = `seq-${claveEmpresa}`;
+      const now = (/* @__PURE__ */ new Date()).toISOString();
+      db.prepare(`
+        INSERT INTO folio_sequences
+        (id, clave_empresa, prefijo_empresa, ultimo_numero, sincronizado, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(id2, claveEmpresa, prefijoEmpresa, ultimoNumero, 0, now);
+      console.log(`📋 Nueva secuencia inicializada para empresa ${claveEmpresa}: ${ultimoNumero}`);
+    } else {
+      ultimoNumero = existing.ultimo_numero + 1;
+      const now = (/* @__PURE__ */ new Date()).toISOString();
+      db.prepare(`
+        UPDATE folio_sequences
+        SET ultimo_numero = ?, sincronizado = 0, updated_at = ?
+        WHERE clave_empresa = ?
+      `).run(ultimoNumero, now, claveEmpresa);
+      console.log(`📋 Secuencia incrementada para empresa ${claveEmpresa}: ${existing.ultimo_numero} → ${ultimoNumero}`);
+    }
+    const folio = `${prefijoEmpresa}-${ultimoNumero.toString().padStart(7, "0")}`;
+    return { folio, ultimoNumero };
+  });
+  return transaction.immediate();
 }
 function getOne(sql, params = []) {
   if (!db) throw new Error("Database not initialized");
@@ -31650,6 +31689,26 @@ async function printThermal(mainWindow2, data) {
 const __dirname$1 = require$$1$1.dirname(fileURLToPath(import.meta.url));
 let mainWindow = null;
 const store = new ElectronStore();
+const folioMutexes = /* @__PURE__ */ new Map();
+async function withFolioMutex(claveEmpresa, operation) {
+  const pending = folioMutexes.get(claveEmpresa);
+  if (pending) {
+    await pending.catch(() => {
+    });
+  }
+  let resolveMutex;
+  const mutex = new Promise((resolve2) => {
+    resolveMutex = resolve2;
+  });
+  folioMutexes.set(claveEmpresa, mutex);
+  try {
+    const result = await operation();
+    return result;
+  } finally {
+    resolveMutex();
+    folioMutexes.delete(claveEmpresa);
+  }
+}
 const isDev = process.env.NODE_ENV === "development";
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -31775,6 +31834,11 @@ function registerIpcHandlers() {
   ipcMain$1.handle("db:all", (_event, sql, params) => {
     return getAll(sql, params);
   });
+  ipcMain$1.handle("db:atomicIncrementFolio", async (_event, claveEmpresa, prefijoEmpresa) => {
+    return withFolioMutex(claveEmpresa, async () => {
+      return atomicIncrementFolioSequence(claveEmpresa, prefijoEmpresa);
+    });
+  });
   ipcMain$1.handle("printer:list", () => listPrinters(mainWindow));
   ipcMain$1.handle("printer:print", (_event, data) => printThermal(mainWindow, data));
   ipcMain$1.handle("sync:start", async () => {
@@ -31831,10 +31895,6 @@ if (!gotTheLock) {
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.focus();
-    }
-  });
-}
-cus();
     }
   });
 }

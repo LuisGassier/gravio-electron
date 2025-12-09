@@ -29,17 +29,19 @@ contextBridge.exposeInMainWorld('electron', {
 
   // Database (SQLite Offline)
   db: {
-    query: (sql: string, params?: any[]) => 
+    query: (sql: string, params?: any[]) =>
       ipcRenderer.invoke('db:query', sql, params),
     exec: (sql: string) => ipcRenderer.invoke('db:exec', sql),
-    transaction: (queries: Array<{ sql: string; params?: any[] }>) => 
+    transaction: (queries: Array<{ sql: string; params?: any[] }>) =>
       ipcRenderer.invoke('db:transaction', queries),
-    get: (sql: string, params?: any[]) => 
+    get: (sql: string, params?: any[]) =>
       ipcRenderer.invoke('db:get', sql, params),
-    run: (sql: string, params?: any[]) => 
+    run: (sql: string, params?: any[]) =>
       ipcRenderer.invoke('db:run', sql, params),
-    all: (sql: string, params?: any[]) => 
+    all: (sql: string, params?: any[]) =>
       ipcRenderer.invoke('db:all', sql, params),
+    atomicIncrementFolio: (claveEmpresa: number, prefijoEmpresa: string) =>
+      ipcRenderer.invoke('db:atomicIncrementFolio', claveEmpresa, prefijoEmpresa),
   },
 
   // Sync
@@ -107,6 +109,10 @@ export type ElectronAPI = {
     get: (sql: string, params?: any[]) => Promise<any | undefined>
     run: (sql: string, params?: any[]) => Promise<void>
     all: (sql: string, params?: any[]) => Promise<any[]>
+    atomicIncrementFolio: (claveEmpresa: number, prefijoEmpresa: string) => Promise<{
+      folio: string
+      ultimoNumero: number
+    }>
   }
   sync: {
     start: () => Promise<void>

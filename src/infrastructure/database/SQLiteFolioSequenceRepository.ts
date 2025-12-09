@@ -182,6 +182,47 @@ export class SQLiteFolioSequenceRepository implements IFolioSequenceRepository {
   }
 
   /**
+   * Atomically increments the sequence and returns the next folio
+   * Delegates to Electron main process for atomic database operation
+   */
+  async incrementAndGetNext(
+    claveEmpresa: number,
+    prefijoEmpresa: string
+  ): Promise<Result<{ folio: string; sequence: FolioSequence }>> {
+    try {
+      if (!window.electron) {
+        return ResultFactory.fail(new Error('Electron API no disponible'))
+      }
+
+      // Call atomic increment via IPC (includes mutex + transaction)
+      const result = await window.electron.db.atomicIncrementFolio(
+        claveEmpresa,
+        prefijoEmpresa
+      )
+
+      // Create sequence entity from result
+      const sequenceResult = FolioSequence.create({
+        claveEmpresa,
+        prefijoEmpresa,
+        ultimoNumero: result.ultimoNumero,
+        sincronizado: false, // Offline operation, not synced yet
+        updatedAt: new Date(),
+      })
+
+      if (!sequenceResult.success) {
+        return ResultFactory.fail(sequenceResult.error)
+      }
+
+      return ResultFactory.ok({
+        folio: result.folio,
+        sequence: sequenceResult.value,
+      })
+    } catch (error) {
+      return ResultFactory.fromError(error)
+    }
+  }
+
+  /**
    * Mapea una fila de base de datos a entidad FolioSequence
    */
   private mapRowToSequence(row: any): Result<FolioSequence> {

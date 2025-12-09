@@ -36,4 +36,20 @@ export interface IFolioSequenceRepository {
    * Obtiene todas las secuencias no sincronizadas
    */
   findUnsynchronized(): Promise<Result<FolioSequence[]>>
+
+  /**
+   * Atomically increments the sequence and returns the next folio
+   * Uses database transaction to prevent race conditions
+   *
+   * @param claveEmpresa - Company key
+   * @param prefijoEmpresa - Company prefix (e.g., "PALA")
+   * @returns Next folio and updated sequence
+   */
+  incrementAndGetNext(
+    claveEmpresa: number,
+    prefijoEmpresa: string
+  ): Promise<Result<{
+    folio: string
+    sequence: FolioSequence
+  }>>
 }
