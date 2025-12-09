@@ -193,6 +193,14 @@ export function PendingTrucksPanel() {
                       </div>
 
                       <div className="space-y-1.5">
+                        {truck.folio && (
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground">Folio:</span>
+                            <span className="text-xs text-primary font-bold font-mono bg-primary/10 px-2 py-0.5 rounded border border-primary/20">
+                              {truck.folio}
+                            </span>
+                          </div>
+                        )}
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-muted-foreground">Placas:</span>
                           <span className="text-xs text-foreground font-semibold bg-muted/30 px-2 py-0.5 rounded">
