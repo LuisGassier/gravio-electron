@@ -14,6 +14,8 @@ const TARGET_MONTH_TOTAL_KG = parseInt(process.env.TARGET_MONTH_TOTAL_KG || '380
 const TARGET_MONTH_VARIATION = parseInt(process.env.TARGET_MONTH_VARIATION || '10000', 10)
 const TARGET_DAILY_COUNT_MEAN = parseInt(process.env.TARGET_DAILY_COUNT_MEAN || '10', 10)
 const DRY_RUN = (process.env.DRY_RUN || 'true') === 'true'
+const PHYSICAL_COOLDOWN_MINUTES = parseInt(process.env.PHYSICAL_COOLDOWN_MINUTES || '30', 10)
+const PHYSICAL_OVERRIDE_PROB = parseFloat(process.env.PHYSICAL_OVERRIDE_PROB || '0.05')
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
   console.warn('SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY not set; function won\'t run live')
@@ -135,23 +137,45 @@ export default async function handler(req: any, res: any) {
     const now = new Date()
 
     // count registros for today for this company and find last timestamp
-    const { data: todaysRegs } = await supabase
+    // Query registros table and filter by registrado_por to differentiate physical vs virtual
+    const { data: todaysRecords } = await supabase
       .from('registros')
-      .select('id, fecha_entrada')
+      .select('id, fecha_entrada, registrado_por')
       .gte('fecha_entrada', startOfDay.toISOString())
       .lte('fecha_entrada', now.toISOString())
       .eq('clave_empresa', CLAVE_EMPRESA)
 
-    const todaysCount = (todaysRegs && Array.isArray(todaysRegs)) ? todaysRegs.length : 0
+    // Separate physical and virtual records based on registrado_por marker
+    const todaysPhysical = todaysRecords?.filter(r =>
+      !r.registrado_por || !r.registrado_por.includes('SYSTEM_GENERATED_OOSLMP')
+    ) || []
+    const todaysVirtual = todaysRecords?.filter(r =>
+      r.registrado_por && r.registrado_por.includes('SYSTEM_GENERATED_OOSLMP')
+    ) || []
+
+    const physicalCount = todaysPhysical.length
+    const generatedCount = todaysVirtual.length
+    const todaysCount = physicalCount + generatedCount
+
+    // Compute last physical registro time (only from physical records)
+    let lastPhysicalTime: Date | null = null
+    if (todaysPhysical.length) {
+      const pd = todaysPhysical.map((r: any) => new Date(r.fecha_entrada))
+      lastPhysicalTime = new Date(Math.max.apply(null, pd as any))
+    }
+
+    // Compute last registro time considering BOTH physical and virtual (for spacing)
+    const allToday = todaysRecords || []
     let lastRegistroTime: Date | null = null
-    if (todaysRegs && todaysRegs.length) {
-      const dates = todaysRegs.map((r: any) => new Date(r.fecha_entrada))
+    if (allToday.length) {
+      const dates = allToday.map((r: any) => new Date(r.fecha_entrada))
       lastRegistroTime = new Date(Math.max.apply(null, dates as any))
     }
 
     // Determine target daily count (randomized within 9-11 but consistent per run)
     const dailyTarget = Math.max(9, Math.min(11, Math.round(sampleTruncatedNormal(TARGET_DAILY_COUNT_MEAN, 1, 9, 11))))
-    const remainingToday = Math.max(0, dailyTarget - todaysCount)
+    // Remaining slots consider both physical and generated records: target is for the total daily count
+    const remainingToday = Math.max(0, dailyTarget - (physicalCount + generatedCount))
 
     // compute remaining allowed minutes in today's windows
     const day = now.getDay()
@@ -188,8 +212,19 @@ export default async function handler(req: any, res: any) {
       }
     }
 
+    // PRIORITY: avoid generating if a physical registro happened recently within cooldown window
+    if (lastPhysicalTime) {
+      const minutesSinceLastPhysical = Math.ceil((now.getTime() - lastPhysicalTime.getTime()) / 60000)
+      if (minutesSinceLastPhysical < PHYSICAL_COOLDOWN_MINUTES) {
+        // allow rare override with small probability
+        if (Math.random() >= PHYSICAL_OVERRIDE_PROB) {
+          return res.json({ ok: true, message: 'Skipping insertion due to recent physical registro', minutesSinceLastPhysical, PHYSICAL_COOLDOWN_MINUTES, dailyTarget, physicalCount, generatedCount })
+        }
+      }
+    }
+
     if (!shouldInsert) {
-      return res.json({ ok: true, message: 'Skipping insertion this run to preserve spacing', dailyTarget, todaysCount, remainingToday, minutesLeftInWindows })
+      return res.json({ ok: true, message: 'Skipping insertion this run to preserve spacing', dailyTarget, physicalCount, generatedCount, remainingToday, minutesLeftInWindows })
     }
 
     // Timestamp candidate: choose within today avoiding sunday 07:00-16:00
@@ -214,48 +249,65 @@ export default async function handler(req: any, res: any) {
       return ts
     })()
 
-    // Collision check
+    // Collision check - verify against all records in registros table
     const bufferMs = COLLISION_BUFFER_MINUTES * 60 * 1000
     const tsStart = new Date(candidateTs.getTime() - bufferMs)
     const tsEnd = new Date(candidateTs.getTime() + bufferMs)
 
-    const { data: collisions, error: collErr } = await supabase
+    const { data: collisions } = await supabase
       .from('registros')
-      .select('id, fecha_entrada, clave_empresa')
+      .select('id, fecha_entrada')
       .gte('fecha_entrada', tsStart.toISOString())
       .lte('fecha_entrada', tsEnd.toISOString())
+      .eq('clave_empresa', CLAVE_EMPRESA)
       .limit(1)
 
-    if (collErr) {
-      console.warn('Error checking collisions', collErr)
-    }
-
-    if (collisions && collisions.length) {
+    if (collisions && collisions.length > 0) {
       // collision detected: try to shift timestamp by buffer*2 forward
       candidateTs.setTime(candidateTs.getTime() + bufferMs * 2)
     }
 
-    // Generate weight using truncated normal around kgPerRecordTarget
-    const mean = Math.max(kgPerRecordTarget, 500) // fallback min 500kg
-    const std = Math.max(mean * 0.15, 50)
-    const weight = Math.round(sampleTruncatedNormal(mean, std, Math.max(200, mean * 0.5), mean * 2))
+    // Generate peso_salida (empty truck weight) based on real data
+    // Real data: min=6,630 kg, max=14,650 kg, avg=8,789 kg, median=6,890 kg
+    const pesoSalida = Math.round(sampleTruncatedNormal(8800, 2000, 6600, 14600))
+
+    // Generate waste (difference) using kgPerRecordTarget
+    const wasteMean = Math.max(kgPerRecordTarget, 5000) // fallback min 5 tons
+    const wasteStd = Math.max(wasteMean * 0.1, 500)
+    const waste = Math.round(sampleTruncatedNormal(wasteMean, wasteStd, Math.max(5000, wasteMean * 0.8), wasteMean * 1.2))
+
+    // Calculate entrada weight (truck arrives full)
+    const pesoEntrada = waste + pesoSalida
+
+    // Generate exit time: 11 minutes ± 4 minutes after entry
+    const minutesDiff = Math.round(sampleTruncatedNormal(11, 4, 7, 15))
+    const fechaSalida = new Date(candidateTs.getTime() + minutesDiff * 60 * 1000)
+
+    // created_at should be ~2-3 seconds before fecha_entrada
+    const createdAt = new Date(candidateTs.getTime() - (2000 + Math.random() * 1000))
 
     const registro = {
       clave_empresa: CLAVE_EMPRESA,
       tipo_pesaje: 'entrada',
-      peso_entrada: weight,
+      peso: waste,
+      peso_entrada: pesoEntrada,
+      peso_salida: pesoSalida,
       fecha_entrada: candidateTs.toISOString(),
+      fecha_salida: fechaSalida.toISOString(),
+      created_at: createdAt.toISOString(),
+      updated_at: createdAt.toISOString(),
       registrado_por: 'SYSTEM_GENERATED_OOSLMP',
-      sincronizado: false,
       operador: operador?.operador || null,
       clave_operador: operador?.clave_operador || null,
       numero_economico: vehiculo?.no_economico || null,
-      placa_vehiculo: vehiculo?.placas || null,
+      placa_vehiculo: vehiculo?.placas || 'VIRTUAL-PLACEHOLDER',
       ruta: ruta?.ruta || null,
       clave_ruta: ruta?.clave_ruta || null,
       clave_concepto: concepto?.clave_concepto || null,
       concepto_id: concepto?.id || null,
       folio: null,
+      sincronizado: true,
+      generated_by_run_id: null as string | null, // Will be set after audit insert
     }
 
     // Insert audit row first to get run_id
@@ -280,10 +332,14 @@ export default async function handler(req: any, res: any) {
     const runId = auditData && auditData[0] && auditData[0].id
 
     // attach run id to registro
-    // @ts-ignore
     registro.generated_by_run_id = runId
 
-    const { data: insertData, error: insertErr } = await supabase.from('registros').insert(registro).select('*').limit(1)
+    // Insert into registros table (marked as virtual via registrado_por field)
+    const { data: insertData, error: insertErr } = await supabase
+      .from('registros')
+      .insert(registro)
+      .select('*')
+      .limit(1)
     if (insertErr) {
       console.error('Error inserting registro', insertErr)
       // attempt to mark audit with error note
@@ -292,7 +348,7 @@ export default async function handler(req: any, res: any) {
     }
 
     // update audit with created info
-    await supabase.from('generated_records_audit').update({ registros_creados: 1, kg_generados: weight }).eq('id', runId)
+    await supabase.from('generated_records_audit').update({ registros_creados: 1, kg_generados: waste }).eq('id', runId)
 
     return res.json({ ok: true, registro: insertData && insertData[0], runId })
   } catch (err) {
