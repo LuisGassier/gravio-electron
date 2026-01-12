@@ -1,33 +1,29 @@
-import { createClient } from '@supabase/supabase-js'
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
-// Edge Function / Supabase function scaffold
-// Requiere en el entorno: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
-// Configurables mediante env: CLAVE_EMPRESA, COLLISION_BUFFER_MINUTES, TIMEZONE, ALLOW_BACKFILL, TARGET_MONTH_TOTAL_KG, TARGET_DAILY_COUNT_MEAN, DRY_RUN
-
-const SUPABASE_URL = process.env.SUPABASE_URL || ''
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-const CLAVE_EMPRESA = parseInt(process.env.CLAVE_EMPRESA || '4', 10)
-const COLLISION_BUFFER_MINUTES = parseInt(process.env.COLLISION_BUFFER_MINUTES || '8', 10)
-const TIMEZONE = process.env.TIMEZONE || 'America/Mexico_City'
-const ALLOW_BACKFILL = (process.env.ALLOW_BACKFILL || 'false') === 'true'
-const TARGET_MONTH_TOTAL_KG = parseInt(process.env.TARGET_MONTH_TOTAL_KG || '380000', 10)
-const TARGET_MONTH_VARIATION = parseInt(process.env.TARGET_MONTH_VARIATION || '10000', 10)
-const TARGET_DAILY_COUNT_MEAN = parseInt(process.env.TARGET_DAILY_COUNT_MEAN || '10', 10)
-const DRY_RUN = (process.env.DRY_RUN || 'true') === 'true'
-const PHYSICAL_COOLDOWN_MINUTES = parseInt(process.env.PHYSICAL_COOLDOWN_MINUTES || '30', 10)
-const PHYSICAL_OVERRIDE_PROB = parseFloat(process.env.PHYSICAL_OVERRIDE_PROB || '0.05')
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || ''
+const SUPABASE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+const CLAVE_EMPRESA = parseInt(Deno.env.get('CLAVE_EMPRESA') || '4', 10)
+const COLLISION_BUFFER_MINUTES = parseInt(Deno.env.get('COLLISION_BUFFER_MINUTES') || '8', 10)
+const TIMEZONE = Deno.env.get('TIMEZONE') || 'America/Mexico_City'
+const ALLOW_BACKFILL = (Deno.env.get('ALLOW_BACKFILL') || 'false') === 'true'
+const TARGET_MONTH_TOTAL_KG = parseInt(Deno.env.get('TARGET_MONTH_TOTAL_KG') || '2750000', 10)
+const TARGET_MONTH_VARIATION = parseInt(Deno.env.get('TARGET_MONTH_VARIATION') || '250000', 10)
+const TARGET_DAILY_COUNT_MEAN = parseInt(Deno.env.get('TARGET_DAILY_COUNT_MEAN') || '11', 10)
+const MAX_DAILY_TOTAL = parseInt(Deno.env.get('MAX_DAILY_TOTAL') || '12', 10)
+const DRY_RUN = (Deno.env.get('DRY_RUN') || 'true') === 'true'
+const PHYSICAL_COOLDOWN_MINUTES = parseInt(Deno.env.get('PHYSICAL_COOLDOWN_MINUTES') || '30', 10)
+const PHYSICAL_OVERRIDE_PROB = parseFloat(Deno.env.get('PHYSICAL_OVERRIDE_PROB') || '0.05')
+const ACTIVITY_WINDOW_HOURS = parseInt(Deno.env.get('ACTIVITY_WINDOW_HOURS') || '4', 10)
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
   console.warn('SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY not set; function won\'t run live')
 }
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
-  auth: {
-    persistSession: false,
-  },
+  auth: { persistSession: false },
 })
 
-// Utility: truncated normal via simple rejection sampling
 function sampleTruncatedNormal(mean: number, std: number, min: number, max: number) {
   for (let i = 0; i < 100; i++) {
     const u1 = Math.random()
@@ -39,74 +35,53 @@ function sampleTruncatedNormal(mean: number, std: number, min: number, max: numb
   return Math.max(min, Math.min(max, mean))
 }
 
-// Helper: format UTC timestamp candidate using local timezone offsets if needed
-function nowLocal(date = new Date()) {
-  return new Date(date.toISOString())
-}
-
-export default async function handler(req: any, res: any) {
+Deno.serve(async (req) => {
   try {
-    // Determine target for the month with small random variation
     const variation = Math.floor((Math.random() * 2 - 1) * TARGET_MONTH_VARIATION)
     const targetMonthKg = TARGET_MONTH_TOTAL_KG + variation
 
-    // Get current date in server timezone (we treat as local for scheduling purposes)
     const today = new Date()
     const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
     const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59)
 
-    // 1) sumar kg actuales del mes para la empresa
-    const { data: sumData, error: sumError } = await supabase
-      .rpc('sum_registros_peso_by_empresa', { p_clave_empresa: CLAVE_EMPRESA, p_start: startOfMonth.toISOString(), p_end: endOfMonth.toISOString() })
-
-    // Note: si no tienes el RPC `sum_registros_peso_by_empresa`, abajo incluyo la SQL equivalente como comentario
-    // SQL equivalente (ejecutar como query si RPC no existe):
-    // SELECT COALESCE(SUM(COALESCE(peso_entrada, peso_salida, peso, 0)),0)::numeric as total_kg
-    // FROM public.registros
-    // WHERE clave_empresa = $1 AND fecha_entrada BETWEEN $2 AND $3
-
+    // Calculate current waste for the month
     let kgActuales = 0
-    if (sumError) {
-      console.warn('RPC sum_registros_peso_by_empresa no disponible o falló; intentando consulta directa', sumError)
-      const q = `SELECT COALESCE(SUM(COALESCE(peso_entrada, peso_salida, peso, 0)),0) as total_kg FROM public.registros WHERE clave_empresa = $1 AND fecha_entrada BETWEEN $2 AND $3`
-      const raw = await supabase.rpc('sql_query', { query: q, params: [CLAVE_EMPRESA, startOfMonth.toISOString(), endOfMonth.toISOString()] })
-      // Si no hay helper, seguiremos con kgActuales = 0 y trabajaremos en dry-run
-    } else {
-      // supabase-js devuelve data con la suma si RPC existe
-      // Ajuste: depende de la implementación del RPC
-      // Aquí asumimos que sumData[0].total_kg contiene la suma
-      if (sumData && Array.isArray(sumData) && sumData.length > 0) {
-        // @ts-ignore
-        kgActuales = Number(sumData[0].total_kg || 0)
-      }
+    const { data: registros } = await supabase
+      .from('registros')
+      .select('peso, peso_entrada, peso_salida')
+      .eq('clave_empresa', CLAVE_EMPRESA)
+      .gte('fecha_entrada', startOfMonth.toISOString())
+      .lte('fecha_entrada', endOfMonth.toISOString())
+
+    if (registros) {
+      registros.forEach((r: any) => {
+        const waste = r.peso || (r.peso_entrada && r.peso_salida ? r.peso_entrada - r.peso_salida : 0)
+        kgActuales += waste || 0
+      })
     }
 
-    // 2) calcular kg faltantes
     const kgFaltantes = Math.max(0, targetMonthKg - kgActuales)
 
-    // 3) calcular días y registros restantes
-    // simplificación: días hábiles restantes = días entre hoy y fin de mes excluyendo domingos en que no hay pesaje completo
     const daysRemaining = (() => {
       const tzToday = new Date(today.getFullYear(), today.getMonth(), today.getDate())
       let count = 0
       for (let d = new Date(tzToday); d <= endOfMonth; d.setDate(d.getDate() + 1)) {
-        const day = d.getDay() // 0 = domingo
-        if (day === 0) continue // skip sunday because there's partial window
+        const day = d.getDay()
+        if (day === 0) continue
         count++
       }
       return count || 1
     })()
 
     const expectedRecordsRemaining = Math.max(1, daysRemaining * TARGET_DAILY_COUNT_MEAN)
-
     const kgPerRecordTarget = kgFaltantes / expectedRecordsRemaining
 
-    // Decide whether generate now: if kgFaltantes <= 0 return
     if (kgFaltantes <= 0) {
-      return res.json({ ok: true, message: 'No hay kg faltantes en el mes' })
+      return new Response(JSON.stringify({ ok: true, message: 'No hay kg faltantes en el mes' }), {
+        headers: { 'Content-Type': 'application/json' }
+      })
     }
 
-    // Preparar listas de operadores, rutas, conceptos y vehiculos para clave_empresa
     const [{ data: operadores }, { data: vehiculos }, { data: rutas }, { data: conceptos }] = await Promise.all([
       supabase
         .from('operadores')
@@ -125,19 +100,35 @@ export default async function handler(req: any, res: any) {
       return [{ data: [] }, { data: [] }, { data: [] }, { data: [] }]
     })
 
-    // Select random items with fallback
     const pickRandom = (arr: any[]) => (arr && arr.length ? arr[Math.floor(Math.random() * arr.length)] : null)
     const operador = pickRandom(operadores || [])
-    const vehiculo = pickRandom(vehiculos?.data || [])
-    const ruta = pickRandom(rutas?.data || [])
-    const concepto = pickRandom(conceptos?.data || [])
+    const vehiculo = pickRandom(vehiculos || [])
+    const ruta = pickRandom(rutas || [])
+    const concepto = pickRandom(conceptos || [])
 
-    // Decide whether to insert now based on spacing and daily targets
     const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0)
     const now = new Date()
 
-    // count registros for today for this company and find last timestamp
-    // Query registros table and filter by registrado_por to differentiate physical vs virtual
+    // Check for recent activity from ANY company (landfill is operating)
+    const activityWindowStart = new Date(now.getTime() - ACTIVITY_WINDOW_HOURS * 60 * 60 * 1000)
+    const { data: recentActivity } = await supabase
+      .from('registros')
+      .select('id, clave_empresa, fecha_entrada')
+      .gte('fecha_entrada', activityWindowStart.toISOString())
+      .lte('fecha_entrada', now.toISOString())
+      .limit(1)
+
+    if (!recentActivity || recentActivity.length === 0) {
+      return new Response(JSON.stringify({ 
+        ok: true, 
+        message: `No hay actividad en el relleno en las últimas ${ACTIVITY_WINDOW_HOURS} horas - día sin trabajo`,
+        activityWindowHours: ACTIVITY_WINDOW_HOURS
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      })
+    }
+
+    // Get today's records for OOSLMP
     const { data: todaysRecords } = await supabase
       .from('registros')
       .select('id, fecha_entrada, registrado_por')
@@ -145,7 +136,6 @@ export default async function handler(req: any, res: any) {
       .lte('fecha_entrada', now.toISOString())
       .eq('clave_empresa', CLAVE_EMPRESA)
 
-    // Separate physical and virtual records based on registrado_por marker
     const todaysPhysical = todaysRecords?.filter(r =>
       !r.registrado_por || !r.registrado_por.includes('SYSTEM_GENERATED_OOSLMP')
     ) || []
@@ -157,14 +147,12 @@ export default async function handler(req: any, res: any) {
     const generatedCount = todaysVirtual.length
     const todaysCount = physicalCount + generatedCount
 
-    // Compute last physical registro time (only from physical records)
     let lastPhysicalTime: Date | null = null
     if (todaysPhysical.length) {
       const pd = todaysPhysical.map((r: any) => new Date(r.fecha_entrada))
       lastPhysicalTime = new Date(Math.max.apply(null, pd as any))
     }
 
-    // Compute last registro time considering BOTH physical and virtual (for spacing)
     const allToday = todaysRecords || []
     let lastRegistroTime: Date | null = null
     if (allToday.length) {
@@ -172,69 +160,63 @@ export default async function handler(req: any, res: any) {
       lastRegistroTime = new Date(Math.max.apply(null, dates as any))
     }
 
-    // Determine target daily count (randomized within 9-11 but consistent per run)
-    const dailyTarget = Math.max(9, Math.min(11, Math.round(sampleTruncatedNormal(TARGET_DAILY_COUNT_MEAN, 1, 9, 11))))
-    // Remaining slots consider both physical and generated records: target is for the total daily count
+    const dailyTarget = Math.min(MAX_DAILY_TOTAL, Math.round(sampleTruncatedNormal(TARGET_DAILY_COUNT_MEAN, 1, 10, 12)))
     const remainingToday = Math.max(0, dailyTarget - (physicalCount + generatedCount))
 
-    // compute remaining allowed minutes in today's windows
     const day = now.getDay()
-    const weekdayStartHour = 7
-    const weekdayEndHour = 17
     let minutesLeftInWindows = 0
     function minutesBetween(a: Date, b: Date) { return Math.max(0, Math.ceil((b.getTime() - a.getTime()) / 60000)) }
 
+    // Monday-Saturday: 24 hours (00:00 - 23:59)
+    // Sunday: Two windows (00:00-07:00 and 16:00-23:59)
     if (day === 0) {
-      // sunday: allowed windows are 00:00-07:00 and 16:00-23:59
       const window1End = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 7, 0, 0)
       const window2Start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 16, 0, 0)
       const window2End = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59)
       if (now < window1End) minutesLeftInWindows += minutesBetween(now, window1End)
       if (now < window2End) minutesLeftInWindows += minutesBetween(Math.max(now, window2Start), window2End)
     } else {
-      const windowStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), weekdayStartHour, 0, 0)
-      const windowEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), weekdayEndHour, 0, 0)
-      if (now < windowEnd) minutesLeftInWindows += minutesBetween(Math.max(now, windowStart), windowEnd)
+      // Monday-Saturday: Full day (00:00 - 23:59)
+      const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59)
+      minutesLeftInWindows = minutesBetween(now, endOfDay)
     }
 
-    // Decide insertion based on remaining slots and spacing
     let shouldInsert = false
     if (remainingToday > 0 && minutesLeftInWindows > 0) {
       const expectedInterval = minutesLeftInWindows / remainingToday
       const minutesSinceLast = lastRegistroTime ? Math.ceil((now.getTime() - lastRegistroTime.getTime()) / 60000) : Infinity
-      // Allow insert if we're close to the expected interval since last registro, or small random chance
       if (minutesSinceLast >= Math.max(1, expectedInterval * 0.6)) {
         shouldInsert = true
       } else {
-        // small probabilistic allowance to avoid rigid schedule
         const prob = Math.min(0.3, 1 / Math.max(1, expectedInterval))
         if (Math.random() < prob) shouldInsert = true
       }
     }
 
-    // PRIORITY: avoid generating if a physical registro happened recently within cooldown window
     if (lastPhysicalTime) {
       const minutesSinceLastPhysical = Math.ceil((now.getTime() - lastPhysicalTime.getTime()) / 60000)
       if (minutesSinceLastPhysical < PHYSICAL_COOLDOWN_MINUTES) {
-        // allow rare override with small probability
         if (Math.random() >= PHYSICAL_OVERRIDE_PROB) {
-          return res.json({ ok: true, message: 'Skipping insertion due to recent physical registro', minutesSinceLastPhysical, PHYSICAL_COOLDOWN_MINUTES, dailyTarget, physicalCount, generatedCount })
+          return new Response(JSON.stringify({ ok: true, message: 'Skipping insertion due to recent physical registro', minutesSinceLastPhysical, PHYSICAL_COOLDOWN_MINUTES, dailyTarget, physicalCount, generatedCount }), {
+            headers: { 'Content-Type': 'application/json' }
+          })
         }
       }
     }
 
     if (!shouldInsert) {
-      return res.json({ ok: true, message: 'Skipping insertion this run to preserve spacing', dailyTarget, physicalCount, generatedCount, remainingToday, minutesLeftInWindows })
+      return new Response(JSON.stringify({ ok: true, message: 'Skipping insertion this run to preserve spacing', dailyTarget, physicalCount, generatedCount, remainingToday, minutesLeftInWindows }), {
+        headers: { 'Content-Type': 'application/json' }
+      })
     }
 
-    // Timestamp candidate: choose within today avoiding sunday 07:00-16:00
     const candidateTs = (() => {
       const day = today.getDay()
-      let startHour = 7
-      let endHour = 17
+      let startHour = 0
+      let endHour = 23
+
+      // Sunday: Limited hours (00:00-07:00 or 16:00-23:00)
       if (day === 0) {
-        // sunday: no pesajes between 07:00-16:00: we choose outside that window (early morning or after 16:00)
-        // choose randomly either before 07:00 or after 16:00
         if (Math.random() < 0.5) {
           startHour = 0
           endHour = 7
@@ -243,13 +225,14 @@ export default async function handler(req: any, res: any) {
           endHour = 23
         }
       }
+      // Monday-Saturday: Full day (00:00-23:00)
+
       const hour = Math.floor(Math.random() * (endHour - startHour + 1)) + startHour
       const minute = Math.floor(Math.random() * 60)
       const ts = new Date(today.getFullYear(), today.getMonth(), today.getDate(), hour, minute)
       return ts
     })()
 
-    // Collision check - verify against all records in registros table
     const bufferMs = COLLISION_BUFFER_MINUTES * 60 * 1000
     const tsStart = new Date(candidateTs.getTime() - bufferMs)
     const tsEnd = new Date(candidateTs.getTime() + bufferMs)
@@ -263,27 +246,16 @@ export default async function handler(req: any, res: any) {
       .limit(1)
 
     if (collisions && collisions.length > 0) {
-      // collision detected: try to shift timestamp by buffer*2 forward
       candidateTs.setTime(candidateTs.getTime() + bufferMs * 2)
     }
 
-    // Generate peso_salida (empty truck weight) based on real data
-    // Real data: min=6,630 kg, max=14,650 kg, avg=8,789 kg, median=6,890 kg
     const pesoSalida = Math.round(sampleTruncatedNormal(8800, 2000, 6600, 14600))
-
-    // Generate waste (difference) using kgPerRecordTarget
-    const wasteMean = Math.max(kgPerRecordTarget, 5000) // fallback min 5 tons
-    const wasteStd = Math.max(wasteMean * 0.1, 500)
-    const waste = Math.round(sampleTruncatedNormal(wasteMean, wasteStd, Math.max(5000, wasteMean * 0.8), wasteMean * 1.2))
-
-    // Calculate entrada weight (truck arrives full)
+    // Generate waste (difference) between 9-13 tons, heavily biased towards 13 tons
+    // This ensures all records stay within truck capacity constraint
+    const waste = Math.round(sampleTruncatedNormal(12800, 300, 9000, 13000))
     const pesoEntrada = waste + pesoSalida
-
-    // Generate exit time: 11 minutes ± 4 minutes after entry
     const minutesDiff = Math.round(sampleTruncatedNormal(11, 4, 7, 15))
     const fechaSalida = new Date(candidateTs.getTime() + minutesDiff * 60 * 1000)
-
-    // created_at should be ~2-3 seconds before fecha_entrada
     const createdAt = new Date(candidateTs.getTime() - (2000 + Math.random() * 1000))
 
     const registro = {
@@ -307,10 +279,9 @@ export default async function handler(req: any, res: any) {
       concepto_id: concepto?.id || null,
       folio: null,
       sincronizado: true,
-      generated_by_run_id: null as string | null, // Will be set after audit insert
+      generated_by_run_id: null as string | null,
     }
 
-    // Insert audit row first to get run_id
     const auditRow = {
       function_run_at: new Date().toISOString(),
       period: startOfMonth.toISOString(),
@@ -320,21 +291,22 @@ export default async function handler(req: any, res: any) {
     }
 
     if (DRY_RUN) {
-      return res.json({ ok: true, dry_run: true, registro, kgFaltantes, kgPerRecordTarget })
+      return new Response(JSON.stringify({ ok: true, dry_run: true, registro, kgFaltantes, kgPerRecordTarget }), {
+        headers: { 'Content-Type': 'application/json' }
+      })
     }
 
-    // Insert audit and registration (best-effort transactional behavior)
     const { data: auditData, error: auditErr } = await supabase.from('generated_records_audit').insert(auditRow).select('*').limit(1)
     if (auditErr) {
       console.error('Error inserting audit row', auditErr)
-      return res.status(500).json({ ok: false, error: auditErr })
+      return new Response(JSON.stringify({ ok: false, error: auditErr }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      })
     }
     const runId = auditData && auditData[0] && auditData[0].id
-
-    // attach run id to registro
     registro.generated_by_run_id = runId
 
-    // Insert into registros table (marked as virtual via registrado_por field)
     const { data: insertData, error: insertErr } = await supabase
       .from('registros')
       .insert(registro)
@@ -342,17 +314,23 @@ export default async function handler(req: any, res: any) {
       .limit(1)
     if (insertErr) {
       console.error('Error inserting registro', insertErr)
-      // attempt to mark audit with error note
       await supabase.from('generated_records_audit').update({ notes: 'insert error: ' + String(insertErr) }).eq('id', runId)
-      return res.status(500).json({ ok: false, error: insertErr })
+      return new Response(JSON.stringify({ ok: false, error: insertErr }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      })
     }
 
-    // update audit with created info
     await supabase.from('generated_records_audit').update({ registros_creados: 1, kg_generados: waste }).eq('id', runId)
 
-    return res.json({ ok: true, registro: insertData && insertData[0], runId })
+    return new Response(JSON.stringify({ ok: true, registro: insertData && insertData[0], runId }), {
+      headers: { 'Content-Type': 'application/json' }
+    })
   } catch (err) {
     console.error('Unexpected error in ooslmp_generator', err)
-    return res.status(500).json({ ok: false, error: String(err) })
+    return new Response(JSON.stringify({ ok: false, error: String(err) }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    })
   }
-}
+})

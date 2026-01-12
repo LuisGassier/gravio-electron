@@ -1,7 +1,7 @@
 /**
- * Backfill Script: Generate historical virtual records for OOSLMP (Dec 1-27, 2024)
+ * Backfill Script: Generate historical virtual records for OOSLMP (Dec 1-30, 2025)
  *
- * This script generates synthetic records to fill in missing data for December 2024.
+ * This script generates synthetic records to fill in missing data for December 2025.
  * It only processes days that had physical activity (real truck records).
  *
  * Usage:
@@ -21,15 +21,17 @@ const CLAVE_EMPRESA = 4 // OOSLMP
 const DRY_RUN = process.env.DRY_RUN !== 'false' // Default to dry run for safety
 
 // Targets and constraints
-// Monthly target: 2.5-3M kg, for 27 days (Dec 1-27) = ~2.25-2.7M kg
-// Working days: 21, so target = 2.25M kg
-const TARGET_TOTAL_KG = 2250000 // 2.25M kg total for Dec 1-27
-const TARGET_DAILY_MEAN = 10 // Mean daily count: 9-11 records per day
+// Monthly target: 2.75M kg for 30 days (Dec 1-30, 2025)
+// Working days: ~24, so target = 2.75M kg total
+// Truck capacity: 13 tons max, so we need more records per day to stay under limit
+const TARGET_TOTAL_KG = 2750000 // 2.75M kg total for Dec 1-30
+const TARGET_DAILY_MEAN = 11 // Mean daily count: 10-12 records per day (increased to reach target)
+const MAX_DAILY_TOTAL = 12 // Maximum total records (physical + virtual) per day
 const COLLISION_BUFFER_MINUTES = 8 // Minimum minutes between records
 
-// Date range: December 1-27, 2025
+// Date range: December 1-31, 2025
 const START_DATE = new Date('2025-12-01T00:00:00-06:00')
-const END_DATE = new Date('2025-12-27T23:59:59-06:00')
+const END_DATE = new Date('2025-12-31T23:59:59-06:00')
 
 // Validate environment
 if (!SUPABASE_URL || !SUPABASE_KEY) {
@@ -293,25 +295,75 @@ async function backfill() {
 
   console.log('')
 
-  // Step 2: Calculate existing waste from physical records
-  console.log('🔍 Calculando basura ya tirada en registros físicos...')
-  const { data: physicalWaste } = await supabase
+  // Step 2: Adjust physical records to have waste between 9-13 tons
+  console.log('🔧 Ajustando registros físicos a pesos entre 9-13 toneladas...')
+  const { data: physicalRecords, error: physicalError } = await supabase
     .from('registros')
-    .select('peso, peso_entrada, peso_salida')
+    .select('id, peso, peso_entrada, peso_salida, registrado_por')
     .eq('clave_empresa', CLAVE_EMPRESA)
     .gte('fecha_entrada', START_DATE.toISOString())
     .lte('fecha_entrada', END_DATE.toISOString())
 
-  let existingWasteKg = 0
-  physicalWaste?.forEach(r => {
-    // Calculate waste as: peso_entrada - peso_salida, or use peso field if available
-    const waste = r.peso || (r.peso_entrada && r.peso_salida ? r.peso_entrada - r.peso_salida : 0)
-    existingWasteKg += waste || 0
-  })
+  if (physicalError) {
+    console.error('❌ Error al consultar registros físicos:', physicalError)
+    throw physicalError
+  }
 
-  const remainingKg = Math.max(0, TARGET_TOTAL_KG - existingWasteKg)
-  console.log(`   Ya tirados: ${existingWasteKg.toLocaleString()} kg`)
-  console.log(`   Faltantes: ${remainingKg.toLocaleString()} kg`)
+  // Filter only physical records (no SYSTEM_GENERATED marker)
+  const physicalOnly = (physicalRecords || []).filter(r =>
+    !r.registrado_por || !r.registrado_por.includes('SYSTEM_GENERATED_OOSLMP')
+  )
+
+  console.log(`   Encontrados ${physicalOnly.length} registros físicos a ajustar`)
+
+  const updatedPhysicalRecords: any[] = []
+  let totalPhysicalWaste = 0
+
+  for (const record of physicalOnly) {
+    // Generate new waste between 9-13 tons with more dispersed distribution
+    // Using higher std deviation to get better spread across 10, 11, 12, 13 tons
+    const newWaste = Math.round(sampleTruncatedNormal(11500, 1000, 9000, 13000))
+
+    // Keep existing peso_salida or generate realistic one
+    const pesoSalida = record.peso_salida || Math.round(sampleTruncatedNormal(8800, 2000, 6600, 14600))
+
+    // Calculate new peso_entrada
+    const pesoEntrada = newWaste + pesoSalida
+
+    totalPhysicalWaste += newWaste
+
+    updatedPhysicalRecords.push({
+      id: record.id,
+      peso: newWaste,
+      peso_entrada: pesoEntrada,
+      peso_salida: pesoSalida
+    })
+  }
+
+  console.log(`   Total basura en físicos (ajustado): ${totalPhysicalWaste.toLocaleString()} kg`)
+
+  // Update physical records if not DRY_RUN
+  if (!DRY_RUN) {
+    console.log('💾 Actualizando registros físicos en Supabase...')
+    for (const update of updatedPhysicalRecords) {
+      const { error } = await supabase
+        .from('registros')
+        .update({
+          peso: update.peso,
+          peso_entrada: update.peso_entrada,
+          peso_salida: update.peso_salida
+        })
+        .eq('id', update.id)
+
+      if (error) {
+        console.error(`❌ Error actualizando registro ${update.id}:`, error)
+      }
+    }
+    console.log(`   ✅ ${updatedPhysicalRecords.length} registros físicos actualizados`)
+  }
+
+  const remainingKg = Math.max(0, TARGET_TOTAL_KG - totalPhysicalWaste)
+  console.log(`   Faltantes para alcanzar meta: ${remainingKg.toLocaleString()} kg`)
   console.log('')
 
   // Step 3: Get catalogues
@@ -337,8 +389,8 @@ async function backfill() {
     const physicalCount = physicalRecords.length
     const virtualCount = virtualRecords.length
 
-    // Target: 9-11 total records (physical + virtual) per day
-    const targetTotal = Math.round(sampleTruncatedNormal(TARGET_DAILY_MEAN, 1, 9, 11))
+    // Target: 10-12 total records (physical + virtual) per day, max 12
+    const targetTotal = Math.min(MAX_DAILY_TOTAL, Math.round(sampleTruncatedNormal(TARGET_DAILY_MEAN, 1, 10, 12)))
     const virtualNeeded = Math.max(0, targetTotal - physicalCount - virtualCount)
 
     if (virtualNeeded > 0) {
@@ -379,12 +431,9 @@ async function backfill() {
       // Real data: min=6,630 kg, max=14,650 kg, avg=8,789 kg, median=6,890 kg
       const pesoSalida = Math.round(sampleTruncatedNormal(8800, 2000, 6600, 14600))
 
-      // Generate waste (difference) centered around calculated average to hit target
-      // Use ±20% variation to maintain realistic distribution
-      const wasteMin = Math.max(5000, avgWastePerRecord * 0.8) // Minimum 5 tons
-      const wasteMax = avgWastePerRecord * 1.2
-      const wasteStd = avgWastePerRecord * 0.1 // 10% standard deviation
-      const waste = Math.round(sampleTruncatedNormal(avgWastePerRecord, wasteStd, wasteMin, wasteMax))
+      // Generate waste (difference) between 9-13 tons with dispersed distribution
+      // Using higher std deviation to get better spread across 10, 11, 12, 13 tons
+      const waste = Math.round(sampleTruncatedNormal(11500, 1000, 9000, 13000))
 
       // Calculate entrada weight (truck arrives full)
       const pesoEntrada = waste + pesoSalida
