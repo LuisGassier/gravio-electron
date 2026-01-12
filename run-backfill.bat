@@ -1,0 +1,5 @@
+@echo off
+set SUPABASE_URL=https://qwluzbaxvtnczxklveek.supabase.co
+set SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF3bHV6YmF4dnRuY3p4a2x2ZWVrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwODkxNzcsImV4cCI6MjA2OTY2NTE3N30.W_nvBHLeY8wF2r6Ab2dijssGJI5UAnwaM7o7uec8Gcw
+set DRY_RUN=false
+npx ts-node scripts/backfill_ooslmp_december_2025.ts

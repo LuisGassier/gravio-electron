@@ -186,6 +186,13 @@ async function deleteVirtualRecords(): Promise<number> {
 }
 
 /**
+ * Utility: Format folio number (OOSL-0000001)
+ */
+function formatFolio(numero: number): string {
+  return `OOSL-${numero.toString().padStart(7, '0')}`
+}
+
+/**
  * Step 2: Get catalogues (operators, routes, concepts)
  */
 async function getCatalogues() {
@@ -220,18 +227,18 @@ async function getCatalogues() {
       : Promise.resolve({ data: [] })
   ])
 
-  // Find or use first operator (should be "OOSLMP")
+  // Find or use first operator (should be "Operador del Organismo de Limpia")
   const ooslmpOperator = (operadores || []).find(op =>
-    op.operador && op.operador.toLowerCase().includes('ooslmp')
+    op.operador && op.operador.toLowerCase().includes('organismo')
   ) || (operadores || [])[0]
 
-  // Find or use route "recolección diferenciada"
+  // Find or use route "Ruta de recoleccion"
   const recoleccionRuta = (rutas || []).find(r =>
-    r.ruta && r.ruta.toLowerCase().includes('recolección diferenciada')
+    r.ruta && r.ruta.toLowerCase().includes('recoleccion')
   ) || (rutas || [])[0]
 
-  console.log(`   - Operador fijo: ${ooslmpOperator?.operador || 'N/A'}`)
-  console.log(`   - Ruta fija: ${recoleccionRuta?.ruta || 'N/A'}`)
+  console.log(`   - Operador fijo: Operador del Organismo de Limpia`)
+  console.log(`   - Ruta fija: Ruta de recoleccion`)
   console.log(`   - Conceptos disponibles: ${conceptos?.length || 0}`)
   console.log(`   - Vehículos configurados: ${VEHICLES.length} (${VEHICLES.filter(v => v.tipo === 'CARGA_TRASERA').length} carga trasera/cunas, ${VEHICLES.filter(v => v.tipo === 'VOLTEO').length} volteo)`)
 
@@ -469,7 +476,7 @@ async function generateRecordsForDay(
       clave_ruta: catalogues.ruta?.clave_ruta || null,
       clave_concepto: concepto ? (concepto as any).clave_concepto : null,
       concepto_id: concepto ? (concepto as any).id : null,
-      folio: null,
+      folio: null, // Will be assigned later in chronological order
       sincronizado: true,
       created_at: createdAt.toISOString(),
       updated_at: updatedAt.toISOString()
@@ -506,7 +513,34 @@ async function backfill() {
   const catalogues = await getCatalogues()
   console.log('')
 
-  // Step 3: Get working days
+  // Step 3: Get maximum folio number from existing records
+  console.log('🔢 Obteniendo último folio usado...')
+  const { data: maxFolioData, error: maxFolioError } = await supabase
+    .from('registros')
+    .select('folio')
+    .eq('clave_empresa', CLAVE_EMPRESA)
+    .not('folio', 'is', null)
+    .order('folio', { ascending: false })
+    .limit(1)
+
+  if (maxFolioError) {
+    console.error('❌ Error al obtener máximo folio:', maxFolioError)
+    throw maxFolioError
+  }
+
+  let nextFolioNumber = 1
+  if (maxFolioData && maxFolioData.length > 0) {
+    const maxFolio = maxFolioData[0].folio
+    // Extract number from format OOSL-0000123
+    const match = maxFolio.match(/OOSL-(\d+)/)
+    if (match) {
+      nextFolioNumber = parseInt(match[1], 10) + 1
+    }
+  }
+  console.log(`   Próximo folio a usar: ${formatFolio(nextFolioNumber)}`)
+  console.log('')
+
+  // Step 4: Get working days
   const workingDays = await getWorkingDays()
   console.log('')
 
@@ -515,18 +549,25 @@ async function backfill() {
     return
   }
 
-  // Step 4: Generate records for each working day
+  // Step 5: Generate records for each working day
   console.log('🏭 Generando registros virtuales...')
   console.log('')
 
   const allRecords: any[] = []
   let totalKgGenerated = 0
+  let currentFolioNumber = nextFolioNumber
 
   // Calculate target kg per day (distribute evenly across working days)
   const targetDailyKg = TARGET_TOTAL_KG / workingDays.length
 
   for (const dayKey of workingDays) {
     const records = await generateRecordsForDay(dayKey, catalogues, targetDailyKg)
+
+    // Assign folios to records in chronological order
+    records.forEach(record => {
+      record.folio = formatFolio(currentFolioNumber)
+      currentFolioNumber++
+    })
 
     const dayKg = records.reduce((sum, r) => sum + r.peso, 0)
     totalKgGenerated += dayKg
