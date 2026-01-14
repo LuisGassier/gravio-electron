@@ -48,17 +48,18 @@ async function run() {
   // PASO PREVIO: Renombrar a temporal para evitar colisiones de Unique Constraint
   console.log('🧹 Limpiando folios existentes (fase temporal) para evitar colisiones...')
   
-  const tempUpdates = records.map(r => ({
+  const tempUpdates = records.map((r, idx) => ({
       id: r.id,
-      folio: `TEMP-${r.id.substring(0, 8)}-${Math.random().toString(36).substring(7)}`
+      // Format: T-00001 (short, safe)
+      folio: `T-${(idx+1).toString().padStart(5, '0')}` 
   }))
 
-  // Actualizar a temporales
-  for (let i = 0; i < tempUpdates.length; i += 20) {
-      const chunk = tempUpdates.slice(i, i + 20)
-      await Promise.all(chunk.map(async (u) => {
-          await supabase.from('registros').update({ folio: u.folio }).eq('id', u.id)
-      }))
+  // Actualizar a temporales - SEQUENTIAL
+  for (const u of tempUpdates) {
+      const { error } = await supabase.from('registros').update({ folio: u.folio }).eq('id', u.id)
+      if (error) {
+          console.error(`❌ Error setting TEMP folio for ${u.id}:`, error)
+      }
       process.stdout.write('T')
   }
   console.log('\n✅ Folios temporales asignados.')

@@ -23,7 +23,8 @@ const DRY_RUN = process.env.DRY_RUN !== 'false' // Default to dry run for safety
 
 // Targets and constraints
 const TARGET_TOTAL_KG = 2751370 // 2,751.37 tons for December 2025 (including physical records)
-const COLLISION_BUFFER_MINUTES = 15 // Minimum minutes between same truck entries
+const COLLISION_BUFFER_MINUTES = 15 // Minimum minutes between ANY truck entries
+const MORNING_SHIFT_COOLDOWN = 180 // 3 hours - time before same truck can return (morning to afternoon)
 const DRIVER_COOLDOWN_MINUTES = 120 // Minimum minutes before driver switches trucks
 
 // Date range: December 1-31, 2025 (México time UTC-6)
@@ -277,25 +278,58 @@ async function getWorkingDays(): Promise<string[]> {
 
     // Check GLOBAL activity (all companies) to detect if landfill was open
     // "not based on company 4 but based on when there were working days for all trucks"
-    const { count, error } = await supabase
+    // Fetch timestamps to analyze hourly distribution
+    const { data: records, error } = await supabase
         .from('registros')
-        .select('*', { count: 'exact', head: true })
+        .select('fecha_entrada')
         .gte('fecha_entrada', dayStart.toISOString())
         .lte('fecha_entrada', dayEnd.toISOString())
         .not('registrado_por', 'like', '%SYSTEM%') 
 
     if (error) {
         console.error(`❌ Error verificando actividad para ${dayKey}`, error)
-        // Fallback: Add it if error? Or skip? Let's skip to be safe.
         continue
     }
 
-    // Threshold: > 2 trucks implies open day. 
-    // "maybe one entered in early morning but none else" -> skip
-    if ((count || 0) > 2) {
+    const count = records?.length || 0
+
+    // Threshold: Any activity implies open day as per user request
+    if (count === 0) {
+         console.log(`   🏖️  Día detectado como inhábil (Sin actividad): ${dayKey}`)
+         continue
+    }
+
+    // Check hourly distribution (Mexico Time)
+    // We want to detect if it was a real working day or just anomalies.
+    // User logic: "si hubo camiones que entraron entonces no fue inhabil"
+    // So if count > 0, we basically accept it, but we might want to check reasonable hours just in case.
+    // But let's follow user instruction strictly: if trucks entered, it's a working day.
+    
+    // However, we still calculate dayTimeRecords to log info, but we won't correct/exclude based on it strictly
+    // unless it's purely madrugadas (1 AM - 5 AM) which might be an error.
+    // Let's broaden the check window: 06:00 to 22:00 (covers Sunday late shifts)
+    
+    let dayTimeRecords = 0
+    for (const r of records) {
+        // Convert UTC timestamp to Mexico Time Date object
+        const utcDate = new Date(r.fecha_entrada)
+        const mxTime = new Date(utcDate.getTime() - (6 * 3600 * 1000))
+        const h = mxTime.getUTCHours()
+
+        if (h >= 6 && h <= 22) {
+            dayTimeRecords++
+        }
+    }
+
+    if (dayTimeRecords > 0) {
          workingDays.push(dayKey)
     } else {
-         console.log(`   🏖️  Día detectado como inhábil: ${dayKey} (Solo ${count} entradas físicas totales)`)
+         console.log(`   🌙 Día detectado como inhábil/nocturno: ${dayKey} (Solo ${dayTimeRecords}/${count} entradas en horario 06:00-22:00)`)
+         // If they entered at 3 AM, we probably shouldn't generate day traffic there unless explicitly open?
+         // Assuming user wants to follow physical pattern. 
+         // If physical trucks only entered at 3 AM, generating 7:30 AM records might be wrong OR correct if the user wants to "fill" the day.
+         // Let's assume if there is ANY activity, we treat it as working day and generate our standard hours.
+         workingDays.push(dayKey) 
     }
   }
   
@@ -342,7 +376,7 @@ function generateTimestamp(dayKey: string, dayOfWeek: number): Date {
     startHour = 16
     endHour = 21
   } else {
-    // Monday-Saturday: 7:30 AM - 3:00 PM
+    // Monday-Saturday: 7:30 AM - 3:00 PM (Updated per request)
     startHour = 7.5 // 7:30 AM
     endHour = 15 // 3:00 PM
   }
@@ -365,6 +399,13 @@ function generateTimestamp(dayKey: string, dayOfWeek: number): Date {
   return utcTime
 }
 
+// Global tracking for constraints across all phases
+const GLOBAL_TRACKING = {
+  timestamps: [] as Date[], // All entry timestamps (virtual + physical)
+  vehicleExits: new Map<string, Date>(), // Last exit time per vehicle
+  vehicleDailyTrips: new Map<string, number>() // Key: "placa-YYYY-MM-DD", Value: count
+} // Added global tracking
+  
 /**
  * Step 5: Generate records for a single day
  * Optimized to hit monthly target by distributing trips across vehicles
@@ -383,207 +424,171 @@ async function generateRecordsForDay(
   const loadFactor = getLoadFactor(dayOfWeek)
   const records: any[] = []
   
-  // Initialize constraints with existing physical records
-  const usedTimestamps: Date[] = existingPhysicalRecords.map(r => new Date(r.fecha_entrada))
-  const vehicleTripCount = new Map<string, number>()
-  const vehicleLastExitTime = new Map<string, Date>()
-
-  const physicalKg = existingPhysicalRecords.reduce((sum, r) => sum + (Number(r.peso) || 0), 0)
-
-  // Pre-fill vehicle trip counts from physical records to enforce limits
+  // Register physical records in global tracking if not already 
+  // (We do this once per day loop, but this function is called once per day, so it works)
   existingPhysicalRecords.forEach(r => {
-      if (r.numero_economico) {
-          const current = vehicleTripCount.get(r.numero_economico) || 0
-          vehicleTripCount.set(r.numero_economico, current + 1)
-          
-          // Estimate exit time for physical records (entry + ~15 min) to block immediate reuse
-          const entry = new Date(r.fecha_entrada)
-          const exit = new Date(entry.getTime() + 15 * 60000)
-          
-          const last = vehicleLastExitTime.get(r.numero_economico)
-          if (!last || exit > last) {
-              vehicleLastExitTime.set(r.numero_economico, exit)
-          }
+      const vid = r.numero_economico || 'UNKNOWN'
+      const key = `${vid}-${dayKey}`
+      const ts = new Date(r.fecha_entrada)
+      
+      // Only add if not tracked yet (simple check)
+      // Since function is called once per day, we can just sync valid counts
+      if (!GLOBAL_TRACKING.vehicleDailyTrips.has(key)) {
+         // Count physicals for this specific day/vehicle from the array
+         const count = existingPhysicalRecords.filter(pr => pr.numero_economico === vid).length
+         GLOBAL_TRACKING.vehicleDailyTrips.set(key, count)
+      }
+
+      // Add timestamps for collision check
+      GLOBAL_TRACKING.timestamps.push(ts)
+      
+      // Update last exit (approx 15m duration for physical)
+      const exit = new Date(ts.getTime() + 15 * 60000)
+      const last = GLOBAL_TRACKING.vehicleExits.get(vid)
+      if (!last || exit > last) {
+        GLOBAL_TRACKING.vehicleExits.set(vid, exit)
       }
   })
 
-  // Determine how many vehicles will work today (6-8 vehicles out of 9 total)
-  // We must ensure vehicles that ALREADY worked physically are included if possible, or counted
-  const numVehiclesWorking = Math.floor(sampleTruncatedNormal(7.5, 0.5, 7, 9))
-  
-  // Start with all vehicles
-  let workingVehicles = [...VEHICLES]
-  
-  // If we want random subset, we shuffle. 
-  // But we should prioritize ones that haven't worked too much if we care about rotation?
-  // Logic: Shuffle all, pick top N.
-  workingVehicles.sort(() => Math.random() - 0.5)
-  workingVehicles = workingVehicles.slice(0, numVehiclesWorking)
-
-  // Ensure vehicles that already have physical trips are in the working set (so we can add more trips if allowed)
-  // Or maybe physical trips maxed them out? We handle that in the loop check.
-  // Actually, if a vehicle worked physically, it IS a working vehicle today.
+  // Determine how many vehicles will work today - USE ALL 9 vehicles
+  // Ensure we include vehicles that already have physical records
   const physicalVehicles = new Set(existingPhysicalRecords.map(r => r.numero_economico).filter(Boolean))
+
+  // Use ALL vehicles and shuffle for variety
+  let workingVehicles = [...VEHICLES].sort(() => Math.random() - 0.5)
+
+  // Force include physical vehicles at start
   physicalVehicles.forEach(eco => {
       const v = VEHICLES.find(veh => veh.numero_economico === eco)
-      if (v && !workingVehicles.includes(v)) {
-          workingVehicles.push(v)
-      }
+      if (v && !workingVehicles.includes(v)) workingVehicles.unshift(v)
   })
 
-  let totalKgGenerated = 0
+  // =========================================================================
+  // TWO-SHIFT STRATEGY:
+  // 1. MORNING SHIFT (7:30-11:30): All 9 vehicles make their first trip
+  // 2. AFTERNOON SHIFT (11:30-3:00): Same vehicles return for second trip
+  // This naturally generates ~12-18 trips per day (9 morning + up to 9 afternoon)
+  // =========================================================================
 
-  // Generate trips until we hit the daily target
-  // But respect vehicle limits
+  let totalKgGenerated = 0
   let attempts = 0
-  
-  while (totalKgGenerated < targetDailyKg && attempts < 100 && (records.length + existingPhysicalRecords.length) < maxRecordsLimit) {
+
+  // Track which shift we're in for each attempt
+  const morningShiftEnd = new Date(`${year}-${month.toString().padStart(2,'0')}-${day.toString().padStart(2,'0')}T11:30:00-06:00`)
+
+  while (totalKgGenerated < targetDailyKg && attempts < 300 && (records.length + existingPhysicalRecords.length) < maxRecordsLimit) {
     if (workingVehicles.length === 0) break
 
-    // Select a vehicle (prefer vehicles with fewer trips to balance load)
+    // Select a vehicle (prefer vehicles with fewer trips)
     const vehicle = workingVehicles.reduce((minVehicle, v) => {
-      const minTrips = vehicleTripCount.get(minVehicle.numero_economico) || 0
-      const vTrips = vehicleTripCount.get(v.numero_economico) || 0
+      const minKey = `${minVehicle.numero_economico}-${dayKey}`
+      const vKey = `${v.numero_economico}-${dayKey}`
+      const minTrips = GLOBAL_TRACKING.vehicleDailyTrips.get(minKey) || 0
+      const vTrips = GLOBAL_TRACKING.vehicleDailyTrips.get(vKey) || 0
       return vTrips < minTrips ? v : minVehicle
     })
 
     const vehicleKey = vehicle.numero_economico
-    const currentTrips = vehicleTripCount.get(vehicleKey) || 0
+    const dailyTripKey = `${vehicle.numero_economico}-${dayKey}`
+    const currentTrips = GLOBAL_TRACKING.vehicleDailyTrips.get(dailyTripKey) || 0
 
-    // Check if vehicle has reached max trips per day
-    // Max trips varies by type and random chance
-    // Carga Trasera: 1-2 trips. Volteo: 1-2 trips.
-    // Sunday has reduced trips in general
-    let maxTrips = Math.floor(sampleTruncatedNormal(
-      (vehicle.viajes_por_dia_min + vehicle.viajes_por_dia_max) / 2, 
-      0.5, 
-      vehicle.viajes_por_dia_min, 
-      vehicle.viajes_por_dia_max
-    ))
-    
-    if (dayOfWeek === 0) maxTrips = Math.min(maxTrips, 1) // Sundays mostly 1 trip if working
+    // Allow 2 trips per vehicle (morning + afternoon)
+    // This is realistic: one trip in AM, one in PM
+    let maxTrips = 2
+    if (dayOfWeek === 0) maxTrips = 3 // Sunday: max 2-3 trips (user said 2-3)
 
     if (currentTrips >= maxTrips) {
-      // Remove this vehicle from working vehicles for this day
-      const index = workingVehicles.findIndex(v => v.numero_economico === vehicleKey)
-      if (index >= 0) {
-        workingVehicles.splice(index, 1)
-      }
+      // Vehicle full for today
+      workingVehicles = workingVehicles.filter(v => v.numero_economico !== vehicleKey)
       continue
     }
 
-    // Generate timestamp
+    // Generate timestamp with TWO-SHIFT logic
+    // MORNING: 7:30-11:30 (first trip)
+    // AFTERNOON: 11:30-3:00 (second trip - same truck returns after 3+ hours)
+
+    let startH = 7.5, endH = 15.0
+    if (dayOfWeek === 0) { startH = 16.0; endH = 21.0 }
+
+    // Determine if this should be morning or afternoon shift based on current trips
+    let shiftStartH = startH, shiftEndH = endH
+    if (dayOfWeek !== 0 && currentTrips === 0) {
+        // First trip: MORNING SHIFT (7:30-11:30)
+        shiftStartH = 7.5
+        shiftEndH = 11.5
+    } else if (dayOfWeek !== 0 && currentTrips === 1) {
+        // Second trip: AFTERNOON SHIFT (11:30-3:00)
+        shiftStartH = 11.5
+        shiftEndH = 15.0
+    }
+
     let timestamp: Date | null = null
-    const lastExit = vehicleLastExitTime.get(vehicleKey)
-    
-    // Day hours: 06:00 to 18:00 (strictly non-madrugada)
-    const baseDate = new Date(year, month - 1, day)
-    const startHour = 6 // 6 AM
-    const endHour = 18 // 6 PM
+    const lastExit = GLOBAL_TRACKING.vehicleExits.get(vehicleKey)
 
-    for (let attempt = 0; attempt < 50; attempt++) {
-      // Generate randomized time within 06:00 - 18:00 Mexico Time
-      const hour = Math.floor(Math.random() * (endHour - startHour)) + startHour
-      const minute = Math.floor(Math.random() * 60)
-      
-      // Construct UTC timestamp from Mexico Time (UTC-6)
-      // Method: Create Date object in local time components via String to avoid unexpected shifts,
-      // then suffix with -06:00 to specify the offset, then let Date parse it to UTC.
-      
-      const isoLocal = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}T${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}:00-06:00`
-      const candidateTimestamp = new Date(isoLocal)
+    for (let i = 0; i < 100; i++) {
+        const t = shiftStartH + Math.random() * (shiftEndH - shiftStartH)
+        const h = Math.floor(t)
+        const m = Math.floor((t - h) * 60)
 
-      // Rule: Vehicle cannot enter again too soon (e.g. 1 hour turnaround + travel time)
-      // "Revisar que el mismo camión no entre seguido en periodos cortos de tiempo"
-      if (lastExit) {
-        const diffMinutes = (candidateTimestamp.getTime() - lastExit.getTime()) / (1000 * 60)
-        if (diffMinutes < 60) { // Must be at least 60 mins after last exit
-            continue
+        // Construct ISO string with -06:00 offset explicitly to avoid server timezone issues
+        // YYYY-MM-DDTHH:mm:SS-06:00
+        const isoStr = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}T${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${Math.floor(Math.random()*59).toString().padStart(2, '0')}-06:00`
+        const candidate = new Date(isoStr)
+
+        // 1. Check strict previous order (cannot enter before last exit)
+        if (lastExit && candidate < lastExit) continue;
+
+        // 2. For second trip: must wait at least 3 hours (MORNING_SHIFT_COOLDOWN)
+        if (lastExit && currentTrips >= 1) {
+            const diffMin = (candidate.getTime() - lastExit.getTime()) / 60000
+            if (diffMin < MORNING_SHIFT_COOLDOWN) continue;
         }
-      }
 
-      // Rule: Vehicle cannot enter BEFORE previous exit (logic check)
-      if (lastExit && candidateTimestamp < lastExit) {
-          continue 
-      }
+        // 3. Check 15 min collision buffer (ANY TRUCK)
+        const collision = GLOBAL_TRACKING.timestamps.some(existing =>
+            Math.abs(existing.getTime() - candidate.getTime()) < COLLISION_BUFFER_MINUTES * 60000
+        )
+        if (collision) continue;
 
-      // Check for global collision (gate congestion)
-      // "Revisar que el mismo chofer no vaya en diferentes camiones en periodos cortos de tiempo"
-      // Assuming 1 driver per truck, gate collision is the main check here.
-      // If we assumed pool drivers, we would check driver availability. 
-      // Given "Operador OOSLMP" is constant, we'll enforce a general gate buffer
-      const hasCollision = usedTimestamps.some(ts =>
-        Math.abs(candidateTimestamp.getTime() - ts.getTime()) < COLLISION_BUFFER_MINUTES * 60 * 1000
-      )
-
-      if (!hasCollision) {
-        timestamp = candidateTimestamp
-        break
-      }
+        timestamp = candidate
+        break;
     }
 
     if (!timestamp) {
       attempts++
-      continue // Try another vehicle or retry
+      continue 
     }
 
-    // Generate weights based on STRICT rules
+    // Generate weights (Same logic as before)
+    const round10 = roundToNearestTen
     let pesoSalida: number, pesoEntrada: number, waste: number
 
-    // Redondear function
-    const round10 = roundToNearestTen
-
     if (vehicle.tipo === 'CARGA_TRASERA') {
-      // Carga trasera: 
-      // Peso entrada 24-27ton
-      // Peso salida 13-14ton
-      // Peso diferencia es de 10-13 ton
-      
       const pSalidaRaw = sampleTruncatedNormal(13500, 300, 13000, 14000)
       const pEntradaRaw = sampleTruncatedNormal(25500, 800, 24000, 27000)
-      
       pesoSalida = round10(pSalidaRaw)
       pesoEntrada = round10(pEntradaRaw)
       waste = pesoEntrada - pesoSalida
-      
-      // Validation check (though construction ensures range mostly)
       if (waste < 10000) { pesoEntrada += (10000 - waste); waste = pesoEntrada - pesoSalida; }
-      if (waste > 14000) { pesoEntrada -= (waste - 13000); waste = pesoEntrada - pesoSalida; } // Soft cap at 13k
-      
+      if (waste > 14000) { pesoEntrada -= (waste - 13000); waste = pesoEntrada - pesoSalida; }
     } else {
-      // Volteo: 
-      // Salida 3.6t a 6.5t
-      // De entrada 5-7 ton mas que el peso de salida.
-      
       const pSalidaRaw = sampleTruncatedNormal(5050, 800, 3600, 6500)
       const residuosRaw = sampleTruncatedNormal(6000, 500, 5000, 7000)
-      
       pesoSalida = round10(pSalidaRaw)
-      waste = round10(residuosRaw)
-      
-      // Load factor adjustment
-      waste = round10(waste * loadFactor)
-      
-      // Ensure waste is still within 5-7 tons after load factor (soft limits)
+      waste = round10(residuosRaw * loadFactor)
       if (waste < 5000) waste = 5000
       if (waste > 7000) waste = 7000
-      
       pesoEntrada = pesoSalida + waste
     }
 
-    // Generate exit time: 11 minutes ± 4 minutes after entry
-    const minutesDiff = Math.round(sampleTruncatedNormal(11, 4, 7, 15))
-    const fechaSalida = new Date(timestamp.getTime() + minutesDiff * 60 * 1000)
-
-    // created_at should be ~2-3 seconds before fecha_entrada
-    const createdAt = new Date(timestamp.getTime() - (2000 + Math.random() * 1000))
-
-    const concepto = catalogues.conceptos.length > 0 ? pickRandom(catalogues.conceptos) : null
-    
-    // Calculate updated_at as 2 seconds after fecha_salida
+    // Exit time
+    const duration = Math.round(sampleTruncatedNormal(11, 4, 7, 15))
+    const fechaSalida = new Date(timestamp.getTime() + duration * 60000)
+    const createdAt = new Date(timestamp.getTime() - 2000)
     const updatedAt = new Date(fechaSalida.getTime() + 2000)
+    const concepto = catalogues.conceptos.length > 0 ? pickRandom(catalogues.conceptos) : null
 
-    records.push({
+    const record = {
       clave_empresa: CLAVE_EMPRESA,
       peso_entrada: pesoEntrada,
       peso_salida: pesoSalida,
@@ -600,23 +605,25 @@ async function generateRecordsForDay(
       clave_ruta: catalogues.ruta?.clave_ruta || null,
       clave_concepto: concepto ? (concepto as any).clave_concepto : null,
       concepto_id: concepto ? (concepto as any).id : null,
-      folio: null, // Will be assigned later in chronological order
+      folio: null,
       sincronizado: true,
       created_at: createdAt.toISOString(),
       updated_at: updatedAt.toISOString()
-    })
+    }
 
-    // Update tracking
-    usedTimestamps.push(timestamp)
-    vehicleTripCount.set(vehicleKey, currentTrips + 1)
-    vehicleLastExitTime.set(vehicleKey, fechaSalida)
+    records.push(record)
+
+    // Update global tracking
+    GLOBAL_TRACKING.timestamps.push(timestamp)
+    GLOBAL_TRACKING.vehicleExits.set(vehicleKey, fechaSalida)
+    GLOBAL_TRACKING.vehicleDailyTrips.set(dailyTripKey, currentTrips + 1)
+    
     totalKgGenerated += waste
-    attempts = 0 // Reset attempts on success
+    attempts = 0
   }
 
-  // Sort records by timestamp
+  // Sort local records (Global will be sorted at end)
   records.sort((a, b) => new Date(a.fecha_entrada).getTime() - new Date(b.fecha_entrada).getTime())
-
   return records
 }
 
@@ -734,9 +741,12 @@ async function backfill() {
   const remainingForWeekDays = remainingTargetKg - totalSundayTarget
   const weekDayTarget = remainingForWeekDays / weekDaysCount
   
-  console.log(`📉 Plan de distribución:`)
-  console.log(`   Domingos (${sundaysCount}): ~${(sundayTarget/1000).toFixed(1)} ton/día (Max 2 viajes)`)
+  console.log(`📉 Plan de distribución (Sistema de 2 turnos):`)
+  console.log(`   Domingos (${sundaysCount}): ~${(sundayTarget/1000).toFixed(1)} ton/día (Max 2-3 viajes)`)
   console.log(`   Lun-Sab  (${weekDaysCount}): ~${(weekDayTarget/1000).toFixed(1)} ton/día`)
+  console.log(`   Lunes/Martes/Sábado: Camiones más cargados (factor 1.0-1.15)`)
+  console.log(`   Mié/Jue/Vie: Camiones menos cargados (factor 0.85-1.0)`)
+  console.log(`   Estrategia: Turnos mañana (7:30-11:30) y tarde (11:30-3:00)`)
   console.log('')
 
   for (const dayKey of workingDays) {
@@ -751,9 +761,9 @@ async function backfill() {
     const physicalRecordsOfDay = await getPhysicalRecordsForDay(dayKey)
     const physicalKgDay = physicalRecordsOfDay.reduce((sum, r) => sum + (Number(r.peso)||0), 0)
 
-    // Adjust target: If physical already covers part of target, reduce widely.
-    // If physical > target, we might generate 0.
-    const remainingForDay = Math.max(0, target - physicalKgDay)
+    // Adjust target: If physical already covers part of target, reduce.
+    // Add small buffer (5%) to ensure we exceed slightly and can adjust down later
+    const remainingForDay = Math.max(0, (target - physicalKgDay) * 1.05)
 
     const records = await generateRecordsForDay(
         dayKey, 
@@ -798,88 +808,47 @@ async function backfill() {
   let totalDecemberKg = physicalKg + totalKgGenerated
   let adjustedRecords = [...allRecords]
   
-  // IF SHORT: Add extra records in non-Sundays
+  // IF SHORT: Add extra records by reusing the robust generation logic in a loop
   if (totalDecemberKg < TARGET_TOTAL_KG) {
       const missingKg = TARGET_TOTAL_KG - totalDecemberKg
       console.log(`   Faltante: ${missingKg.toLocaleString()} kg - Generando registros extra...`)
-      
+      console.log(`   Se distribuirán en los ${workingDays.length} días laborados`)
+
       let addedKg = 0
-      let attempts = 0
-      
-      // Filter valid days (Mon-Sat) to add records
-      const validDayKeys = workingDays.filter(d => new Date(d + 'T12:00:00').getDay() !== 0)
-      
-      while (addedKg < missingKg && attempts < 200) {
+      let maxLoops = 1000 // Increased significantly
+
+      // Include ALL working days (including Sundays) for extra capacity
+      const validDayKeys = [...workingDays]
+
+      while (addedKg < missingKg && maxLoops > 0) {
           const randomDay = pickRandom(validDayKeys)
-          // Generate 1 single record efficiently
-          // We cheat a bit by calling generateRecordsForDay with a small target but forcing 1 record
-          // But simpler is to manually create one similar to generateRecordsForDay logic
-          
-          // Or just call generateRecordsForDay for that day again and take 1 record?
-          // No, that might regenerate existing timestamps.
-          // Better to create a helper or inline it.
-          // Let's use a simplified logical injection.
-          
-          // Hack: we instantiate a record manually
-          const vehicle = pickRandom(VEHICLES.filter(v => v.tipo === 'CARGA_TRASERA')) // Prefer compactors for filler
-          const loadFactor = 1.05
-          
-          // Generate weights
-          let pSalida = roundToNearestTen(sampleTruncatedNormal(13500, 300, 13000, 14000))
-          let pEntrada = roundToNearestTen(sampleTruncatedNormal(25500, 800, 24000, 27000))
-          let waste = pEntrada - pSalida
-          if (waste < 10000) waste = 10000
-          
-          // Validar que no nos pasemos demasiado si falta poco
-          if ((addedKg + waste) > (missingKg + 15000)) { // Allow slight overshoot to correct later
-               // Skip big trucks if we need small amount? No, we will cut excess later.
+
+          // Generate records with realistic target
+          // This will use the two-shift system automatically
+          const targetPerAttempt = Math.min(13000, missingKg - addedKg)
+
+          const records = await generateRecordsForDay(
+             randomDay,
+             catalogues,
+             targetPerAttempt, // Realistic target
+             3, // Allow up to 3 records per attempt
+             [] // No need to pass physicals again, they are in GLOBAL_TRACKING
+          )
+
+          if (records.length > 0) {
+              for (const r of records) {
+                  adjustedRecords.push(r)
+                  addedKg += r.peso
+              }
+              if (maxLoops % 100 === 0) process.stdout.write('.')
           }
-          
-          // Generate timestamp: 2:00 PM - 3:00 PM filler
-           const [y,m,d] = randomDay.split('-').map(Number)
-           const baseTime = new Date(y, m-1, d, 14 + Math.random(), Math.random()*60)
-           const ts = new Date(baseTime.getTime() + 6*3600*1000) // UTC
-           
-           const r = {
-               clave_empresa: CLAVE_EMPRESA,
-               peso_entrada: pSalida + waste,
-               peso_salida: pSalida,
-               peso: waste,
-               fecha_entrada: ts.toISOString(),
-               fecha_salida: new Date(ts.getTime() + 15*60000).toISOString(),
-               tipo_pesaje: 'completo',
-               registrado_por: 'SYSTEM_GENERATED_OOSLMP_BACKFILL_2025',
-               operador: 'Operador OOSLMP',
-               clave_operador: catalogues.operador?.clave_operador || null,
-               numero_economico: vehicle.numero_economico,
-               placa_vehiculo: vehicle.placa,
-               ruta: 'Recolección diferenciada',
-               clave_ruta: catalogues.ruta?.clave_ruta || null,
-               clave_concepto: catalogues.conceptos[0]?.clave_concepto || null,
-               concepto_id: catalogues.conceptos[0]?.id || null,
-               folio: null,
-               sincronizado: true,
-               created_at: ts.toISOString(),
-               updated_at: ts.toISOString()
-           }
-           
-           adjustedRecords.push(r)
-           addedKg += waste
-           attempts++
+          maxLoops--
       }
+      console.log('')
       
-      // Update totals
       totalKgGenerated = adjustedRecords.reduce((sum, r) => sum + r.peso, 0)
       totalDecemberKg = physicalKg + totalKgGenerated
-      
-      // Re-sort
-      adjustedRecords.sort((a,b) => new Date(a.fecha_entrada).getTime() - new Date(b.fecha_entrada).getTime())
-      
-      // Re-folio
-      let f = nextFolioNumber
-      adjustedRecords.forEach(r => { r.folio = formatFolio(f); f++ })
-      
-      console.log(`   Agregados ${attempts} registros extra. Nuevo total: ${totalDecemberKg.toLocaleString()} kg`)
+      console.log(`   Finalizado relleno. Nuevo total: ${totalDecemberKg.toLocaleString()} kg`)
   }
 
   // If we're over the target, remove records ONLY if the excess is large enough to warrant removing a whole trip
