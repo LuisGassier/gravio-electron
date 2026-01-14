@@ -256,24 +256,51 @@ async function getCatalogues() {
  * Step 3: Get working days (ALL days in December 2025)
  */
 async function getWorkingDays(): Promise<string[]> {
-  console.log('📅 Generando calendario para Diciembre 2025 completos...')
+  console.log('📅 Analizando actividad real del relleno para determinar días laborables...')
   
-  const allDays: string[] = []
+  const workingDays: string[] = []
   const current = new Date(START_DATE)
-  // Re-align to start of month if strictly needed, but START_DATE is Dec 1
   
+  // Create a clean date set
+  const daysToCheck: string[] = []
   while (current <= END_DATE) {
-    // Generate YYYY-MM-DD in Mexico Time
-    // START_DATE is already set to correct zone offset, but to be safe we construct string manually or use library
-    // Simpler: Use timezone offset of -6
-    const mexicoDate = new Date(current.getTime() - (6 * 60 * 60 * 1000))
-    allDays.push(mexicoDate.toISOString().split('T')[0])
-    
-    current.setDate(current.getDate() + 1)
+     // Adjust for timezone to get partial stamp
+     const mexicoDate = new Date(current.getTime() - (6 * 60 * 60 * 1000))
+     daysToCheck.push(mexicoDate.toISOString().split('T')[0])
+     current.setDate(current.getDate() + 1)
+  }
+
+  // Check activity for each day
+  for (const dayKey of daysToCheck) {
+    const dayStart = new Date(dayKey + 'T00:00:00-06:00')
+    const dayEnd = new Date(dayKey + 'T23:59:59-06:00')
+
+    // Check GLOBAL activity (all companies) to detect if landfill was open
+    // "not based on company 4 but based on when there were working days for all trucks"
+    const { count, error } = await supabase
+        .from('registros')
+        .select('*', { count: 'exact', head: true })
+        .gte('fecha_entrada', dayStart.toISOString())
+        .lte('fecha_entrada', dayEnd.toISOString())
+        .not('registrado_por', 'like', '%SYSTEM%') 
+
+    if (error) {
+        console.error(`❌ Error verificando actividad para ${dayKey}`, error)
+        // Fallback: Add it if error? Or skip? Let's skip to be safe.
+        continue
+    }
+
+    // Threshold: > 2 trucks implies open day. 
+    // "maybe one entered in early morning but none else" -> skip
+    if ((count || 0) > 2) {
+         workingDays.push(dayKey)
+    } else {
+         console.log(`   🏖️  Día detectado como inhábil: ${dayKey} (Solo ${count} entradas físicas totales)`)
+    }
   }
   
-  console.log(`✅ Se generarán registros para los ${allDays.length} días del mes`)
-  return allDays
+  console.log(`✅ Se generarán registros para los ${workingDays.length} días activos encontrados (de ${daysToCheck.length} posibles)`)
+  return workingDays
 }
 
 /**
@@ -448,9 +475,23 @@ async function generateRecordsForDay(
     // Generate timestamp
     let timestamp: Date | null = null
     const lastExit = vehicleLastExitTime.get(vehicleKey)
+    
+    // Day hours: 06:00 to 18:00 (strictly non-madrugada)
+    const baseDate = new Date(year, month - 1, day)
+    const startHour = 6 // 6 AM
+    const endHour = 18 // 6 PM
 
     for (let attempt = 0; attempt < 50; attempt++) {
-      const candidateTimestamp = generateTimestamp(dayKey, dayOfWeek)
+      // Generate randomized time within 06:00 - 18:00 Mexico Time
+      const hour = Math.floor(Math.random() * (endHour - startHour)) + startHour
+      const minute = Math.floor(Math.random() * 60)
+      
+      // Construct UTC timestamp from Mexico Time (UTC-6)
+      // Method: Create Date object in local time components via String to avoid unexpected shifts,
+      // then suffix with -06:00 to specify the offset, then let Date parse it to UTC.
+      
+      const isoLocal = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}T${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}:00-06:00`
+      const candidateTimestamp = new Date(isoLocal)
 
       // Rule: Vehicle cannot enter again too soon (e.g. 1 hour turnaround + travel time)
       // "Revisar que el mismo camión no entre seguido en periodos cortos de tiempo"
