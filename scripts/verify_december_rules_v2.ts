@@ -8,6 +8,7 @@ const CLAVE_EMPRESA = 4
 // December 2025
 const START_DATE = '2025-12-01T00:00:00-06:00'
 const END_DATE = '2025-12-31T23:59:59-06:00'
+const TARGET_TOTAL_KG = 2751370
 
 // Vehicle Types (Copy from backfill script)
 const VEHICLES = [
@@ -56,6 +57,17 @@ async function verify() {
   
   let errors: string[] = []
   let warnings: string[] = []
+
+  // 0. Check total weight (physical + virtual) for December in Mexico time
+  const totalKg = records.reduce((sum, r) => sum + (Number(r.peso) || 0), 0)
+  const totalTons = totalKg / 1000
+  const targetTons = TARGET_TOTAL_KG / 1000
+
+  if (totalTons.toFixed(2) !== targetTons.toFixed(2)) {
+      errors.push(`❌ Peso total diciembre fuera de objetivo: ${totalTons.toFixed(2)} t (esperado ${targetTons.toFixed(2)} t)`)
+  } else {
+      console.log(`✅ Peso total diciembre: ${totalTons.toFixed(2)} t (OK)`)
+  }
 
   // 1. Check Holidays
   const dec12Records = records.filter(r => {

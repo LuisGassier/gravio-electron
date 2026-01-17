@@ -293,43 +293,48 @@ async function getWorkingDays(): Promise<string[]> {
 
     const count = records?.length || 0
 
-    // Threshold: Any activity implies open day as per user request
-    if (count === 0) {
-         console.log(`   🏖️  Día detectado como inhábil (Sin actividad): ${dayKey}`)
+    // Exclude specific holidays manually if strict business rule
+    // User requested exclusion of Dec 25 and Dec 31 specifically
+    if (dayKey.endsWith('-12-12') || dayKey.endsWith('-12-25') || dayKey.endsWith('-12-31')) { 
+         console.log(`   🏖️  Día feriado excluido manualmente: ${dayKey}`)
          continue
     }
 
-    // Check hourly distribution (Mexico Time)
-    // We want to detect if it was a real working day or just anomalies.
-    // User logic: "si hubo camiones que entraron entonces no fue inhabil"
-    // So if count > 0, we basically accept it, but we might want to check reasonable hours just in case.
-    // But let's follow user instruction strictly: if trucks entered, it's a working day.
-    
-    // However, we still calculate dayTimeRecords to log info, but we won't correct/exclude based on it strictly
-    // unless it's purely madrugadas (1 AM - 5 AM) which might be an error.
-    // Let's broaden the check window: 06:00 to 22:00 (covers Sunday late shifts)
-    
+    // Check Global Activity to determine if the landfill was TRULY open
+    // We filter out days where activity was only in the "madrugada" (early morning) or late night
+    // Defined Working Hours for Validation: 07:00 to 20:00 (7 AM - 8 PM)
+    // If all records fall outside this window, we assume the landfill wasn't operating normally
     let dayTimeRecords = 0
-    for (const r of records) {
-        // Convert UTC timestamp to Mexico Time Date object
-        const utcDate = new Date(r.fecha_entrada)
-        const mxTime = new Date(utcDate.getTime() - (6 * 3600 * 1000))
-        const h = mxTime.getUTCHours()
+    let totalRecords = records?.length || 0
+    
+    // Check specific hours of activity
+    if (records && records.length > 0) {
+        for (const r of records) {
+            // Convert UTC timestamp to Mexico Time (UTC-6)
+            const utcDate = new Date(r.fecha_entrada)
+            const mxTime = new Date(utcDate.getTime() - (6 * 3600 * 1000))
+            const h = mxTime.getUTCHours()
 
-        if (h >= 6 && h <= 22) {
-            dayTimeRecords++
+            // Count records in standard operation window (07:00 - 20:00)
+            if (h >= 7 && h <= 20) {
+                dayTimeRecords++
+            }
         }
     }
 
-    if (dayTimeRecords > 0) {
-         workingDays.push(dayKey)
+    // Logic to determine if day is valid
+    // We used to require >= 5, but to be safe for days with low volume (like Dec 1-5 potentially),
+    // we just ensure there is AT LEAST ONE record during operational hours.
+    const isWorkingDay = dayTimeRecords > 0
+
+    if (totalRecords === 0) {
+         console.log(`   🏖️  Día inhábil detectado (Sin actividad): ${dayKey}`)
+    } else if (!isWorkingDay) {
+         console.log(`   🌙 Día inhábil detectado (Solo actividad fuera de horario 07:00-20:00): ${dayKey} (${totalRecords} registros total)`)
     } else {
-         console.log(`   🌙 Día detectado como inhábil/nocturno: ${dayKey} (Solo ${dayTimeRecords}/${count} entradas en horario 06:00-22:00)`)
-         // If they entered at 3 AM, we probably shouldn't generate day traffic there unless explicitly open?
-         // Assuming user wants to follow physical pattern. 
-         // If physical trucks only entered at 3 AM, generating 7:30 AM records might be wrong OR correct if the user wants to "fill" the day.
-         // Let's assume if there is ANY activity, we treat it as working day and generate our standard hours.
-         workingDays.push(dayKey) 
+         // It has significant daytime records, so it's a working day
+         workingDays.push(dayKey)
+         // console.log(`   ✅ Día laborable: ${dayKey} (${totalRecords} registros, ${dayTimeRecords} en horario diurno)`)
     }
   }
   
@@ -415,7 +420,8 @@ async function generateRecordsForDay(
   catalogues: any,
   targetDailyKg: number,
   maxRecordsLimit: number = 20,
-  existingPhysicalRecords: any[] = []
+  existingPhysicalRecords: any[] = [],
+  forceMaxCapacity: boolean = false
 ) {
   const [year, month, day] = dayKey.split('-').map(Number)
   const mexicoDate = new Date(year, month - 1, day)
@@ -425,24 +431,17 @@ async function generateRecordsForDay(
   const records: any[] = []
   
   // Register physical records in global tracking if not already 
-  // (We do this once per day loop, but this function is called once per day, so it works)
   existingPhysicalRecords.forEach(r => {
       const vid = r.numero_economico || 'UNKNOWN'
       const key = `${vid}-${dayKey}`
       const ts = new Date(r.fecha_entrada)
       
-      // Only add if not tracked yet (simple check)
-      // Since function is called once per day, we can just sync valid counts
       if (!GLOBAL_TRACKING.vehicleDailyTrips.has(key)) {
-         // Count physicals for this specific day/vehicle from the array
          const count = existingPhysicalRecords.filter(pr => pr.numero_economico === vid).length
          GLOBAL_TRACKING.vehicleDailyTrips.set(key, count)
       }
-
-      // Add timestamps for collision check
       GLOBAL_TRACKING.timestamps.push(ts)
       
-      // Update last exit (approx 15m duration for physical)
       const exit = new Date(ts.getTime() + 15 * 60000)
       const last = GLOBAL_TRACKING.vehicleExits.get(vid)
       if (!last || exit > last) {
@@ -450,33 +449,28 @@ async function generateRecordsForDay(
       }
   })
 
-  // Determine how many vehicles will work today - USE ALL 9 vehicles
-  // Ensure we include vehicles that already have physical records
+  // Determine working vehicles
+  let workingVehicles = [...VEHICLES]
+  if (!forceMaxCapacity) {
+       // Randomly select subset for normal days
+       workingVehicles.sort(() => Math.random() - 0.5)
+       const numVehiclesWorking = Math.floor(sampleTruncatedNormal(7.5, 0.5, 7, 9))
+       workingVehicles = workingVehicles.slice(0, numVehiclesWorking)
+  }
+  
+  // Always include physicals
   const physicalVehicles = new Set(existingPhysicalRecords.map(r => r.numero_economico).filter(Boolean))
-
-  // Use ALL vehicles and shuffle for variety
-  let workingVehicles = [...VEHICLES].sort(() => Math.random() - 0.5)
-
-  // Force include physical vehicles at start
   physicalVehicles.forEach(eco => {
       const v = VEHICLES.find(veh => veh.numero_economico === eco)
       if (v && !workingVehicles.includes(v)) workingVehicles.unshift(v)
   })
 
-  // =========================================================================
-  // TWO-SHIFT STRATEGY:
-  // 1. MORNING SHIFT (7:30-11:30): All 9 vehicles make their first trip
-  // 2. AFTERNOON SHIFT (11:30-3:00): Same vehicles return for second trip
-  // This naturally generates ~12-18 trips per day (9 morning + up to 9 afternoon)
-  // =========================================================================
-
   let totalKgGenerated = 0
   let attempts = 0
+  
+  const effectiveLimit = forceMaxCapacity ? 999 : maxRecordsLimit
 
-  // Track which shift we're in for each attempt
-  const morningShiftEnd = new Date(`${year}-${month.toString().padStart(2,'0')}-${day.toString().padStart(2,'0')}T11:30:00-06:00`)
-
-  while (totalKgGenerated < targetDailyKg && attempts < 300 && (records.length + existingPhysicalRecords.length) < maxRecordsLimit) {
+  while (totalKgGenerated < targetDailyKg && attempts < 300 && (records.length + existingPhysicalRecords.length) < effectiveLimit) {
     if (workingVehicles.length === 0) break
 
     // Select a vehicle (prefer vehicles with fewer trips)
@@ -492,34 +486,47 @@ async function generateRecordsForDay(
     const dailyTripKey = `${vehicle.numero_economico}-${dayKey}`
     const currentTrips = GLOBAL_TRACKING.vehicleDailyTrips.get(dailyTripKey) || 0
 
-    // Allow 2 trips per vehicle (morning + afternoon)
-    // This is realistic: one trip in AM, one in PM
-    let maxTrips = 2
-    if (dayOfWeek === 0) maxTrips = 3 // Sunday: max 2-3 trips (user said 2-3)
+    // Trip Max Logic
+    let maxTrips = vehicle.viajes_por_dia_max
+    if (!forceMaxCapacity) {
+        if (dayOfWeek === 0) {
+             maxTrips = 3 // Sunday limited
+        } else {
+             // Normal day: 2 trips for Carga Trasera, 4 for Volteo usually
+             // But we want to simulate the "2 Shift" pattern mostly
+             if (vehicle.tipo === 'CARGA_TRASERA') maxTrips = 2
+             else maxTrips = 3
+        }
+    }
+    
+    // Safety check against vehicles config
+    maxTrips = Math.min(maxTrips, vehicle.viajes_por_dia_max)
 
     if (currentTrips >= maxTrips) {
-      // Vehicle full for today
       workingVehicles = workingVehicles.filter(v => v.numero_economico !== vehicleKey)
       continue
     }
 
-    // Generate timestamp with TWO-SHIFT logic
-    // MORNING: 7:30-11:30 (first trip)
-    // AFTERNOON: 11:30-3:00 (second trip - same truck returns after 3+ hours)
-
+    // Schedule: 
+    // If strict force, just find ANY slot 7:00-18:00
+    // If normal, follow shifts.
+    
     let startH = 7.5, endH = 15.0
     if (dayOfWeek === 0) { startH = 16.0; endH = 21.0 }
 
-    // Determine if this should be morning or afternoon shift based on current trips
     let shiftStartH = startH, shiftEndH = endH
-    if (dayOfWeek !== 0 && currentTrips === 0) {
-        // First trip: MORNING SHIFT (7:30-11:30)
-        shiftStartH = 7.5
-        shiftEndH = 11.5
-    } else if (dayOfWeek !== 0 && currentTrips === 1) {
-        // Second trip: AFTERNOON SHIFT (11:30-3:00)
-        shiftStartH = 11.5
-        shiftEndH = 15.0
+    
+    if (!forceMaxCapacity) {
+        // TWO-SHIFT STRATEGY logic
+        if (dayOfWeek !== 0 && currentTrips === 0) {
+            shiftStartH = 7.5; shiftEndH = 11.5
+        } else if (dayOfWeek !== 0 && currentTrips === 1) {
+            shiftStartH = 11.5; shiftEndH = 15.0
+        }
+    } else {
+        // Force mode: Use wider window 6:00 - 18:00 to fit trips
+         shiftStartH = 6.0; shiftEndH = 18.0
+         if (dayOfWeek === 0) { shiftStartH = 14.0; shiftEndH = 22.0 }
     }
 
     let timestamp: Date | null = null
@@ -529,27 +536,20 @@ async function generateRecordsForDay(
         const t = shiftStartH + Math.random() * (shiftEndH - shiftStartH)
         const h = Math.floor(t)
         const m = Math.floor((t - h) * 60)
-
-        // Construct ISO string with -06:00 offset explicitly to avoid server timezone issues
-        // YYYY-MM-DDTHH:mm:SS-06:00
         const isoStr = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}T${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${Math.floor(Math.random()*59).toString().padStart(2, '0')}-06:00`
         const candidate = new Date(isoStr)
 
-        // 1. Check strict previous order (cannot enter before last exit)
         if (lastExit && candidate < lastExit) continue;
-
-        // 2. For second trip: must wait at least 3 hours (MORNING_SHIFT_COOLDOWN)
-        if (lastExit && currentTrips >= 1) {
+        
+        if (lastExit && currentTrips >= 1 && !forceMaxCapacity) {
             const diffMin = (candidate.getTime() - lastExit.getTime()) / 60000
             if (diffMin < MORNING_SHIFT_COOLDOWN) continue;
         }
 
-        // 3. Check 15 min collision buffer (ANY TRUCK)
         const collision = GLOBAL_TRACKING.timestamps.some(existing =>
             Math.abs(existing.getTime() - candidate.getTime()) < COLLISION_BUFFER_MINUTES * 60000
         )
         if (collision) continue;
-
         timestamp = candidate
         break;
     }
@@ -815,32 +815,26 @@ async function backfill() {
       console.log(`   Se distribuirán en los ${workingDays.length} días laborados`)
 
       let addedKg = 0
-      let maxLoops = 1000 // Increased significantly
-
-      // Include ALL working days (including Sundays) for extra capacity
+      let maxLoops = 5000 // Force fill mode
+      
       const validDayKeys = [...workingDays]
 
       while (addedKg < missingKg && maxLoops > 0) {
           const randomDay = pickRandom(validDayKeys)
-
-          // Generate records with realistic target
-          // This will use the two-shift system automatically
-          const targetPerAttempt = Math.min(13000, missingKg - addedKg)
-
+          
           const records = await generateRecordsForDay(
              randomDay,
              catalogues,
-             targetPerAttempt, // Realistic target
-             3, // Allow up to 3 records per attempt
-             [] // No need to pass physicals again, they are in GLOBAL_TRACKING
+             1, // Target small, forces 1 trip
+             1, // Limit 1 record per call
+             [], // No physicals
+             true // forceMaxCapacity: USE ALL VEHICLES UP TO MAX LIMIT
           )
 
           if (records.length > 0) {
-              for (const r of records) {
-                  adjustedRecords.push(r)
-                  addedKg += r.peso
-              }
-              if (maxLoops % 100 === 0) process.stdout.write('.')
+              const r = records[0]
+              adjustedRecords.push(r)
+              addedKg += r.peso
           }
           maxLoops--
       }
@@ -924,14 +918,21 @@ async function backfill() {
               const newEntrada = r.peso_entrada + step
               
               // Define hard limits for realism
-              // Carga trasera: waste 9000-14000. Volteo: 3000-7500.
               let isValid = false
-              if (r.placa_vehiculo && r.placa_vehiculo !== 'BACKFILL-VIRTUAL') { // If matched to real vehicle
-                  // Find vehicle type
-                   // Simply check current weight range
-                   if (newWaste >= 3000 && newWaste <= 15000) isValid = true
+              
+              const vehicleInfo = VEHICLES.find(v => v.numero_economico === r.numero_economico)
+              
+              if (vehicleInfo) {
+                  if (vehicleInfo.tipo === 'VOLTEO') {
+                      // Volteo Strict: 3600 - 8000 (Allow slight overuse to fit target)
+                      if (newWaste >= 3600 && newWaste <= 8000) isValid = true
+                  } else {
+                      // Carga Trasera: 9000 - 15500
+                      if (newWaste >= 9000 && newWaste <= 15500) isValid = true
+                  }
               } else {
-                  isValid = true
+                  // Fallback if no match
+                  if (newWaste >= 3000 && newWaste <= 15000) isValid = true
               }
               
               if (isValid) {
