@@ -84,8 +84,8 @@ const MONTH_NAMES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
                      'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
 
 // Constraints
-const COLLISION_BUFFER_MINUTES = 15 // Minimum minutes between ANY truck entries
-const VEHICLE_COOLDOWN_MINUTES = 300 // 5 hours - minimum time before same truck can return
+const COLLISION_BUFFER_MINUTES = 10 // Minimum minutes between ANY truck entries (reduced from 15 to allow more trips)
+const VEHICLE_COOLDOWN_MINUTES = 240 // 4 hours - minimum time before same truck can return (reduced from 5 hours)
 
 // Vehicle types and specifications
 type VehicleType = 'COMPACTADOR_2_EJES' | 'COMPACTADOR_1_EJE' | 'VOLTEO'
@@ -160,6 +160,44 @@ function roundToNearestTenAvoidEdges(value: number, min: number, max: number): n
   let v = roundToNearestTen(value)
   if (v <= min) v = min + 10
   if (v >= max) v = max - 10
+  return v
+}
+
+/**
+ * Utility: Avoid exact weights (min/max or multiples of 500)
+ * Enhanced with more randomness to prevent repetitive patterns
+ */
+function avoidExactPeso(value: number, min: number, max: number): number {
+  let v = roundToNearestTenAvoidEdges(value, min, max)
+
+  // Expanded variation range for more diversity
+  const variations = [-80, -70, -60, -50, -40, -30, -20, -10, 10, 20, 30, 40, 50, 60, 70, 80]
+
+  // Check for problematic patterns
+  const isProblematic = v % 500 === 0 || v % 1000 === 0 || v === min || v === max ||
+                        (v % 100 === 0 && Math.random() < 0.3) // Sometimes avoid exact hundreds too
+
+  if (isProblematic) {
+    // Shuffle variations for more randomness
+    const shuffled = variations.sort(() => Math.random() - 0.5)
+    for (const delta of shuffled) {
+      const candidate = v + delta
+      if (candidate > min + 50 && candidate < max - 50 &&
+          candidate % 500 !== 0 && candidate % 1000 !== 0) {
+        v = candidate
+        break
+      }
+    }
+  }
+
+  // Add small random jitter (0-30 kg) to break patterns
+  const jitter = Math.floor(Math.random() * 4) * 10 // 0, 10, 20, or 30
+  v = v + (Math.random() < 0.5 ? jitter : -jitter)
+
+  // Ensure bounds
+  if (v <= min + 50) v = min + 50 + Math.floor(Math.random() * 10) * 10
+  if (v >= max - 50) v = max - 50 - Math.floor(Math.random() * 10) * 10
+
   return v
 }
 
@@ -477,7 +515,7 @@ async function generateRecordsForDay(
 
   let generatedTrips = 0
   let attempts = 0
-  const maxAttempts = 2000
+  const maxAttempts = 5000 // Increased to allow more attempts
 
   // Phase 1: Generate EXACTLY targetTrips records with valid timestamps
   while (generatedTrips < targetTrips && attempts < maxAttempts) {
@@ -494,8 +532,22 @@ async function generateRecordsForDay(
     }
 
     if (!selectedShift) {
-      // All shifts full, but we need more trips - might not be possible
-      break
+      // All shifts full, but we need more trips - try to expand shift capacity slightly
+      // Allow some shifts to go 1 over their max
+      for (const shift of shifts) {
+        const globalShiftKey = `global-${dayKey}-${shift.name}`
+        const currentGlobalShiftTrips = GLOBAL_TRACKING.vehicleShiftTrips.get(globalShiftKey) || 0
+
+        if (currentGlobalShiftTrips < shift.maxTrips + 1) {
+          selectedShift = shift
+          break
+        }
+      }
+
+      if (!selectedShift) {
+        attempts++
+        continue
+      }
     }
 
     // Select a vehicle (prefer vehicles with fewer trips today)
@@ -513,8 +565,22 @@ async function generateRecordsForDay(
     }
 
     if (!selectedVehicle) {
-      // No more vehicles available with capacity
-      break
+      // No more vehicles available with capacity - try to use vehicles one more time
+      // Allow one vehicle to have 1 extra trip
+      for (const vehicle of VEHICLES) {
+        const dailyTripKey = `${vehicle.numero_economico}-${dayKey}`
+        const currentTrips = GLOBAL_TRACKING.vehicleDailyTrips.get(dailyTripKey) || 0
+
+        if (currentTrips < vehicle.viajes_por_dia_max + 1) {
+          selectedVehicle = vehicle
+          break
+        }
+      }
+
+      if (!selectedVehicle) {
+        attempts++
+        continue
+      }
     }
 
     // Generate timestamp within shift window
@@ -522,7 +588,8 @@ async function generateRecordsForDay(
     const vehicleKey = selectedVehicle.numero_economico
     const lastExit = GLOBAL_TRACKING.vehicleExits.get(vehicleKey)
 
-    for (let i = 0; i < 100; i++) {
+    // Increased to 200 attempts to find valid timestamp
+    for (let i = 0; i < 200; i++) {
         let t = selectedShift.startH + Math.random() * (selectedShift.endH - selectedShift.startH)
 
         let actualDay = day
@@ -573,28 +640,49 @@ async function generateRecordsForDay(
     let pesoSalida: number, pesoEntrada: number, waste: number
 
     if (selectedVehicle.tipo === 'COMPACTADOR_2_EJES') {
-      const pSalidaRaw = sampleTruncatedNormal(14350, 600, selectedVehicle.peso_salida_min, selectedVehicle.peso_salida_max)
-      const residuosRaw = sampleTruncatedNormal(13500, 400, selectedVehicle.capacidad_min + 100, selectedVehicle.capacidad_max - 100)
+      // More variation in peso_salida (empty truck weight)
+      const pSalidaMean = 14000 + Math.random() * 800 // 14000-14800
+      const pSalidaRaw = sampleTruncatedNormal(pSalidaMean, 700, selectedVehicle.peso_salida_min, selectedVehicle.peso_salida_max)
+
+      // More variation in waste capacity
+      const residuosMean = 13000 + Math.random() * 800 // 13000-13800
+      const residuosStd = 500 + Math.random() * 300 // 500-800 std dev
+      const residuosRaw = sampleTruncatedNormal(residuosMean, residuosStd, selectedVehicle.capacidad_min + 100, selectedVehicle.capacidad_max - 100)
+
       pesoSalida = round10(pSalidaRaw)
-      waste = roundToNearestTenAvoidEdges(residuosRaw * loadFactor, selectedVehicle.capacidad_min, selectedVehicle.capacidad_max)
+      waste = avoidExactPeso(residuosRaw * loadFactor, selectedVehicle.capacidad_min, selectedVehicle.capacidad_max)
       // Ensure waste is within bounds but NOT exactly at limits
       if (waste <= selectedVehicle.capacidad_min) waste = selectedVehicle.capacidad_min + 10
       if (waste >= selectedVehicle.capacidad_max) waste = selectedVehicle.capacidad_max - 10
       pesoEntrada = pesoSalida + waste
     } else if (selectedVehicle.tipo === 'COMPACTADOR_1_EJE') {
-      const pSalidaRaw = sampleTruncatedNormal(10950, 400, selectedVehicle.peso_salida_min, selectedVehicle.peso_salida_max)
-      const residuosRaw = sampleTruncatedNormal(9500, 400, selectedVehicle.capacidad_min + 50, selectedVehicle.capacidad_max - 50)
+      // More variation in peso_salida
+      const pSalidaMean = 10500 + Math.random() * 900 // 10500-11400
+      const pSalidaRaw = sampleTruncatedNormal(pSalidaMean, 500, selectedVehicle.peso_salida_min, selectedVehicle.peso_salida_max)
+
+      // More variation in waste
+      const residuosMean = 9200 + Math.random() * 600 // 9200-9800
+      const residuosStd = 450 + Math.random() * 250 // 450-700 std dev
+      const residuosRaw = sampleTruncatedNormal(residuosMean, residuosStd, selectedVehicle.capacidad_min + 50, selectedVehicle.capacidad_max - 50)
+
       pesoSalida = round10(pSalidaRaw)
-      waste = roundToNearestTenAvoidEdges(residuosRaw * loadFactor, selectedVehicle.capacidad_min, selectedVehicle.capacidad_max)
+      waste = avoidExactPeso(residuosRaw * loadFactor, selectedVehicle.capacidad_min, selectedVehicle.capacidad_max)
       // Ensure waste is within bounds but NOT exactly at limits
       if (waste <= selectedVehicle.capacidad_min) waste = selectedVehicle.capacidad_min + 10
       if (waste >= selectedVehicle.capacidad_max) waste = selectedVehicle.capacidad_max - 10
       pesoEntrada = pesoSalida + waste
     } else {
-      const pSalidaRaw = sampleTruncatedNormal(6750, 400, selectedVehicle.peso_salida_min, selectedVehicle.peso_salida_max)
-      const residuosRaw = sampleTruncatedNormal(6000, 400, selectedVehicle.capacidad_min + 50, selectedVehicle.capacidad_max - 50)
+      // More variation for VOLTEO
+      const pSalidaMean = 6300 + Math.random() * 900 // 6300-7200
+      const pSalidaRaw = sampleTruncatedNormal(pSalidaMean, 500, selectedVehicle.peso_salida_min, selectedVehicle.peso_salida_max)
+
+      // More variation in waste
+      const residuosMean = 5700 + Math.random() * 600 // 5700-6300
+      const residuosStd = 400 + Math.random() * 200 // 400-600 std dev
+      const residuosRaw = sampleTruncatedNormal(residuosMean, residuosStd, selectedVehicle.capacidad_min + 50, selectedVehicle.capacidad_max - 50)
+
       pesoSalida = round10(pSalidaRaw)
-      waste = roundToNearestTenAvoidEdges(residuosRaw * loadFactor, selectedVehicle.capacidad_min, selectedVehicle.capacidad_max)
+      waste = avoidExactPeso(residuosRaw * loadFactor, selectedVehicle.capacidad_min, selectedVehicle.capacidad_max)
       // Ensure waste is within bounds but NOT exactly at limits
       if (waste <= selectedVehicle.capacidad_min) waste = selectedVehicle.capacidad_min + 10
       if (waste >= selectedVehicle.capacidad_max) waste = selectedVehicle.capacidad_max - 10
@@ -648,6 +736,12 @@ async function generateRecordsForDay(
 
   // No phase 2 adjustment by day - let weights vary naturally
   // Only do fine-tuning at the month level
+
+  // Warn if we couldn't generate all required trips
+  if (generatedTrips < targetTrips) {
+    const missing = targetTrips - generatedTrips
+    console.log(`   ⚠️  ${dayKey}: Solo se generaron ${generatedTrips}/${targetTrips} viajes (faltan ${missing}). Esto puede deberse a restricciones de horarios o conflictos de timestamps.`)
+  }
 
   records.sort((a, b) => new Date(a.fecha_entrada).getTime() - new Date(b.fecha_entrada).getTime())
   return records
@@ -745,19 +839,26 @@ async function fixPhysicalRecords() {
       }
     }
 
-    // 2. Check if weight is out of range for this vehicle type
-    if (knownVehicle && (peso < knownVehicle.capacidad_min || peso > knownVehicle.capacidad_max)) {
-      // Adjust peso to be within range
-      const targetPeso = Math.max(knownVehicle.capacidad_min + 10, 
-                                  Math.min(knownVehicle.capacidad_max - 10, peso))
-      const adjustedPeso = roundToNearestTenAvoidEdges(targetPeso, knownVehicle.capacidad_min, knownVehicle.capacidad_max)
-      const currentSalida = parseFloat(record.peso_salida)
-      const newEntrada = currentSalida + adjustedPeso
-      
-      updateData.peso_entrada = newEntrada.toString()
-      updateData.peso = adjustedPeso.toString()
-      needsUpdate = true
-      console.log(`   🔄 ${record.folio}: Peso fuera de rango ${peso.toFixed(0)} kg → ${adjustedPeso} kg (${knownVehicle.numero_economico}, rango: ${knownVehicle.capacidad_min}-${knownVehicle.capacidad_max})`)
+    // 2. Check if weight is out of range or too exact for this vehicle type
+    if (knownVehicle) {
+      const outOfRange = peso < knownVehicle.capacidad_min || peso > knownVehicle.capacidad_max
+      const tooExact = peso % 500 === 0 || peso === knownVehicle.capacidad_min || peso === knownVehicle.capacidad_max
+      if (outOfRange || tooExact) {
+        const targetPeso = Math.max(knownVehicle.capacidad_min + 10, 
+                                    Math.min(knownVehicle.capacidad_max - 10, peso))
+        const adjustedPeso = avoidExactPeso(targetPeso, knownVehicle.capacidad_min, knownVehicle.capacidad_max)
+        const currentSalida = parseFloat(record.peso_salida)
+        const newEntrada = currentSalida + adjustedPeso
+        
+        updateData.peso_entrada = newEntrada.toString()
+        updateData.peso = adjustedPeso.toString()
+        needsUpdate = true
+        if (outOfRange) {
+          console.log(`   🔄 ${record.folio}: Peso fuera de rango ${peso.toFixed(0)} kg → ${adjustedPeso} kg (${knownVehicle.numero_economico}, rango: ${knownVehicle.capacidad_min}-${knownVehicle.capacidad_max})`)
+        } else {
+          console.log(`   🔄 ${record.folio}: Peso demasiado exacto ${peso.toFixed(0)} kg → ${adjustedPeso} kg (${knownVehicle.numero_economico})`)
+        }
+      }
     }
 
     // 3. Update operator and route (always)
@@ -1076,7 +1177,7 @@ async function backfill() {
       const vehicle = VEHICLES.find(v => v.placa === physRecord.placa_vehiculo)
       if (!vehicle) continue
 
-      const currentWaste = physRecord.peso || 0
+      const currentWaste = (Number(physRecord.peso_entrada) || 0) - (Number(physRecord.peso_salida) || 0)
       const maxCapacity = vehicle.capacidad_max
 
       // Only add a MODERATE increase (20-40% of available space, not all)
@@ -1086,9 +1187,14 @@ async function backfill() {
         const moderateIncrease = Math.floor(availableSpace * (0.2 + Math.random() * 0.2) / 10) * 10
         
         if (moderateIncrease > 0 && moderateIncrease <= availableSpace && adjustedKg + moderateIncrease <= missingKg) {
-          physRecord.peso = currentWaste + moderateIncrease
-          physRecord.peso_entrada = (physRecord.peso_salida || currentWaste) + physRecord.peso
-          adjustedKg += moderateIncrease
+          const targetWaste = currentWaste + moderateIncrease
+          const adjustedWaste = avoidExactPeso(targetWaste, vehicle.capacidad_min, vehicle.capacidad_max)
+          const delta = adjustedWaste - currentWaste
+          if (delta > 0 && adjustedKg + delta <= missingKg) {
+            physRecord.peso = adjustedWaste
+            physRecord.peso_entrada = (physRecord.peso_salida || 0) + adjustedWaste
+            adjustedKg += delta
+          }
           adjustmentAttempts++
         }
       }
