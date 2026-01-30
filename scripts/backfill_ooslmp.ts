@@ -84,7 +84,7 @@ const MONTH_NAMES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
                      'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
 
 // Constraints
-const COLLISION_BUFFER_MINUTES = 10 // Minimum minutes between ANY truck entries (reduced from 15 to allow more trips)
+const COLLISION_BUFFER_MINUTES = 20 // Minimum minutes between ANY truck entries (reduced from 15 to allow more trips)
 const VEHICLE_COOLDOWN_MINUTES = 240 // 4 hours - minimum time before same truck can return (reduced from 5 hours)
 
 // Vehicle types and specifications
@@ -154,51 +154,42 @@ function roundToNearestTen(value: number): number {
 }
 
 /**
- * Utility: Round to nearest 10 but avoid exact min/max edges
- */
-function roundToNearestTenAvoidEdges(value: number, min: number, max: number): number {
-  let v = roundToNearestTen(value)
-  if (v <= min) v = min + 10
-  if (v >= max) v = max - 10
-  return v
-}
-
-/**
- * Utility: Avoid exact weights (min/max or multiples of 500)
- * Enhanced with more randomness to prevent repetitive patterns
+ * Utility: Add natural variation to weights - AGGRESSIVE anti-pattern function
+ * This function FORCES variation and prevents exact multiples
  */
 function avoidExactPeso(value: number, min: number, max: number): number {
-  let v = roundToNearestTenAvoidEdges(value, min, max)
+  // Round to nearest 10
+  let v = Math.round(value / 10) * 10
 
-  // Expanded variation range for more diversity
-  const variations = [-80, -70, -60, -50, -40, -30, -20, -10, 10, 20, 30, 40, 50, 60, 70, 80]
-
-  // Check for problematic patterns
-  const isProblematic = v % 500 === 0 || v % 1000 === 0 || v === min || v === max ||
-                        (v % 100 === 0 && Math.random() < 0.3) // Sometimes avoid exact hundreds too
-
-  if (isProblematic) {
-    // Shuffle variations for more randomness
-    const shuffled = variations.sort(() => Math.random() - 0.5)
-    for (const delta of shuffled) {
-      const candidate = v + delta
-      if (candidate > min + 50 && candidate < max - 50 &&
-          candidate % 500 !== 0 && candidate % 1000 !== 0) {
-        v = candidate
-        break
-      }
-    }
+  // CRITICAL: Detect and fix exact multiples of 500/1000 FIRST
+  if (v % 1000 === 0) {
+    // If it's exact 1000, add random offset between -200 and +200 (in steps of 10)
+    const offset = (Math.floor(Math.random() * 41) - 20) * 10 // -200 to +200
+    v = v + offset
+  } else if (v % 500 === 0) {
+    // If it's exact 500, add random offset between -150 and +150
+    const offset = (Math.floor(Math.random() * 31) - 15) * 10 // -150 to +150
+    v = v + offset
   }
 
-  // Add small random jitter (0-30 kg) to break patterns
-  const jitter = Math.floor(Math.random() * 4) * 10 // 0, 10, 20, or 30
+  // Add additional random variation (±50-200 kg) to EVERY value
+  const extraVariation = (Math.floor(Math.random() * 16) - 8) * 10 // -80 to +80
+  v = v + extraVariation
+
+  // Add small final jitter (0-40 kg)
+  const jitter = Math.floor(Math.random() * 5) * 10 // 0, 10, 20, 30, 40
   v = v + (Math.random() < 0.5 ? jitter : -jitter)
 
-  // Ensure bounds
-  if (v <= min + 50) v = min + 50 + Math.floor(Math.random() * 10) * 10
-  if (v >= max - 50) v = max - 50 - Math.floor(Math.random() * 10) * 10
+  // Clamp to bounds with safe margins
+  if (v < min + 100) v = min + 100 + Math.floor(Math.random() * 20) * 10
+  if (v > max - 100) v = max - 100 - Math.floor(Math.random() * 20) * 10
 
-  return v
+  // Final check: if STILL a multiple of 500 or 1000, add 30-70 kg
+  if (v % 500 === 0 || v % 1000 === 0) {
+    v = v + (30 + Math.floor(Math.random() * 5) * 10) // Add 30-70 kg
+  }
+
+  return Math.round(v / 10) * 10 // Ensure result is multiple of 10
 }
 
 /**
@@ -644,16 +635,19 @@ async function generateRecordsForDay(
       const pSalidaMean = 13500 + Math.random() * 1500 // 13500-15000
       const pSalidaRaw = sampleTruncatedNormal(pSalidaMean, 700, selectedVehicle.peso_salida_min, selectedVehicle.peso_salida_max)
 
-      // REALISTIC range: 70-105% of max capacity (can be slightly overloaded sometimes)
-      // Capacity: 13000-14000, realistic range: 9100-14700 kg
-      const minRealistic = selectedVehicle.capacidad_min * 0.70
-      const maxRealistic = selectedVehicle.capacidad_max * 1.05 // Allow up to 105% overload
-      const residuosMean = minRealistic + Math.random() * (maxRealistic - minRealistic)
-      const residuosStd = 900 + Math.random() * 600 // More variation
-      const residuosRaw = sampleTruncatedNormal(residuosMean, residuosStd, minRealistic, maxRealistic)
+      // HIGHER range: 85-110% to get closer to target while maintaining variation
+      // Capacity: 13000-14000, range: 11050-15400 kg
+      const minWaste = selectedVehicle.capacidad_min * 0.85  // 11050 kg
+      const maxWaste = selectedVehicle.capacidad_max * 1.10  // 15400 kg
+
+      // Generate completely random base within range (no normal distribution bias)
+      const wasteBase = minWaste + Math.random() * (maxWaste - minWaste)
+
+      // Apply load factor with additional noise to prevent patterns
+      const wasteWithFactor = wasteBase * loadFactor * (0.95 + Math.random() * 0.1) // ±5% noise
 
       pesoSalida = round10(pSalidaRaw)
-      waste = avoidExactPeso(residuosRaw * loadFactor, selectedVehicle.capacidad_min, selectedVehicle.capacidad_max * 1.05)
+      waste = avoidExactPeso(wasteWithFactor, minWaste, maxWaste)
       pesoEntrada = pesoSalida + waste
 
     } else if (selectedVehicle.tipo === 'COMPACTADOR_1_EJE') {
@@ -661,15 +655,19 @@ async function generateRecordsForDay(
       const pSalidaMean = 10200 + Math.random() * 1300 // 10200-11500
       const pSalidaRaw = sampleTruncatedNormal(pSalidaMean, 500, selectedVehicle.peso_salida_min, selectedVehicle.peso_salida_max)
 
-      // REALISTIC range: 70-105% (6300-10500 kg, can be slightly overloaded)
-      const minRealistic = selectedVehicle.capacidad_min * 0.70
-      const maxRealistic = selectedVehicle.capacidad_max * 1.05
-      const residuosMean = minRealistic + Math.random() * (maxRealistic - minRealistic)
-      const residuosStd = 700 + Math.random() * 400
-      const residuosRaw = sampleTruncatedNormal(residuosMean, residuosStd, minRealistic, maxRealistic)
+      // HIGHER range: 85-110%
+      // Capacity: 9000-10000, range: 7650-11000 kg
+      const minWaste = selectedVehicle.capacidad_min * 0.85  // 7650 kg
+      const maxWaste = selectedVehicle.capacidad_max * 1.10  // 11000 kg
+
+      // Completely random base (no normal distribution)
+      const wasteBase = minWaste + Math.random() * (maxWaste - minWaste)
+
+      // Apply load factor with noise
+      const wasteWithFactor = wasteBase * loadFactor * (0.95 + Math.random() * 0.1)
 
       pesoSalida = round10(pSalidaRaw)
-      waste = avoidExactPeso(residuosRaw * loadFactor, selectedVehicle.capacidad_min, selectedVehicle.capacidad_max * 1.05)
+      waste = avoidExactPeso(wasteWithFactor, minWaste, maxWaste)
       pesoEntrada = pesoSalida + waste
 
     } else {
@@ -677,15 +675,19 @@ async function generateRecordsForDay(
       const pSalidaMean = 6000 + Math.random() * 1300 // 6000-7300
       const pSalidaRaw = sampleTruncatedNormal(pSalidaMean, 500, selectedVehicle.peso_salida_min, selectedVehicle.peso_salida_max)
 
-      // REALISTIC range: 70-105% (3850-6825 kg, can be slightly overloaded)
-      const minRealistic = selectedVehicle.capacidad_min * 0.70
-      const maxRealistic = selectedVehicle.capacidad_max * 1.05
-      const residuosMean = minRealistic + Math.random() * (maxRealistic - minRealistic)
-      const residuosStd = 600 + Math.random() * 350
-      const residuosRaw = sampleTruncatedNormal(residuosMean, residuosStd, minRealistic, maxRealistic)
+      // HIGHER range: 85-110%
+      // Capacity: 5500-6500, range: 4675-7150 kg
+      const minWaste = selectedVehicle.capacidad_min * 0.85  // 4675 kg
+      const maxWaste = selectedVehicle.capacidad_max * 1.10  // 7150 kg
+
+      // Completely random base (no normal distribution)
+      const wasteBase = minWaste + Math.random() * (maxWaste - minWaste)
+
+      // Apply load factor with noise
+      const wasteWithFactor = wasteBase * loadFactor * (0.95 + Math.random() * 0.1)
 
       pesoSalida = round10(pSalidaRaw)
-      waste = avoidExactPeso(residuosRaw * loadFactor, selectedVehicle.capacidad_min, selectedVehicle.capacidad_max * 1.05)
+      waste = avoidExactPeso(wasteWithFactor, minWaste, maxWaste)
       pesoEntrada = pesoSalida + waste
     }
 
