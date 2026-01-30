@@ -635,57 +635,57 @@ async function generateRecordsForDay(
       continue
     }
 
-    // Generate initial weights based on vehicle type (mid-range for now)
+    // Generate initial weights based on vehicle type with REALISTIC variation
     const round10 = roundToNearestTen
     let pesoSalida: number, pesoEntrada: number, waste: number
 
     if (selectedVehicle.tipo === 'COMPACTADOR_2_EJES') {
-      // More variation in peso_salida (empty truck weight)
-      const pSalidaMean = 14000 + Math.random() * 800 // 14000-14800
+      // Variation in peso_salida (empty truck weight)
+      const pSalidaMean = 13500 + Math.random() * 1500 // 13500-15000
       const pSalidaRaw = sampleTruncatedNormal(pSalidaMean, 700, selectedVehicle.peso_salida_min, selectedVehicle.peso_salida_max)
 
-      // More variation in waste capacity
-      const residuosMean = 13000 + Math.random() * 800 // 13000-13800
-      const residuosStd = 500 + Math.random() * 300 // 500-800 std dev
-      const residuosRaw = sampleTruncatedNormal(residuosMean, residuosStd, selectedVehicle.capacidad_min + 100, selectedVehicle.capacidad_max - 100)
+      // REALISTIC range: 70-105% of max capacity (can be slightly overloaded sometimes)
+      // Capacity: 13000-14000, realistic range: 9100-14700 kg
+      const minRealistic = selectedVehicle.capacidad_min * 0.70
+      const maxRealistic = selectedVehicle.capacidad_max * 1.05 // Allow up to 105% overload
+      const residuosMean = minRealistic + Math.random() * (maxRealistic - minRealistic)
+      const residuosStd = 900 + Math.random() * 600 // More variation
+      const residuosRaw = sampleTruncatedNormal(residuosMean, residuosStd, minRealistic, maxRealistic)
 
       pesoSalida = round10(pSalidaRaw)
-      waste = avoidExactPeso(residuosRaw * loadFactor, selectedVehicle.capacidad_min, selectedVehicle.capacidad_max)
-      // Ensure waste is within bounds but NOT exactly at limits
-      if (waste <= selectedVehicle.capacidad_min) waste = selectedVehicle.capacidad_min + 10
-      if (waste >= selectedVehicle.capacidad_max) waste = selectedVehicle.capacidad_max - 10
+      waste = avoidExactPeso(residuosRaw * loadFactor, selectedVehicle.capacidad_min, selectedVehicle.capacidad_max * 1.05)
       pesoEntrada = pesoSalida + waste
+
     } else if (selectedVehicle.tipo === 'COMPACTADOR_1_EJE') {
-      // More variation in peso_salida
-      const pSalidaMean = 10500 + Math.random() * 900 // 10500-11400
+      // Variation in peso_salida
+      const pSalidaMean = 10200 + Math.random() * 1300 // 10200-11500
       const pSalidaRaw = sampleTruncatedNormal(pSalidaMean, 500, selectedVehicle.peso_salida_min, selectedVehicle.peso_salida_max)
 
-      // More variation in waste
-      const residuosMean = 9200 + Math.random() * 600 // 9200-9800
-      const residuosStd = 450 + Math.random() * 250 // 450-700 std dev
-      const residuosRaw = sampleTruncatedNormal(residuosMean, residuosStd, selectedVehicle.capacidad_min + 50, selectedVehicle.capacidad_max - 50)
+      // REALISTIC range: 70-105% (6300-10500 kg, can be slightly overloaded)
+      const minRealistic = selectedVehicle.capacidad_min * 0.70
+      const maxRealistic = selectedVehicle.capacidad_max * 1.05
+      const residuosMean = minRealistic + Math.random() * (maxRealistic - minRealistic)
+      const residuosStd = 700 + Math.random() * 400
+      const residuosRaw = sampleTruncatedNormal(residuosMean, residuosStd, minRealistic, maxRealistic)
 
       pesoSalida = round10(pSalidaRaw)
-      waste = avoidExactPeso(residuosRaw * loadFactor, selectedVehicle.capacidad_min, selectedVehicle.capacidad_max)
-      // Ensure waste is within bounds but NOT exactly at limits
-      if (waste <= selectedVehicle.capacidad_min) waste = selectedVehicle.capacidad_min + 10
-      if (waste >= selectedVehicle.capacidad_max) waste = selectedVehicle.capacidad_max - 10
+      waste = avoidExactPeso(residuosRaw * loadFactor, selectedVehicle.capacidad_min, selectedVehicle.capacidad_max * 1.05)
       pesoEntrada = pesoSalida + waste
+
     } else {
-      // More variation for VOLTEO
-      const pSalidaMean = 6300 + Math.random() * 900 // 6300-7200
+      // Variation for VOLTEO
+      const pSalidaMean = 6000 + Math.random() * 1300 // 6000-7300
       const pSalidaRaw = sampleTruncatedNormal(pSalidaMean, 500, selectedVehicle.peso_salida_min, selectedVehicle.peso_salida_max)
 
-      // More variation in waste
-      const residuosMean = 5700 + Math.random() * 600 // 5700-6300
-      const residuosStd = 400 + Math.random() * 200 // 400-600 std dev
-      const residuosRaw = sampleTruncatedNormal(residuosMean, residuosStd, selectedVehicle.capacidad_min + 50, selectedVehicle.capacidad_max - 50)
+      // REALISTIC range: 70-105% (3850-6825 kg, can be slightly overloaded)
+      const minRealistic = selectedVehicle.capacidad_min * 0.70
+      const maxRealistic = selectedVehicle.capacidad_max * 1.05
+      const residuosMean = minRealistic + Math.random() * (maxRealistic - minRealistic)
+      const residuosStd = 600 + Math.random() * 350
+      const residuosRaw = sampleTruncatedNormal(residuosMean, residuosStd, minRealistic, maxRealistic)
 
       pesoSalida = round10(pSalidaRaw)
-      waste = avoidExactPeso(residuosRaw * loadFactor, selectedVehicle.capacidad_min, selectedVehicle.capacidad_max)
-      // Ensure waste is within bounds but NOT exactly at limits
-      if (waste <= selectedVehicle.capacidad_min) waste = selectedVehicle.capacidad_min + 10
-      if (waste >= selectedVehicle.capacidad_max) waste = selectedVehicle.capacidad_max - 10
+      waste = avoidExactPeso(residuosRaw * loadFactor, selectedVehicle.capacidad_min, selectedVehicle.capacidad_max * 1.05)
       pesoEntrada = pesoSalida + waste
     }
 
