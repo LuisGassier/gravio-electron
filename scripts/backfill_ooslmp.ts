@@ -4,6 +4,7 @@
  * This script:
  * 1. Deletes all existing virtual records for the specified month
  * 2. Generates new synthetic records with realistic business rules
+ * 3. (FIX MODE) Corrects physical records with invalid vehicles/operators/routes
  *
  * Usage:
  *   Using .env.backfill file:
@@ -18,6 +19,7 @@
  *   - TARGET_KG: Target weight in kg including physical records (e.g., 2814440)
  *   - CLAVE_EMPRESA: Company code (default: 4 for OOSLMP)
  *   - DRY_RUN: false for actual execution, true for dry run (default: true)
+ *   - FIX_PHYSICAL_RECORDS: true to fix physical records with invalid data (default: false)
  */
 
 import dotenv from 'dotenv'
@@ -48,8 +50,12 @@ const MONTH = parseInt(process.env.MONTH || '1', 10) // 1-12
 const TARGET_TOTAL_KG = parseInt(process.env.TARGET_KG || '2814440', 10)
 const CLAVE_EMPRESA = parseInt(process.env.CLAVE_EMPRESA || '4', 10)
 const DRY_RUN = process.env.DRY_RUN?.toLowerCase() !== 'false' // Default to dry run for safety
+const FIX_PHYSICAL_RECORDS = process.env.FIX_PHYSICAL_RECORDS?.toLowerCase() === 'true' // Fix mode
+const FIX_ONLY = process.env.FIX_ONLY?.toLowerCase() === 'true' // Only fix physical records
 
 console.log(`📋 DRY_RUN variable: "${process.env.DRY_RUN}" → ${DRY_RUN ? 'MODO DRY RUN' : 'MODO LIVE'}`)
+console.log(`🔧 FIX_PHYSICAL_RECORDS: ${FIX_PHYSICAL_RECORDS ? 'SÍ (corregir registros físicos)' : 'NO'}`)
+if (FIX_ONLY) console.log('🛠️  FIX_ONLY: Solo correcciones físicas (sin regenerar virtuales)')
 
 // Validate configuration
 if (!SUPABASE_URL || !SUPABASE_KEY) {
@@ -145,6 +151,16 @@ function roundToNearestTen(value: number): number {
   const variations = [-40, -30, -20, -10, 0, 10, 20, 30, 40]
   const variation = variations[Math.floor(Math.random() * variations.length)]
   return Math.max(0, base + variation)
+}
+
+/**
+ * Utility: Round to nearest 10 but avoid exact min/max edges
+ */
+function roundToNearestTenAvoidEdges(value: number, min: number, max: number): number {
+  let v = roundToNearestTen(value)
+  if (v <= min) v = min + 10
+  if (v >= max) v = max - 10
+  return v
 }
 
 /**
@@ -558,27 +574,30 @@ async function generateRecordsForDay(
 
     if (selectedVehicle.tipo === 'COMPACTADOR_2_EJES') {
       const pSalidaRaw = sampleTruncatedNormal(14350, 600, selectedVehicle.peso_salida_min, selectedVehicle.peso_salida_max)
-      const residuosRaw = sampleTruncatedNormal(13500, 300, selectedVehicle.capacidad_min, selectedVehicle.capacidad_max)
+      const residuosRaw = sampleTruncatedNormal(13500, 400, selectedVehicle.capacidad_min + 100, selectedVehicle.capacidad_max - 100)
       pesoSalida = round10(pSalidaRaw)
-      waste = round10(residuosRaw * loadFactor)
-      if (waste < selectedVehicle.capacidad_min) waste = selectedVehicle.capacidad_min
-      if (waste > selectedVehicle.capacidad_max) waste = selectedVehicle.capacidad_max
+      waste = roundToNearestTenAvoidEdges(residuosRaw * loadFactor, selectedVehicle.capacidad_min, selectedVehicle.capacidad_max)
+      // Ensure waste is within bounds but NOT exactly at limits
+      if (waste <= selectedVehicle.capacidad_min) waste = selectedVehicle.capacidad_min + 10
+      if (waste >= selectedVehicle.capacidad_max) waste = selectedVehicle.capacidad_max - 10
       pesoEntrada = pesoSalida + waste
     } else if (selectedVehicle.tipo === 'COMPACTADOR_1_EJE') {
       const pSalidaRaw = sampleTruncatedNormal(10950, 400, selectedVehicle.peso_salida_min, selectedVehicle.peso_salida_max)
-      const residuosRaw = sampleTruncatedNormal(9500, 300, selectedVehicle.capacidad_min, selectedVehicle.capacidad_max)
+      const residuosRaw = sampleTruncatedNormal(9500, 400, selectedVehicle.capacidad_min + 50, selectedVehicle.capacidad_max - 50)
       pesoSalida = round10(pSalidaRaw)
-      waste = round10(residuosRaw * loadFactor)
-      if (waste < selectedVehicle.capacidad_min) waste = selectedVehicle.capacidad_min
-      if (waste > selectedVehicle.capacidad_max) waste = selectedVehicle.capacidad_max
+      waste = roundToNearestTenAvoidEdges(residuosRaw * loadFactor, selectedVehicle.capacidad_min, selectedVehicle.capacidad_max)
+      // Ensure waste is within bounds but NOT exactly at limits
+      if (waste <= selectedVehicle.capacidad_min) waste = selectedVehicle.capacidad_min + 10
+      if (waste >= selectedVehicle.capacidad_max) waste = selectedVehicle.capacidad_max - 10
       pesoEntrada = pesoSalida + waste
     } else {
       const pSalidaRaw = sampleTruncatedNormal(6750, 400, selectedVehicle.peso_salida_min, selectedVehicle.peso_salida_max)
-      const residuosRaw = sampleTruncatedNormal(6000, 300, selectedVehicle.capacidad_min, selectedVehicle.capacidad_max)
+      const residuosRaw = sampleTruncatedNormal(6000, 400, selectedVehicle.capacidad_min + 50, selectedVehicle.capacidad_max - 50)
       pesoSalida = round10(pSalidaRaw)
-      waste = round10(residuosRaw * loadFactor)
-      if (waste < selectedVehicle.capacidad_min) waste = selectedVehicle.capacidad_min
-      if (waste > selectedVehicle.capacidad_max) waste = selectedVehicle.capacidad_max
+      waste = roundToNearestTenAvoidEdges(residuosRaw * loadFactor, selectedVehicle.capacidad_min, selectedVehicle.capacidad_max)
+      // Ensure waste is within bounds but NOT exactly at limits
+      if (waste <= selectedVehicle.capacidad_min) waste = selectedVehicle.capacidad_min + 10
+      if (waste >= selectedVehicle.capacidad_max) waste = selectedVehicle.capacidad_max - 10
       pesoEntrada = pesoSalida + waste
     }
 
@@ -635,8 +654,265 @@ async function generateRecordsForDay(
 }
 
 /**
+ * Fix physical records with invalid vehicles/operators/routes
+ */
+async function fixPhysicalRecords() {
+  console.log('🔧 MODO CORRECCIÓN: Corrigiendo registros físicos...\n')
+
+  const { data: physicalRecords, error } = await supabase
+    .from('registros')
+    .select('*')
+    .eq('clave_empresa', CLAVE_EMPRESA)
+    .gte('fecha_entrada', START_DATE.toISOString())
+    .lte('fecha_entrada', END_DATE.toISOString())
+    .not('registrado_por', 'like', '%SYSTEM_GENERATED%')
+
+  if (error) {
+    console.error('❌ Error obteniendo registros físicos:', error)
+    throw error
+  }
+
+  console.log(`📄 Registros físicos encontrados: ${physicalRecords.length}`)
+
+  const catalogues = await getCatalogues()
+  const operador = catalogues.operador // Ya es el objeto del operador
+  const ruta = catalogues.ruta // Ya es el objeto de la ruta
+
+  if (!operador || !ruta) {
+    console.error('❌ No se encontraron operador o ruta en los catálogos')
+    throw new Error('Catálogos incompletos')
+  }
+
+  console.log(`📋 Valores de corrección:`)
+  console.log(`   Operador: ${operador.operador} (${operador.clave_operador})`)
+  console.log(`   Ruta: ${ruta.ruta} (${ruta.clave_ruta})\n`)
+
+  let fixedCount = 0
+  const updates: any[] = []
+
+  for (const record of physicalRecords) {
+    const peso = parseFloat(record.peso_entrada) - parseFloat(record.peso_salida)
+    let needsUpdate = false
+    const updateData: any = {}
+
+    const plateFromNumero = typeof record.numero_economico === 'string'
+      ? (record.numero_economico.match(/[A-Z]{2}\d{4,6}/g) || [])[0]
+      : null
+    const plateCandidate = record.placa_vehiculo || plateFromNumero
+
+    // 1. Check if vehicle is unknown
+    let knownVehicle = VEHICLES.find(v => 
+      v.numero_economico === record.numero_economico || 
+      v.placa === record.numero_economico ||
+      v.placa === plateCandidate
+    )
+
+    if (!knownVehicle) {
+      // Map to appropriate vehicle based on weight
+      let mappedVehicle: VehicleSpec | null = null
+
+      if (peso >= 13000) {
+        // Compactador 2 ejes
+        mappedVehicle = pickRandom(VEHICLES.filter(v => v.tipo === 'COMPACTADOR_2_EJES'))
+      } else if (peso >= 9000) {
+        // Compactador 1 eje
+        mappedVehicle = pickRandom(VEHICLES.filter(v => v.tipo === 'COMPACTADOR_1_EJE'))
+      } else {
+        // Volteo
+        mappedVehicle = pickRandom(VEHICLES.filter(v => v.tipo === 'VOLTEO'))
+      }
+
+      if (mappedVehicle) {
+        updateData.numero_economico = mappedVehicle.numero_economico
+        updateData.placa_vehiculo = mappedVehicle.placa
+        knownVehicle = mappedVehicle
+        needsUpdate = true
+        console.log(`   🔄 ${record.folio}: Vehículo desconocido "${record.numero_economico}" → ${mappedVehicle.numero_economico} (${mappedVehicle.placa}, peso: ${peso.toFixed(0)} kg)`)
+      }
+    } else {
+      // 1b. Ensure numero_economico matches known vehicle
+      if (record.numero_economico !== knownVehicle.numero_economico) {
+        updateData.numero_economico = knownVehicle.numero_economico
+        needsUpdate = true
+        console.log(`   🔄 ${record.folio}: Número económico corregido ${record.numero_economico} → ${knownVehicle.numero_economico}`)
+      }
+
+      // 1c. Ensure placa matches numero_economico
+      if (record.placa_vehiculo !== knownVehicle.placa) {
+        updateData.placa_vehiculo = knownVehicle.placa
+        needsUpdate = true
+        console.log(`   🔄 ${record.folio}: Placa corregida ${record.placa_vehiculo} → ${knownVehicle.placa} (${knownVehicle.numero_economico})`)
+      }
+    }
+
+    // 2. Check if weight is out of range for this vehicle type
+    if (knownVehicle && (peso < knownVehicle.capacidad_min || peso > knownVehicle.capacidad_max)) {
+      // Adjust peso to be within range
+      const targetPeso = Math.max(knownVehicle.capacidad_min + 10, 
+                                  Math.min(knownVehicle.capacidad_max - 10, peso))
+      const adjustedPeso = roundToNearestTenAvoidEdges(targetPeso, knownVehicle.capacidad_min, knownVehicle.capacidad_max)
+      const currentSalida = parseFloat(record.peso_salida)
+      const newEntrada = currentSalida + adjustedPeso
+      
+      updateData.peso_entrada = newEntrada.toString()
+      updateData.peso = adjustedPeso.toString()
+      needsUpdate = true
+      console.log(`   🔄 ${record.folio}: Peso fuera de rango ${peso.toFixed(0)} kg → ${adjustedPeso} kg (${knownVehicle.numero_economico}, rango: ${knownVehicle.capacidad_min}-${knownVehicle.capacidad_max})`)
+    }
+
+    // 3. Update operator and route (always)
+    if (record.clave_operador !== operador.clave_operador || record.clave_ruta !== ruta.clave_ruta) {
+      updateData.clave_operador = operador.clave_operador
+      updateData.clave_ruta = ruta.clave_ruta
+      needsUpdate = true
+    }
+
+    // 4. Ensure horarios válidos (México UTC-6)
+    const mx = new Date(new Date(record.fecha_entrada).getTime() - 6 * 60 * 60 * 1000)
+    const hour = mx.getUTCHours() + mx.getUTCMinutes() / 60
+    const dayOfWeek = mx.getUTCDay()
+    const isValidHorario = dayOfWeek === 0
+      ? (hour >= 16 && hour <= 20)
+      : (hour >= 7.5 && hour <= 15) || (hour >= 18 && hour <= 20) || (hour >= 23 || hour < 1)
+
+    if (!isValidHorario) {
+      // Move to a valid time in the same day (Mexico time)
+      const base = new Date(Date.UTC(mx.getUTCFullYear(), mx.getUTCMonth(), mx.getUTCDate(), 0, 0, 0))
+      let newHour = 8.0
+      if (dayOfWeek === 0) newHour = 17.0
+      const h = Math.floor(newHour)
+      const m = Math.floor((newHour - h) * 60)
+      const fixedIso = `${mx.getUTCFullYear()}-${String(mx.getUTCMonth()+1).padStart(2,'0')}-${String(mx.getUTCDate()).padStart(2,'0')}T${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:00-06:00`
+      const fixedEntrada = new Date(fixedIso)
+      const fixedSalida = new Date(fixedEntrada.getTime() + 12 * 60000)
+
+      updateData.fecha_entrada = fixedEntrada.toISOString()
+      updateData.fecha_salida = fixedSalida.toISOString()
+      needsUpdate = true
+      console.log(`   🔄 ${record.folio}: Horario corregido → ${fixedEntrada.toISOString()}`)
+    }
+
+    if (needsUpdate) {
+      updates.push({ id: record.id, data: updateData })
+      fixedCount++
+    }
+  }
+
+  if (fixedCount === 0) {
+    console.log('\n✅ No hay registros físicos que corregir')
+    return
+  }
+
+  console.log(`\n📊 Total de registros a corregir: ${fixedCount}`)
+
+  if (DRY_RUN) {
+    console.log('   [DRY RUN] No se aplicarán cambios')
+    return
+  }
+
+  console.log('   Aplicando correcciones...')
+  for (const update of updates) {
+    const { error: updateError } = await supabase
+      .from('registros')
+      .update(update.data)
+      .eq('id', update.id)
+
+    if (updateError) {
+      console.error(`❌ Error actualizando registro ${update.id}:`, updateError)
+    }
+  }
+
+  console.log(`✅ ${fixedCount} registros físicos corregidos\n`)
+}
+
+/**
  * Main backfill function
  */
+async function getLastFolioBeforeMonth(): Promise<number> {
+  const { data, error } = await supabase
+    .from('registros')
+    .select('folio, fecha_entrada')
+    .eq('clave_empresa', CLAVE_EMPRESA)
+    .lt('fecha_entrada', START_DATE.toISOString())
+    .not('folio', 'is', null)
+    .order('fecha_entrada', { ascending: false })
+    .limit(500)
+
+  if (error) {
+    console.error('❌ Error al obtener folio anterior al mes:', error)
+    throw error
+  }
+
+  let lastFolioNum = 0
+  for (const row of data || []) {
+    const match = String(row.folio || '').match(/OOSL-(\d+)/)
+    if (match) {
+      lastFolioNum = parseInt(match[1], 10)
+      break
+    }
+  }
+  return lastFolioNum
+}
+
+async function renumberFoliosForMonth() {
+  console.log('🔁 Renumerando folios físicos + virtuales en orden cronológico...')
+
+  const lastFolioNum = await getLastFolioBeforeMonth()
+  const startFolio = lastFolioNum + 1
+  console.log(`   Folio inicial del mes: ${formatFolio(startFolio)}`)
+
+  const { data: monthRecords, error } = await supabase
+    .from('registros')
+    .select('id, folio, fecha_entrada')
+    .eq('clave_empresa', CLAVE_EMPRESA)
+    .gte('fecha_entrada', START_DATE.toISOString())
+    .lte('fecha_entrada', END_DATE.toISOString())
+    .order('fecha_entrada', { ascending: true })
+
+  if (error) {
+    console.error('❌ Error al obtener registros del mes:', error)
+    throw error
+  }
+
+  if (!monthRecords || monthRecords.length === 0) {
+    console.log('⚠️ No hay registros para renumerar')
+    return
+  }
+
+  // Evitar colisiones: primero limpiar folios del mes
+  const { error: clearError } = await supabase
+    .from('registros')
+    .update({ folio: null })
+    .eq('clave_empresa', CLAVE_EMPRESA)
+    .gte('fecha_entrada', START_DATE.toISOString())
+    .lte('fecha_entrada', END_DATE.toISOString())
+
+  if (clearError) {
+    console.error('❌ Error limpiando folios del mes:', clearError)
+    throw clearError
+  }
+
+  let folioNum = startFolio
+  const batchSize = 50
+  for (let i = 0; i < monthRecords.length; i += batchSize) {
+    const batch = monthRecords.slice(i, i + batchSize)
+    for (const record of batch) {
+      const { error: updateError } = await supabase
+        .from('registros')
+        .update({ folio: formatFolio(folioNum) })
+        .eq('id', record.id)
+
+      if (updateError) {
+        console.error(`❌ Error renumerando registro ${record.id}:`, updateError)
+        throw updateError
+      }
+      folioNum++
+    }
+  }
+
+  console.log(`✅ Folios renumerados: ${formatFolio(startFolio)} → ${formatFolio(folioNum - 1)}`)
+}
+
 async function backfill() {
   console.log('🚀 Iniciando backfill de registros virtuales OOSLMP')
   console.log(`📊 Periodo: ${MONTH_NAMES[MONTH - 1]} ${YEAR}`)
@@ -645,35 +921,23 @@ async function backfill() {
   console.log(`🔧 Modo: ${DRY_RUN ? 'DRY RUN (no se modificará nada)' : 'LIVE (modificación real)'}`)
   console.log('')
 
+  // Fix physical records if requested
+  if (FIX_PHYSICAL_RECORDS) {
+    await fixPhysicalRecords()
+    if (FIX_ONLY) {
+      console.log('🛠️  FIX_ONLY activo: finalizando después de correcciones físicas.')
+      return
+    }
+  }
+
   const deletedCount = await deleteVirtualRecords()
   console.log('')
 
   const catalogues = await getCatalogues()
   console.log('')
 
-  console.log('🔢 Obteniendo último folio usado...')
-  const { data: maxFolioData, error: maxFolioError } = await supabase
-    .from('registros')
-    .select('folio')
-    .eq('clave_empresa', CLAVE_EMPRESA)
-    .not('folio', 'is', null)
-    .order('folio', { ascending: false })
-    .limit(1)
-
-  if (maxFolioError) {
-    console.error('❌ Error al obtener máximo folio:', maxFolioError)
-    throw maxFolioError
-  }
-
-  let nextFolioNumber = 1
-  if (maxFolioData && maxFolioData.length > 0) {
-    const maxFolio = maxFolioData[0].folio
-    const match = maxFolio.match(/OOSL-(\d+)/)
-    if (match) {
-      nextFolioNumber = parseInt(match[1], 10) + 1
-    }
-  }
-  console.log(`   Próximo folio a usar: ${formatFolio(nextFolioNumber)}`)
+  const lastFolioBeforeMonth = await getLastFolioBeforeMonth()
+  console.log(`   Último folio antes del mes: ${formatFolio(lastFolioBeforeMonth)}`)
   console.log('')
 
   console.log(`📊 Calculando peso de registros físicos en ${MONTH_NAMES[MONTH - 1]} ${YEAR}...`)
@@ -726,7 +990,6 @@ async function backfill() {
 
   const allRecords: any[] = []
   let totalKgGenerated = 0
-  let currentFolioNumber = nextFolioNumber
 
   let sundaysCount = 0
   let weekDaysCount = 0
@@ -949,13 +1212,7 @@ async function backfill() {
 
   adjustedRecords.sort((a, b) => new Date(a.fecha_entrada).getTime() - new Date(b.fecha_entrada).getTime())
 
-  // Assign folios to all records - MUST be done once, for all records
-  let folioNum = nextFolioNumber
-  for (const record of adjustedRecords) {
-    // Ensure no record already has a folio
-    record.folio = formatFolio(folioNum)
-    folioNum++
-  }
+  // Folios se asignan al final para físicos + virtuales en orden cronológico
 
   totalKgGenerated = adjustedRecords.reduce((sum, r) => sum + r.peso, 0)
   totalJanuaryKg = physicalKg + totalKgGenerated
@@ -978,6 +1235,12 @@ async function backfill() {
 
   allRecords.length = 0
   allRecords.push(...adjustedRecords)
+
+  // Assign temporary unique folios to avoid conflicts on insert
+  for (let i = 0; i < allRecords.length; i++) {
+    const tempFolio = `TMP-${YEAR}${String(MONTH).padStart(2, '0')}-${String(i + 1).padStart(6, '0')}`
+    allRecords[i].folio = tempFolio
+  }
 
   if (DRY_RUN) {
     console.log('🔍 DRY RUN - No se modificó la base de datos')
@@ -1005,6 +1268,9 @@ async function backfill() {
 
     console.log(`   ✅ Lote ${batchNum}/${totalBatches} insertado (${batch.length} registros)`)
   }
+
+  // Renumber folios for physical + virtual records in chronological order
+  await renumberFoliosForMonth()
 
   console.log('')
   console.log('═'.repeat(80))
