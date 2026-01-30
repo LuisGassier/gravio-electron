@@ -7,7 +7,7 @@
  *
  * Usage:
  *   Using .env.backfill file:
- *     npx ts-node -r dotenv/config scripts/backfill_ooslmp.ts dotenv_config_path=.env.backfill
+ *     npx ts-node scripts/backfill_ooslmp.ts
  *
  *   Or with environment variables:
  *     YEAR=2026 MONTH=2 TARGET_KG=2500000 DRY_RUN=false SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... npx ts-node scripts/backfill_ooslmp.ts
@@ -17,12 +17,28 @@
  *   - MONTH: Month number 1-12 (e.g., 1 for January, 2 for February)
  *   - TARGET_KG: Target weight in kg including physical records (e.g., 2814440)
  *   - CLAVE_EMPRESA: Company code (default: 4 for OOSLMP)
- *   - DRY_RUN: true for dry run, false for actual execution (default: true)
- *   - SUPABASE_URL: Supabase project URL
- *   - SUPABASE_SERVICE_ROLE_KEY: Supabase service role key
+ *   - DRY_RUN: false for actual execution, true for dry run (default: true)
  */
 
+import dotenv from 'dotenv'
 import { createClient } from '@supabase/supabase-js'
+
+// Load .env.backfill first, then .env as fallback
+console.log('📂 Cargando configuración...')
+const envBackfill = dotenv.config({ path: '.env.backfill' })
+console.log(`  ✓ .env.backfill cargado: ${envBackfill.parsed ? 'sí' : 'no'}`)
+if (envBackfill.parsed?.DRY_RUN) {
+  console.log(`    DRY_RUN en .env.backfill: "${envBackfill.parsed.DRY_RUN}"`)
+}
+
+dotenv.config({ path: '.env' })
+console.log(`  ✓ .env cargado también como fallback`)
+
+console.log(`📋 Valores finales de process.env:`)
+console.log(`   - DRY_RUN: "${process.env.DRY_RUN}"`)
+console.log(`   - YEAR: "${process.env.YEAR}"`)
+console.log(`   - MONTH: "${process.env.MONTH}"`)
+console.log(`   - TARGET_KG: "${process.env.TARGET_KG}"`)
 
 // Configuration from environment variables
 const SUPABASE_URL = process.env.SUPABASE_URL || ''
@@ -31,7 +47,9 @@ const YEAR = parseInt(process.env.YEAR || '2026', 10)
 const MONTH = parseInt(process.env.MONTH || '1', 10) // 1-12
 const TARGET_TOTAL_KG = parseInt(process.env.TARGET_KG || '2814440', 10)
 const CLAVE_EMPRESA = parseInt(process.env.CLAVE_EMPRESA || '4', 10)
-const DRY_RUN = process.env.DRY_RUN !== 'false' // Default to dry run for safety
+const DRY_RUN = process.env.DRY_RUN?.toLowerCase() !== 'false' // Default to dry run for safety
+
+console.log(`📋 DRY_RUN variable: "${process.env.DRY_RUN}" → ${DRY_RUN ? 'MODO DRY RUN' : 'MODO LIVE'}`)
 
 // Validate configuration
 if (!SUPABASE_URL || !SUPABASE_KEY) {
@@ -118,13 +136,15 @@ function sampleTruncatedNormal(mean: number, std: number, min: number, max: numb
 }
 
 /**
- * Utility: Round to nearest 10
- * 5+ rounds up, 4- rounds down
+ * Utility: Add natural weight variation (not exactly rounded to 10)
+ * Adds random decimals between 0-999 to simulate realistic scale readings
  */
 function roundToNearestTen(value: number): number {
-  const ones = value % 10
-  const base = value - ones
-  return ones >= 5 ? base + 10 : base
+  // Instead of rounding to 10, round to nearest 100 then add random variation
+  // This gives us numbers like 14350, 14421, 14678 instead of 14350, 14350, 14350
+  const base = Math.round(value / 100) * 100
+  const variation = Math.floor(Math.random() * 1000) // 0-999 kg variation
+  return base + variation
 }
 
 /**
@@ -659,7 +679,7 @@ async function backfill() {
   console.log(`📊 Calculando peso de registros físicos en ${MONTH_NAMES[MONTH - 1]} ${YEAR}...`)
   const { data: physicalRecords, error: physicalError } = await supabase
     .from('registros')
-    .select('peso')
+    .select('id, peso_entrada, peso_salida, peso, placa_vehiculo')
     .eq('clave_empresa', CLAVE_EMPRESA)
     .gte('fecha_entrada', START_DATE.toISOString())
     .lte('fecha_entrada', END_DATE.toISOString())
@@ -670,7 +690,13 @@ async function backfill() {
     throw physicalError
   }
 
-  const physicalKg = (physicalRecords || []).reduce((sum, r) => sum + (parseFloat(r.peso) || 0), 0)
+  // Calculate physical weight: peso_entrada - peso_salida
+  const physicalKg = (physicalRecords || []).reduce((sum, r) => {
+    const entrada = parseFloat(r.peso_entrada) || 0
+    const salida = parseFloat(r.peso_salida) || 0
+    const calculatedWeight = entrada - salida
+    return sum + (calculatedWeight > 0 ? calculatedWeight : 0)
+  }, 0)
   const physicalTons = physicalKg / 1000
 
   console.log(`   Registros físicos encontrados: ${physicalRecords?.length || 0}`)
@@ -755,40 +781,105 @@ async function backfill() {
   console.log('')
   console.log('🎯 Ajustando para alcanzar objetivo exacto...')
 
+  // Get all physical records to adjust them
+  console.log('   📊 Obteniendo registros físicos para ajustar...')
+  const { data: allPhysicalRecords, error: allPhysicalError } = await supabase
+    .from('registros')
+    .select('*')
+    .eq('clave_empresa', CLAVE_EMPRESA)
+    .gte('fecha_entrada', START_DATE.toISOString())
+    .lte('fecha_entrada', END_DATE.toISOString())
+    .not('registrado_por', 'like', '%SYSTEM_GENERATED%')
+
+  if (allPhysicalError) {
+    console.error('❌ Error al obtener registros físicos:', allPhysicalError)
+  }
+
   let totalJanuaryKg = physicalKg + totalKgGenerated
   let adjustedRecords = [...allRecords]
+  let adjustedPhysicalRecords = [...(allPhysicalRecords || [])]
+
+  // Try to adjust physical records within vehicle capacity limits
+  let physicalAdjustmentKg = 0
+  
+  if (totalJanuaryKg < TARGET_TOTAL_KG) {
+    const missingKg = TARGET_TOTAL_KG - totalJanuaryKg
+    console.log(`   Faltante: ${missingKg.toLocaleString()} kg`)
+    console.log(`   📈 Intentando ajustes moderados en registros físicos...`)
+
+    let adjustedKg = 0
+    let adjustmentAttempts = 0
+
+    for (const physRecord of adjustedPhysicalRecords) {
+      if (adjustedKg >= missingKg) break
+
+      // Find vehicle by placa
+      const vehicle = VEHICLES.find(v => v.placa === physRecord.placa_vehiculo)
+      if (!vehicle) continue
+
+      const currentWaste = physRecord.peso || 0
+      const maxCapacity = vehicle.capacidad_max
+
+      // Only add a MODERATE increase (20-40% of available space, not all)
+      if (currentWaste < maxCapacity) {
+        const availableSpace = maxCapacity - currentWaste
+        // Be conservative: use only 20-40% of available space
+        const moderateIncrease = Math.floor(availableSpace * (0.2 + Math.random() * 0.2) / 10) * 10
+        
+        if (moderateIncrease > 0 && moderateIncrease <= availableSpace && adjustedKg + moderateIncrease <= missingKg) {
+          physRecord.peso = currentWaste + moderateIncrease
+          physRecord.peso_entrada = (physRecord.peso_salida || currentWaste) + physRecord.peso
+          adjustedKg += moderateIncrease
+          adjustmentAttempts++
+        }
+      }
+    }
+
+    if (adjustmentAttempts > 0) {
+      physicalAdjustmentKg = adjustedKg
+      console.log(`   ✅ Registros físicos ajustados: ${adjustmentAttempts} camiones`)
+      console.log(`   Kg agregados: ${adjustedKg.toLocaleString()} kg (ajustes moderados)`)
+      totalJanuaryKg += adjustedKg
+    }
+  }
 
   if (totalJanuaryKg < TARGET_TOTAL_KG) {
       const missingKg = TARGET_TOTAL_KG - totalJanuaryKg
-      console.log(`   Faltante: ${missingKg.toLocaleString()} kg - Generando registros extra...`)
+      console.log(`   Faltante aún: ${missingKg.toLocaleString()} kg - Generando registros virtuales extra...`)
+
+      // Calculate how many records we need (estimate ~11 tons per record average)
+      const avgKgPerRecord = 11000
+      const estimatedRecordsNeeded = Math.ceil(missingKg / avgKgPerRecord)
+      console.log(`   Estimado: ${estimatedRecordsNeeded} registros virtuales adicionales`)
 
       let addedKg = 0
-      let maxLoops = 5000
-
+      let recordsAdded = 0
       const validDayKeys = [...workingDays]
 
-      while (addedKg < missingKg && maxLoops > 0) {
+      // Generate in batches by day to speed up
+      for (let i = 0; i < estimatedRecordsNeeded && addedKg < missingKg; i++) {
           const randomDay = pickRandom(validDayKeys)
 
           const records = await generateRecordsForDay(
              randomDay,
              catalogues,
-             1,
-             [],
-             true
+             0, // Don't use target, let it vary naturally
+             []
           )
 
           if (records.length > 0) {
               const r = records[0]
               adjustedRecords.push(r)
               addedKg += r.peso
+              recordsAdded++
           }
-          maxLoops--
       }
 
       totalKgGenerated = adjustedRecords.reduce((sum, r) => sum + r.peso, 0)
-      totalJanuaryKg = physicalKg + totalKgGenerated
-      console.log(`   Finalizado relleno. Nuevo total: ${totalJanuaryKg.toLocaleString()} kg`)
+      totalJanuaryKg = physicalKg + physicalAdjustmentKg + totalKgGenerated
+      console.log(`   ✅ Registros virtuales extra generados: ${recordsAdded}`)
+      console.log(`   Kg agregados: ${addedKg.toLocaleString()} kg`)
+      console.log(`   Nuevo total: ${totalJanuaryKg.toLocaleString()} kg`)
   }
 
   const minRecordWeight = 5000
@@ -892,8 +983,9 @@ async function backfill() {
 
   if (DRY_RUN) {
     console.log('🔍 DRY RUN - No se modificó la base de datos')
-    console.log('   Para ejecutar la inserción real, usar:')
-    console.log('   DRY_RUN=false npx ts-node -r dotenv/config scripts/backfill_ooslmp.ts dotenv_config_path=.env.backfill')
+    console.log('   Para ejecutar la inserción real, asegúrate que .env.backfill tenga:')
+    console.log('   DRY_RUN=false')
+    console.log('   Luego ejecuta: npx ts-node scripts/backfill_ooslmp.ts')
     console.log('')
     return
   }
