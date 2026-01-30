@@ -136,15 +136,15 @@ function sampleTruncatedNormal(mean: number, std: number, min: number, max: numb
 }
 
 /**
- * Utility: Add natural weight variation (not exactly rounded to 10)
- * Adds random decimals between 0-999 to simulate realistic scale readings
+ * Utility: Round to nearest 10 with natural variation
+ * Produces values like 14300, 14310, 14320, etc. (all multiples of 10, no decimals)
  */
 function roundToNearestTen(value: number): number {
-  // Instead of rounding to 10, round to nearest 100 then add random variation
-  // This gives us numbers like 14350, 14421, 14678 instead of 14350, 14350, 14350
-  const base = Math.round(value / 100) * 100
-  const variation = Math.floor(Math.random() * 1000) // 0-999 kg variation
-  return base + variation
+  const base = Math.round(value / 10) * 10
+  // Add variation: only multiples of 10 (-40 to 40 kg)
+  const variations = [-40, -30, -20, -10, 0, 10, 20, 30, 40]
+  const variation = variations[Math.floor(Math.random() * variations.length)]
+  return Math.max(0, base + variation)
 }
 
 /**
@@ -761,11 +761,7 @@ async function backfill() {
         physicalRecordsOfDay
     )
 
-    records.forEach(record => {
-      record.folio = formatFolio(currentFolioNumber)
-      currentFolioNumber++
-    })
-
+    // Don't assign folio here - will assign all at once at the end
     const physicalKgDay = physicalRecordsOfDay.reduce((sum, r) => sum + (Number(r.peso)||0), 0)
     const dayKg = records.reduce((sum, r) => sum + r.peso, 0)
     totalKgGenerated += dayKg
@@ -953,11 +949,13 @@ async function backfill() {
 
   adjustedRecords.sort((a, b) => new Date(a.fecha_entrada).getTime() - new Date(b.fecha_entrada).getTime())
 
+  // Assign folios to all records - MUST be done once, for all records
   let folioNum = nextFolioNumber
-  adjustedRecords.forEach(record => {
+  for (const record of adjustedRecords) {
+    // Ensure no record already has a folio
     record.folio = formatFolio(folioNum)
     folioNum++
-  })
+  }
 
   totalKgGenerated = adjustedRecords.reduce((sum, r) => sum + r.peso, 0)
   totalJanuaryKg = physicalKg + totalKgGenerated
