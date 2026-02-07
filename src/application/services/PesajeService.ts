@@ -53,18 +53,24 @@ export class PesajeService {
         );
       }
 
-      // Verificar si hay registros pendientes para esta placa
+      // 🛡️ VALIDACIÓN CRÍTICA: Verificar si hay registros pendientes para esta placa
+      console.log(`🔍 Verificando registros pendientes para placa: ${input.placaVehiculo}`)
       const pendingResult = await this.findPendingUseCase.execute({
         placaVehiculo: input.placaVehiculo,
       });
 
       if (pendingResult.success && pendingResult.value.count > 0) {
+        const pendingIds = pendingResult.value.registros.map(r => r.id).join(', ')
+        console.error(`❌ DUPLICADO DETECTADO: Ya existe ${pendingResult.value.count} registro(s) pendiente(s) para placa ${input.placaVehiculo}`)
+        console.error(`   IDs pendientes: ${pendingIds}`)
         return ResultFactory.fail(
           new Error(
             `Ya existe un registro de entrada pendiente para la placa ${input.placaVehiculo}. Complete primero la salida.`
           )
         );
       }
+
+      console.log(`✅ No hay registros pendientes para placa ${input.placaVehiculo}, se puede crear entrada`)
 
       // 🎯 Generar folio offline usando FolioService
       let folioGenerado: string | undefined;
@@ -96,6 +102,7 @@ export class PesajeService {
       }
 
       // Crear el registro de entrada con el folio generado (o undefined si hubo error)
+      console.log(`📝 Creando entrada para placa ${input.placaVehiculo}, peso: ${pesoActual}kg, folio: ${folioGenerado || 'pendiente'}`)
       const result = await this.createEntradaUseCase.execute({
         ...input,
         pesoEntrada: pesoActual,
@@ -104,11 +111,13 @@ export class PesajeService {
       });
 
       if (!result.success) {
+        console.error(`❌ Error al crear entrada: ${result.error.message}`)
         return result;
       }
 
       // 🚀 Sincronizar INMEDIATAMENTE con Supabase
       const registroCreado = result.value;
+      console.log(`✅ Entrada creada exitosamente: ID=${registroCreado.id}, Folio=${registroCreado.folio}, Placa=${registroCreado.placaVehiculo}`)
       if (registroCreado.id) {
         console.log(`🚀 Sincronizando entrada ${registroCreado.id} con Supabase...`);
         try {

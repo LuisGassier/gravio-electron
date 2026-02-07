@@ -11,7 +11,7 @@ import { downloadRegistros } from '@/lib/sync'
 export function PendingTrucksPanel() {
   const [pendingTrucks, setPendingTrucks] = useState<Registro[]>([])
   const [isSyncing, setIsSyncing] = useState(false)
-  const { selectedRegistro, toggleRegistroSelection, onSalidaRegistrada } = usePesaje()
+  const { selectedRegistro, toggleRegistroSelection, onSalidaRegistrada, onEntradaRegistrada } = usePesaje()
 
   const handleSelectTruck = (truck: Registro) => {
     const wasSelected = selectedRegistro?.id === truck.id
@@ -34,16 +34,25 @@ export function PendingTrucksPanel() {
     }, 5000)
 
     // Suscribirse a notificaciones de salida registrada para recarga inmediata
-    const unsubscribe = onSalidaRegistrada(() => {
+    const unsubscribeSalida = onSalidaRegistrada(() => {
+      console.log('🔔 Salida registrada, recargando pendientes...')
       loadPendingTrucks()
     })
 
-    // Limpiar intervalo y suscripción al desmontar
+    // Suscribirse a notificaciones de entrada registrada para recarga inmediata
+    const unsubscribeEntrada = onEntradaRegistrada(() => {
+      console.log('🔔 Entrada registrada, recargando pendientes...')
+      loadPendingTrucks()
+    })
+
+    // Limpiar intervalo y suscripciones al desmontar
     return () => {
       clearInterval(interval)
-      unsubscribe()
+      unsubscribeSalida()
+      unsubscribeEntrada()
     }
-  }, [onSalidaRegistrada])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const loadPendingTrucks = async () => {
     if (!window.electron) return

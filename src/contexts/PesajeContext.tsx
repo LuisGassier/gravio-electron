@@ -8,6 +8,8 @@ interface PesajeContextType {
   toggleRegistroSelection: (registro: Registro) => void
   notifySalidaRegistrada: () => void
   onSalidaRegistrada: (callback: () => void) => () => void
+  notifyEntradaRegistrada: () => void
+  onEntradaRegistrada: (callback: () => void) => () => void
 }
 
 const PesajeContext = createContext<PesajeContextType | undefined>(undefined)
@@ -15,6 +17,7 @@ const PesajeContext = createContext<PesajeContextType | undefined>(undefined)
 export function PesajeProvider({ children }: { children: ReactNode }) {
   const [selectedRegistro, setSelectedRegistro] = useState<Registro | null>(null)
   const salidaCallbacksRef = useRef<Array<() => void>>([])
+  const entradaCallbacksRef = useRef<Array<() => void>>([])
 
   const selectRegistroForSalida = useCallback((registro: Registro) => {
     setSelectedRegistro(registro)
@@ -48,14 +51,29 @@ export function PesajeProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  const notifyEntradaRegistrada = useCallback(() => {
+    entradaCallbacksRef.current.forEach(callback => callback())
+  }, [])
+
+  const onEntradaRegistrada = useCallback((callback: () => void) => {
+    entradaCallbacksRef.current.push(callback)
+
+    // Retornar función para desuscribirse
+    return () => {
+      entradaCallbacksRef.current = entradaCallbacksRef.current.filter(cb => cb !== callback)
+    }
+  }, [])
+
   return (
-    <PesajeContext.Provider value={{ 
-      selectedRegistro, 
-      selectRegistroForSalida, 
-      clearSelection, 
+    <PesajeContext.Provider value={{
+      selectedRegistro,
+      selectRegistroForSalida,
+      clearSelection,
       toggleRegistroSelection,
       notifySalidaRegistrada,
-      onSalidaRegistrada
+      onSalidaRegistrada,
+      notifyEntradaRegistrada,
+      onEntradaRegistrada
     }}>
       {children}
     </PesajeContext.Provider>

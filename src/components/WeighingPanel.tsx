@@ -47,7 +47,7 @@ interface Concepto {
 }
 
 export function WeighingPanel() {
-  const { selectedRegistro, clearSelection, notifySalidaRegistrada } = usePesaje()
+  const { selectedRegistro, clearSelection, notifySalidaRegistrada, notifyEntradaRegistrada } = usePesaje()
   const [weight, setWeight] = useState<string>('0')
   const [isScaleConnected, setIsScaleConnected] = useState(false)
   const [isSalidaMode, setIsSalidaMode] = useState(false)
@@ -74,6 +74,10 @@ export function WeighingPanel() {
   const [completedConceptoClave, setCompletedConceptoClave] = useState<number>(0)
   const [completedConceptoNombre, setCompletedConceptoNombre] = useState<string>('')
   const [isSyncing, setIsSyncing] = useState(false)
+
+  // 🛡️ Protección contra doble click
+  const [isProcessingEntrada, setIsProcessingEntrada] = useState(false)
+  const [isProcessingSalida, setIsProcessingSalida] = useState(false)
 
   useEffect(() => {
     loadFormData()
@@ -401,6 +405,12 @@ export function WeighingPanel() {
     }))
 
   const registrarEntrada = async () => {
+    // 🛡️ Protección contra doble click
+    if (isProcessingEntrada) {
+      console.warn('⚠️ Ya se está procesando una entrada, ignorando doble click')
+      return
+    }
+
     if (!isScaleConnected) {
       toast.error('La báscula no está conectada')
       return
@@ -410,6 +420,10 @@ export function WeighingPanel() {
       toast.error('Debes seleccionar un vehículo')
       return
     }
+
+    // 🔒 Bloquear botón
+    setIsProcessingEntrada(true)
+    console.log('🔒 Entrada bloqueada para prevenir duplicados')
 
     // Parsear IDs compuestos (UUID-empresa)
     const operadorId = selectedOperador && selectedOperador !== 'NUEVO' 
@@ -457,18 +471,35 @@ export function WeighingPanel() {
 
     if (result.success) {
       const registro = result.value
+      console.log(`✅ Entrada registrada: ${registro?.id} - Folio: ${registro?.folio}`)
       toast.success('Entrada registrada exitosamente', {
         description: `Folio: ${registro?.folio || 'Pendiente'} - ${registro?.placaVehiculo}`
       })
       limpiarFormulario()
+
+      // 🔔 Notificar que se registró una entrada para actualizar lista de pendientes
+      notifyEntradaRegistrada()
+
+      // 🔓 Desbloquear botón después del éxito
+      setIsProcessingEntrada(false)
     } else {
+      console.error(`❌ Error al registrar entrada: ${result.error.message}`)
       toast.error('Error al registrar entrada', {
         description: result.error.message
       })
+
+      // 🔓 Desbloquear botón después del error
+      setIsProcessingEntrada(false)
     }
   }
 
   const registrarSalida = async () => {
+    // 🛡️ Protección contra doble click
+    if (isProcessingSalida) {
+      console.warn('⚠️ Ya se está procesando una salida, ignorando doble click')
+      return
+    }
+
     if (!isScaleConnected) {
       toast.error('La báscula no está conectada')
       return
@@ -479,16 +510,21 @@ export function WeighingPanel() {
       return
     }
 
+    // 🔒 Bloquear botón
+    setIsProcessingSalida(true)
+    console.log(`🔒 Salida bloqueada para registro ${currentRegistro.id}`)
+
     const result = await container.pesajeService.registrarSalida(
       currentRegistro.placaVehiculo,
       observaciones || undefined
     )
 
     if (result.success) {
-      let registro = result.value
-      const pesoNeto = registro.getPesoNeto();
+      try {
+        let registro = result.value
+        const pesoNeto = registro.getPesoNeto();
 
-      // Sincronizar en BACKGROUND (lazy sync) - no bloquea UI
+        // Sincronizar en BACKGROUND (lazy sync) - no bloquea UI
       // Inicia sync inmediatamente pero no espera resultado
       // eslint-disable-next-line @typescript-eslint/no-floating-promises
       (async () => {
@@ -534,11 +570,11 @@ export function WeighingPanel() {
       conceptoClave = conceptoResult.clave
       conceptoNombre = conceptoResult.nombre
 
-      // Verificar si la impresión automática está habilitada
-      const autoPrintEnabled = await container.printerService.isAutoPrintEnabled()
-      console.log('🖨️ Impresión automática:', autoPrintEnabled)
+        // Verificar si la impresión automática está habilitada
+        const autoPrintEnabled = await container.printerService.isAutoPrintEnabled()
+        console.log('🖨️ Impresión automática:', autoPrintEnabled)
 
-      if (autoPrintEnabled) {
+        if (autoPrintEnabled) {
         // Imprimir automáticamente
         try {
           console.log('🖨️ Imprimiendo automáticamente...')
@@ -586,12 +622,28 @@ export function WeighingPanel() {
         cancelarSalida()
       }
 
-      // Notificar que se registró una salida para actualizar lista de pendientes
-      notifySalidaRegistrada()
+        // Notificar que se registró una salida para actualizar lista de pendientes
+        notifySalidaRegistrada()
+
+        // 🔓 Desbloquear botón después del éxito
+        setIsProcessingSalida(false)
+      } catch (error) {
+        console.error('❌ Error en flujo de salida:', error)
+        toast.error('Error al procesar la salida', {
+          description: error instanceof Error ? error.message : 'Error desconocido'
+        })
+
+        // 🔓 Desbloquear botón después del error
+        setIsProcessingSalida(false)
+      }
     } else {
+      console.error(`❌ Error al registrar salida: ${result.error.message}`)
       toast.error('Error al registrar salida', {
         description: result.error.message
       })
+
+      // 🔓 Desbloquear botón después del error
+      setIsProcessingSalida(false)
     }
   }
 
@@ -940,20 +992,20 @@ export function WeighingPanel() {
               <Button
                 onClick={registrarSalida}
                 className="w-full h-14 bg-gradient-to-r from-success to-success/80 hover:from-success/90 hover:to-success/70 text-white font-bold text-base shadow-lg hover:shadow-xl transition-all duration-200"
-                disabled={!isScaleConnected}
+                disabled={!isScaleConnected || isProcessingSalida}
               >
                 <Scale className="w-5 h-5 mr-2" />
-                Registrar Salida e Imprimir
+                {isProcessingSalida ? 'Procesando...' : 'Registrar Salida e Imprimir'}
               </Button>
             </div>
           ) : (
             <Button
               onClick={registrarEntrada}
               className="w-full h-14 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-primary-foreground font-bold text-base shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={!isScaleConnected || !selectedVehiculo}
+              disabled={!isScaleConnected || !selectedVehiculo || isProcessingEntrada}
             >
               <Scale className="w-5 h-5 mr-2" />
-              Registrar Entrada
+              {isProcessingEntrada ? 'Procesando...' : 'Registrar Entrada'}
             </Button>
           )}
         </CardContent>
