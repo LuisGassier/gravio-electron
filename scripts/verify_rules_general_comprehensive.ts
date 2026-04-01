@@ -22,11 +22,13 @@ dotenv.config({ path: '.env' })
 const SUPABASE_URL = process.env.SUPABASE_URL || ''
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 const CLAVE_EMPRESA = 4
+const YEAR = parseInt(process.env.YEAR || '2026', 10)
+const MONTH = parseInt(process.env.MONTH || '1', 10)
+const TARGET_TOTAL_KG = parseInt(process.env.TARGET_KG || '2814440', 10)
 
-// January 2026 (Mexico time boundaries)
-const START_DATE = '2025-12-31T06:00:00Z' // Jan 1 00:00 Mexico = Dec 31 06:00 UTC
-const END_DATE = '2026-02-01T06:00:00Z'   // Feb 1 00:00 Mexico = Feb 1 06:00 UTC
-const TARGET_TOTAL_KG = 2814440
+const START_DATE = new Date(Date.UTC(YEAR, MONTH - 1, 1, 6, 0, 0)).toISOString()
+const END_DATE = new Date(Date.UTC(YEAR, MONTH, 1, 6, 0, 0)).toISOString()
+const MONTH_NAMES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
 
 // Known vehicles (from CSV REGLAS MES DE ENERO 2026)
 const KNOWN_VEHICLES = [
@@ -103,7 +105,7 @@ function isWithinHorario(dayOfWeek: number, hour: number): boolean {
 }
 
 async function verify() {
-  console.log('🔍 VERIFICACIÓN COMPREHENSIVA - Enero 2026 (FÍSICOS + VIRTUALES)\n')
+  console.log(`🔍 VERIFICACIÓN COMPREHENSIVA - ${MONTH_NAMES[MONTH - 1]} ${YEAR} (FÍSICOS + VIRTUALES)\n`)
 
   const { data: records, error } = await supabase
     .from('registros')
@@ -118,16 +120,16 @@ async function verify() {
     process.exit(1)
   }
 
-  // Filter to January 2026 in Mexico time
-  const januaryRecords = records.filter(r => {
+  // Filter to selected month/year in Mexico time
+  const monthRecords = records.filter(r => {
     const mx = getMexicoTime(r.fecha_entrada)
-    return mx.month === 1 && mx.year === 2026
+    return mx.month === MONTH && mx.year === YEAR
   })
 
-  const physicalRecords = januaryRecords.filter(r => !r.registrado_por?.includes('SYSTEM'))
-  const virtualRecords = januaryRecords.filter(r => r.registrado_por?.includes('SYSTEM'))
+  const physicalRecords = monthRecords.filter(r => !r.registrado_por?.includes('SYSTEM'))
+  const virtualRecords = monthRecords.filter(r => r.registrado_por?.includes('SYSTEM'))
 
-  console.log(`📄 Registros totales: ${januaryRecords.length}`)
+  console.log(`📄 Registros totales: ${monthRecords.length}`)
   console.log(`   - Físicos: ${physicalRecords.length}`)
   console.log(`   - Virtuales: ${virtualRecords.length}\n`)
 
@@ -140,7 +142,7 @@ async function verify() {
   
   const unknownVehicles = new Set<string>()
   const mismatchedVehicles: { folio: string; numero: string; placa: string; expected: string }[] = []
-  januaryRecords.forEach(r => {
+  monthRecords.forEach(r => {
     const { byNum, byPlate, resolved } = resolveVehicle(r)
     if (!resolved) {
       if (r.numero_economico) unknownVehicles.add(r.numero_economico)
@@ -169,7 +171,7 @@ async function verify() {
     errors.push(`❌ ${unknownVehicles.size} vehículos NO están en la lista oficial`)
     console.log(`❌ Vehículos desconocidos (${unknownVehicles.size}):`)
     unknownVehicles.forEach(v => {
-      const count = januaryRecords.filter(r => r.numero_economico === v).length
+      const count = monthRecords.filter(r => r.numero_economico === v).length
       console.log(`   🔸 ${v} (${count} registros)`)
     })
   } else {
@@ -195,7 +197,7 @@ async function verify() {
 
   const weightRangeIssues: string[] = []
   let nonMultipleCount = 0
-  januaryRecords.forEach(r => {
+  monthRecords.forEach(r => {
     const { resolved } = resolveVehicle(r)
     const peso = getPesoRSU(r)
     if (!Number.isInteger(peso) || peso % 10 !== 0) nonMultipleCount++
@@ -228,7 +230,7 @@ async function verify() {
   const lastEntryByVehicle = new Map<string, Date>()
   const frequencyViolations: any[] = []
 
-  januaryRecords.forEach(r => {
+  monthRecords.forEach(r => {
     const { resolved } = resolveVehicle(r)
     const vehicleKey = resolved?.numero_economico || r.numero_economico
     if (!vehicleKey) return
@@ -272,7 +274,7 @@ async function verify() {
   console.log('3️⃣ LÍMITES DIARIOS (12 max Lun-Sáb, 1 max Domingo)\n')
 
   const tripsByVehicleDay = new Map<string, number>()
-  januaryRecords.forEach(r => {
+  monthRecords.forEach(r => {
     const { resolved } = resolveVehicle(r)
     const vehicleKey = resolved?.numero_economico || r.numero_economico
     if (!vehicleKey) return
@@ -315,11 +317,11 @@ async function verify() {
 
   // 4. HORARIOS + 31 ENERO + FOLIOS
   console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-  console.log('4️⃣ HORARIOS + 31 ENERO + FOLIOS\n')
+  console.log('4️⃣ HORARIOS + VALIDACIÓN DE FIN DE MES + FOLIOS\n')
 
   let horarioErrors = 0
   let jan31Count = 0
-  const ooslFolios = januaryRecords
+  const ooslFolios = monthRecords
     .filter(r => String(r.folio || '').startsWith('OOSL-'))
     .map(r => r.folio)
     .sort((a: string, b: string) => {
@@ -328,10 +330,10 @@ async function verify() {
       return na - nb
     })
 
-  januaryRecords.forEach(r => {
+  monthRecords.forEach(r => {
     const mx = getMexicoTime(r.fecha_entrada)
     if (!isWithinHorario(mx.dayOfWeek, mx.hour)) horarioErrors++
-    if (mx.day === 31) jan31Count++
+    if (MONTH === 1 && mx.day === 31) jan31Count++
   })
 
   if (horarioErrors > 0) {
@@ -341,11 +343,15 @@ async function verify() {
     console.log('✅ Horarios dentro de rango')
   }
 
-  if (jan31Count > 0) {
-    errors.push(`❌ ${jan31Count} registros encontrados en 31 de enero (debe ser 0)`)
-    console.log(`❌ Registros en 31 de enero: ${jan31Count}`)
+  if (MONTH === 1) {
+    if (jan31Count > 0) {
+      errors.push(`❌ ${jan31Count} registros encontrados en 31 de enero (debe ser 0)`)
+      console.log(`❌ Registros en 31 de enero: ${jan31Count}`)
+    } else {
+      console.log('✅ 31 de enero sin registros')
+    }
   } else {
-    console.log('✅ 31 de enero sin registros')
+    console.log('ℹ️ Regla "31 de enero sin registros" omitida para este mes')
   }
 
   let folioBreaks = 0

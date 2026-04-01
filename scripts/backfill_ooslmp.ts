@@ -73,12 +73,12 @@ if (TARGET_TOTAL_KG <= 0) {
   process.exit(1)
 }
 
-// Calculate date range for the specified month (México time UTC-6)
-const START_DATE = new Date(YEAR, MONTH - 1, 1, 0, 0, 0) // First day of month at midnight
-START_DATE.setHours(START_DATE.getHours() + 6) // Adjust for UTC-6
-
-const END_DATE = new Date(YEAR, MONTH, 0, 23, 59, 59) // Last day of month at 23:59:59
-END_DATE.setHours(END_DATE.getHours() + 6) // Adjust for UTC-6
+// Calculate date range for the specified month in local México time (UTC-6), stored as UTC
+// Example for Feb 2026:
+//   Local 2026-02-01 00:00:00 -> UTC 2026-02-01T06:00:00Z
+//   Local 2026-02-28 23:59:59 -> UTC 2026-03-01T05:59:59Z
+const START_DATE = new Date(Date.UTC(YEAR, MONTH - 1, 1, 6, 0, 0))
+const END_DATE = new Date(Date.UTC(YEAR, MONTH, 1, 5, 59, 59))
 
 const MONTH_NAMES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 
                      'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
@@ -605,6 +605,9 @@ async function generateRecordsForDay(
         const isoStr = `${actualYear}-${actualMonth.toString().padStart(2, '0')}-${actualDay.toString().padStart(2, '0')}T${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${Math.floor(Math.random()*59).toString().padStart(2, '0')}-06:00`
         const candidate = new Date(isoStr)
 
+        // Hard month boundary guard (prevents spillover outside requested month)
+        if (candidate < START_DATE || candidate > END_DATE) continue
+
         if (lastExit && candidate < lastExit) continue
 
         if (lastExit && generatedTrips >= 1) {
@@ -635,10 +638,9 @@ async function generateRecordsForDay(
       const pSalidaMean = 13500 + Math.random() * 1500 // 13500-15000
       const pSalidaRaw = sampleTruncatedNormal(pSalidaMean, 700, selectedVehicle.peso_salida_min, selectedVehicle.peso_salida_max)
 
-      // HIGHER range: 85-110% to get closer to target while maintaining variation
-      // Capacity: 13000-14000, range: 11050-15400 kg
-      const minWaste = selectedVehicle.capacidad_min * 0.85  // 11050 kg
-      const maxWaste = selectedVehicle.capacidad_max * 1.10  // 15400 kg
+      // STRICT official range from business rules
+      const minWaste = selectedVehicle.capacidad_min
+      const maxWaste = selectedVehicle.capacidad_max
 
       // Generate completely random base within range (no normal distribution bias)
       const wasteBase = minWaste + Math.random() * (maxWaste - minWaste)
@@ -646,7 +648,7 @@ async function generateRecordsForDay(
       // Apply load factor with additional noise to prevent patterns
       const wasteWithFactor = wasteBase * loadFactor * (0.95 + Math.random() * 0.1) // ±5% noise
 
-      pesoSalida = round10(pSalidaRaw)
+      pesoSalida = Math.max(selectedVehicle.peso_salida_min, Math.min(selectedVehicle.peso_salida_max, round10(pSalidaRaw)))
       waste = avoidExactPeso(wasteWithFactor, minWaste, maxWaste)
       pesoEntrada = pesoSalida + waste
 
@@ -655,10 +657,9 @@ async function generateRecordsForDay(
       const pSalidaMean = 10200 + Math.random() * 1300 // 10200-11500
       const pSalidaRaw = sampleTruncatedNormal(pSalidaMean, 500, selectedVehicle.peso_salida_min, selectedVehicle.peso_salida_max)
 
-      // HIGHER range: 85-110%
-      // Capacity: 9000-10000, range: 7650-11000 kg
-      const minWaste = selectedVehicle.capacidad_min * 0.85  // 7650 kg
-      const maxWaste = selectedVehicle.capacidad_max * 1.10  // 11000 kg
+      // STRICT official range from business rules
+      const minWaste = selectedVehicle.capacidad_min
+      const maxWaste = selectedVehicle.capacidad_max
 
       // Completely random base (no normal distribution)
       const wasteBase = minWaste + Math.random() * (maxWaste - minWaste)
@@ -666,7 +667,7 @@ async function generateRecordsForDay(
       // Apply load factor with noise
       const wasteWithFactor = wasteBase * loadFactor * (0.95 + Math.random() * 0.1)
 
-      pesoSalida = round10(pSalidaRaw)
+      pesoSalida = Math.max(selectedVehicle.peso_salida_min, Math.min(selectedVehicle.peso_salida_max, round10(pSalidaRaw)))
       waste = avoidExactPeso(wasteWithFactor, minWaste, maxWaste)
       pesoEntrada = pesoSalida + waste
 
@@ -675,10 +676,9 @@ async function generateRecordsForDay(
       const pSalidaMean = 6000 + Math.random() * 1300 // 6000-7300
       const pSalidaRaw = sampleTruncatedNormal(pSalidaMean, 500, selectedVehicle.peso_salida_min, selectedVehicle.peso_salida_max)
 
-      // HIGHER range: 85-110%
-      // Capacity: 5500-6500, range: 4675-7150 kg
-      const minWaste = selectedVehicle.capacidad_min * 0.85  // 4675 kg
-      const maxWaste = selectedVehicle.capacidad_max * 1.10  // 7150 kg
+      // STRICT official range from business rules
+      const minWaste = selectedVehicle.capacidad_min
+      const maxWaste = selectedVehicle.capacidad_max
 
       // Completely random base (no normal distribution)
       const wasteBase = minWaste + Math.random() * (maxWaste - minWaste)
@@ -686,9 +686,15 @@ async function generateRecordsForDay(
       // Apply load factor with noise
       const wasteWithFactor = wasteBase * loadFactor * (0.95 + Math.random() * 0.1)
 
-      pesoSalida = round10(pSalidaRaw)
+      pesoSalida = Math.max(selectedVehicle.peso_salida_min, Math.min(selectedVehicle.peso_salida_max, round10(pSalidaRaw)))
       waste = avoidExactPeso(wasteWithFactor, minWaste, maxWaste)
       pesoEntrada = pesoSalida + waste
+    }
+
+    // Hard guard: never persist out-of-range RSU
+    if (waste < selectedVehicle.capacidad_min || waste > selectedVehicle.capacidad_max) {
+      attempts++
+      continue
     }
 
     const duration = Math.round(sampleTruncatedNormal(11, 4, 7, 15))
@@ -957,12 +963,55 @@ async function getLastFolioBeforeMonth(): Promise<number> {
   return lastFolioNum
 }
 
+async function getGlobalMaxFolio(): Promise<number> {
+  const { data, error } = await supabase
+    .from('registros')
+    .select('folio')
+    .like('folio', 'OOSL-%')
+    .not('folio', 'is', null)
+    .limit(10000)
+
+  if (error) {
+    console.error('❌ Error al obtener folio global máximo:', error)
+    throw error
+  }
+
+  let maxFolioNum = 0
+  for (const row of data || []) {
+    const match = String(row.folio || '').match(/OOSL-(\d+)/)
+    if (match) {
+      const folioNum = parseInt(match[1], 10)
+      if (folioNum > maxFolioNum) maxFolioNum = folioNum
+    }
+  }
+
+  return maxFolioNum
+}
+
 async function renumberFoliosForMonth() {
   console.log('🔁 Renumerando folios físicos + virtuales en orden cronológico...')
 
-  const lastFolioNum = await getLastFolioBeforeMonth()
-  const startFolio = lastFolioNum + 1
-  console.log(`   Folio inicial del mes: ${formatFolio(startFolio)}`)
+  const { data: existingFolios, error: existingFoliosError } = await supabase
+    .from('registros')
+    .select('folio')
+    .like('folio', 'OOSL-%')
+    .not('folio', 'is', null)
+    .limit(10000)
+
+  if (existingFoliosError) {
+    console.error('❌ Error obteniendo folios existentes:', existingFoliosError)
+    throw existingFoliosError
+  }
+
+  const usedFolioNumbers = new Set<number>()
+  for (const row of existingFolios || []) {
+    const match = String(row.folio || '').match(/OOSL-(\d+)/)
+    if (match) usedFolioNumbers.add(parseInt(match[1], 10))
+  }
+
+  const lastFolioNumByCompany = await getLastFolioBeforeMonth()
+  const startFolio = lastFolioNumByCompany + 1
+  console.log(`   Folio inicial por empresa (clave ${CLAVE_EMPRESA}): ${formatFolio(startFolio)}`)
 
   const { data: monthRecords, error } = await supabase
     .from('registros')
@@ -996,10 +1045,19 @@ async function renumberFoliosForMonth() {
   }
 
   let folioNum = startFolio
+  let collisionWarnings = 0
   const batchSize = 50
   for (let i = 0; i < monthRecords.length; i += batchSize) {
     const batch = monthRecords.slice(i, i + batchSize)
     for (const record of batch) {
+      while (usedFolioNumbers.has(folioNum)) {
+        if (collisionWarnings < 3) {
+          console.log(`   ⚠️ Folio ocupado detectado: ${formatFolio(folioNum)}. Saltando al siguiente.`)
+          collisionWarnings++
+        }
+        folioNum++
+      }
+
       const { error: updateError } = await supabase
         .from('registros')
         .update({ folio: formatFolio(folioNum) })
@@ -1009,6 +1067,8 @@ async function renumberFoliosForMonth() {
         console.error(`❌ Error renumerando registro ${record.id}:`, updateError)
         throw updateError
       }
+
+      usedFolioNumbers.add(folioNum)
       folioNum++
     }
   }
@@ -1040,7 +1100,7 @@ async function backfill() {
   console.log('')
 
   const lastFolioBeforeMonth = await getLastFolioBeforeMonth()
-  console.log(`   Último folio antes del mes: ${formatFolio(lastFolioBeforeMonth)}`)
+  console.log(`   Último folio de clave_empresa antes del mes (solo informativo): ${formatFolio(lastFolioBeforeMonth)}`)
   console.log('')
 
   console.log(`📊 Calculando peso de registros físicos en ${MONTH_NAMES[MONTH - 1]} ${YEAR}...`)
@@ -1344,9 +1404,10 @@ async function backfill() {
   allRecords.length = 0
   allRecords.push(...adjustedRecords)
 
-  // Assign temporary unique folios to avoid conflicts on insert
+  // Assign temporary globally-unique folios to avoid conflicts on insert
+  const runToken = Date.now().toString(36).toUpperCase().slice(-6)
   for (let i = 0; i < allRecords.length; i++) {
-    const tempFolio = `TMP-${YEAR}${String(MONTH).padStart(2, '0')}-${String(i + 1).padStart(6, '0')}`
+    const tempFolio = `T${String(YEAR).slice(-2)}${String(MONTH).padStart(2, '0')}${runToken}${String(i + 1).padStart(6, '0')}`
     allRecords[i].folio = tempFolio
   }
 
