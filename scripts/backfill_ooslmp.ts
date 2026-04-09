@@ -697,7 +697,7 @@ async function generateRecordsForDay(
       continue
     }
 
-    const duration = Math.round(sampleTruncatedNormal(11, 4, 7, 15))
+    const duration = Math.round(sampleTruncatedNormal(14, 3, 10, 20))
     const fechaSalida = new Date(timestamp.getTime() + duration * 60000)
     const createdAt = new Date(timestamp.getTime() - 2000)
     const updatedAt = new Date(fechaSalida.getTime() + 2000)

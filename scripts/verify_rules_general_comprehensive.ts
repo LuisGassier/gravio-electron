@@ -223,6 +223,53 @@ async function verify() {
     console.log(`✅ Pesos sin decimales y múltiplos de 10`)
   }
 
+  // 1c. CHECK NET WEIGHT CONSISTENCY (peso neto)
+  console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+  console.log('1️⃣c CONSISTENCIA DE PESO NETO\n')
+
+  let netoGreaterThanSalidaCount = 0
+  let netoMismatchCount = 0
+  const netoMismatchDetails: string[] = []
+
+  monthRecords.forEach(r => {
+    const entrada = Number(r.peso_entrada) || 0
+    const salida = Number(r.peso_salida) || 0
+    const neto = Number(r.peso) || 0
+    const diff = entrada - salida
+
+    if (neto > salida) {
+      netoGreaterThanSalidaCount++
+    }
+
+    // Tolerancia de 10 kg por redondeo operacional
+    if (Math.abs(diff - neto) > 10) {
+      netoMismatchCount++
+      if (netoMismatchDetails.length < 20) {
+        netoMismatchDetails.push(
+          `${r.folio}: entrada=${entrada}, salida=${salida}, neto=${neto}, entrada-salida=${diff}`
+        )
+      }
+    }
+  })
+
+  if (netoGreaterThanSalidaCount > 0) {
+    errors.push(`❌ ${netoGreaterThanSalidaCount} registros con peso neto (peso) mayor que peso_salida`)
+    console.log(`❌ Peso neto > peso_salida: ${netoGreaterThanSalidaCount}`)
+  } else {
+    console.log('✅ Ningún registro tiene peso neto mayor que peso_salida')
+  }
+
+  if (netoMismatchCount > 0) {
+    errors.push(`❌ ${netoMismatchCount} registros con inconsistencia en peso neto (peso != peso_entrada - peso_salida)`)
+    console.log(`❌ Inconsistencias de neto: ${netoMismatchCount}`)
+    netoMismatchDetails.forEach(d => console.log(`   🔸 ${d}`))
+    if (netoMismatchCount > netoMismatchDetails.length) {
+      console.log(`   ... y ${netoMismatchCount - netoMismatchDetails.length} más`)
+    }
+  } else {
+    console.log('✅ Consistencia neto: peso = peso_entrada - peso_salida')
+  }
+
   // 2. CHECK TRIP FREQUENCY (120 min = 2 hours minimum for ALL)
   console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
   console.log('2️⃣ FRECUENCIA DE VIAJES (Mínimo 2 horas entre viajes)\n')

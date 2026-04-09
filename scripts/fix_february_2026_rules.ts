@@ -77,7 +77,11 @@ function chooseInsideRange(min: number, max: number): number {
 function moveToValidHorario(fechaEntradaUtc: string, fechaSalidaUtc: string): { entrada: string; salida: string } {
   const mxIn = getMexicoDate(fechaEntradaUtc)
   const mxOut = getMexicoDate(fechaSalidaUtc)
-  const durationMs = Math.max(7 * 60 * 1000, mxOut.getTime() - mxIn.getTime())
+  const rawDurationMin = Math.round((mxOut.getTime() - mxIn.getTime()) / 60000)
+  const boundedDurationMin = rawDurationMin >= 10 && rawDurationMin <= 20
+    ? rawDurationMin
+    : randomInt(10, 20)
+  const durationMs = boundedDurationMin * 60 * 1000
 
   const dayOfWeek = mxIn.getUTCDay()
 
@@ -158,13 +162,15 @@ async function run() {
     const hour = getHourFraction(mx)
     const dow = mx.getUTCDay()
     const horarioInvalid = !isValidHorario(dow, hour)
+    const durationMin = Math.round((new Date(String(r.fecha_salida)).getTime() - new Date(String(r.fecha_entrada)).getTime()) / 60000)
+    const durationInvalid = durationMin < 10 || durationMin > 20
 
     let targetRsu = rsu
     if (rsu < rule.capMin || rsu > rule.capMax) {
       targetRsu = chooseInsideRange(rule.capMin, rule.capMax)
     }
 
-    if (targetRsu !== rsu || horarioInvalid) {
+    if (targetRsu !== rsu || horarioInvalid || durationInvalid) {
       patches.push({
         id: String(r.id),
         newPeso: targetRsu,
@@ -172,7 +178,7 @@ async function run() {
         newEntrada: salida + targetRsu,
         capMin: rule.capMin,
         capMax: rule.capMax,
-        needHorarioFix: horarioInvalid,
+        needHorarioFix: horarioInvalid || durationInvalid,
         fechaEntrada: String(r.fecha_entrada),
         fechaSalida: String(r.fecha_salida),
       })
@@ -263,7 +269,7 @@ async function run() {
 
   const { data: after, error: afterErr } = await supabase
     .from('registros')
-    .select('id, placa_vehiculo, peso, fecha_entrada')
+    .select('id, placa_vehiculo, peso, fecha_entrada, fecha_salida')
     .eq('clave_empresa', CLAVE_EMPRESA)
     .gte('fecha_entrada', START_DATE)
     .lt('fecha_entrada', END_DATE)
@@ -277,6 +283,7 @@ async function run() {
 
   let outOfRangeAfter = 0
   let horarioAfter = 0
+  let durationAfter = 0
 
   for (const r of after) {
     const rule = VEHICLE_BY_PLATE[r.placa_vehiculo as string]
@@ -287,11 +294,15 @@ async function run() {
 
     const mx = getMexicoDate(String(r.fecha_entrada))
     if (!isValidHorario(mx.getUTCDay(), getHourFraction(mx))) horarioAfter++
+
+    const durationMin = Math.round((new Date(String(r.fecha_salida)).getTime() - new Date(String(r.fecha_entrada)).getTime()) / 60000)
+    if (durationMin < 10 || durationMin > 20) durationAfter++
   }
 
   console.log('✅ Fix aplicado')
   console.log(`   - Fuera de rango después: ${outOfRangeAfter}`)
   console.log(`   - Fuera de horario después: ${horarioAfter}`)
+  console.log(`   - Duración fuera de 10-20 min después: ${durationAfter}`)
   console.log(`   - Total RSU antes: ${originalTotal} kg`)
   console.log(`   - Total RSU después: ${finalTotal} kg`)
 }
