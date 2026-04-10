@@ -1,5 +1,7 @@
 import { SyncRegistrosUseCase } from '../../domain/use-cases/sync/SyncRegistros';
 import type { FolioService } from './FolioService';
+import type { SQLiteRegistroRepository } from '../../infrastructure/database/SQLiteRegistroRepository';
+import type { SupabaseRegistroRepository } from '../../infrastructure/database/SupabaseRegistroRepository';
 
 // Importar funciones para actualizar el estado global de sync
 let updateGlobalSyncStatus: ((lastSync: Date) => void) | null = null;
@@ -18,6 +20,15 @@ export interface SyncResult {
   foliosSynced?: number;
 }
 
+export interface RepararSyncProgress {
+  total: number;
+  procesados: number;
+  subidos: number;
+  yaExistian: number;
+  fallidos: number;
+  done: boolean;
+}
+
 /**
  * Servicio de sincronización mejorado
  * Orquesta la sincronización entre SQLite y Supabase
@@ -29,6 +40,12 @@ export class SyncService {
   private readonly syncRegistrosUseCase: SyncRegistrosUseCase;
   private readonly folioService: FolioService;
   private readonly autoSyncIntervalMs: number;
+  private _localRepo?: SQLiteRegistroRepository;
+  private _remoteRepo?: SupabaseRegistroRepository;
+
+  // Progreso del reparar sync — null si no está corriendo
+  private _repararProgress: RepararSyncProgress | null = null;
+  private _repararCallbacks: Array<(p: RepararSyncProgress) => void> = [];
 
   constructor(
     syncRegistrosUseCase: SyncRegistrosUseCase,
@@ -38,6 +55,109 @@ export class SyncService {
     this.syncRegistrosUseCase = syncRegistrosUseCase;
     this.folioService = folioService;
     this.autoSyncIntervalMs = autoSyncIntervalMs;
+  }
+
+  /**
+   * Inyectar repositorios necesarios para repararSync
+   */
+  setRepositories(local: SQLiteRegistroRepository, remote: SupabaseRegistroRepository): void {
+    this._localRepo = local;
+    this._remoteRepo = remote;
+  }
+
+  /**
+   * Suscribirse al progreso de repararSync
+   */
+  onRepararProgress(cb: (p: RepararSyncProgress) => void): () => void {
+    this._repararCallbacks.push(cb);
+    // Si ya hay progreso activo, enviar el estado actual inmediatamente
+    if (this._repararProgress) cb(this._repararProgress);
+    return () => {
+      this._repararCallbacks = this._repararCallbacks.filter(c => c !== cb);
+    };
+  }
+
+  getRepararProgress(): RepararSyncProgress | null {
+    return this._repararProgress;
+  }
+
+  private _emitProgress(p: RepararSyncProgress) {
+    this._repararProgress = p;
+    this._repararCallbacks.forEach(cb => cb(p));
+  }
+
+  /**
+   * Verifica todos los registros locales contra Supabase y sube los faltantes.
+   * Corre en background — fire-and-forget. Progreso via onRepararProgress().
+   */
+  repararSync(): void {
+    if (!this._localRepo || !this._remoteRepo) {
+      console.error('❌ repararSync: repositorios no configurados');
+      return;
+    }
+    if (this._repararProgress && !this._repararProgress.done) {
+      console.warn('⚠️ repararSync ya está corriendo');
+      return;
+    }
+
+    // Lanzar en background
+    this._doRepararSync().catch(err => {
+      console.error('❌ Error en repararSync:', err);
+      this._emitProgress({
+        total: 0, procesados: 0, subidos: 0, yaExistian: 0, fallidos: 1, done: true
+      });
+    });
+  }
+
+  private async _doRepararSync(): Promise<void> {
+    const localRepo = this._localRepo!;
+    const remoteRepo = this._remoteRepo!;
+
+    const todosResult = await localRepo.findAll();
+    if (!todosResult.success || !todosResult.value) {
+      console.error('❌ repararSync: no se pudo leer SQLite');
+      return;
+    }
+
+    const todos = todosResult.value;
+    let procesados = 0, subidos = 0, yaExistian = 0, fallidos = 0;
+
+    this._emitProgress({ total: todos.length, procesados, subidos, yaExistian, fallidos, done: false });
+
+    for (const reg of todos) {
+      if (!reg.id) { procesados++; continue; }
+      try {
+        // Verificar si existe en Supabase por ID
+        const remoteCheck = await remoteRepo.findById(reg.id);
+        const existeEnRemoto = remoteCheck.success && remoteCheck.value !== null;
+
+        if (existeEnRemoto) {
+          // Ya existe — asegurar que local esté marcado como sincronizado
+          if (!reg.sincronizado) {
+            await window.electron.db.run('UPDATE registros SET sincronizado = 1 WHERE id = ?', [reg.id]);
+          }
+          yaExistian++;
+        } else {
+          // No existe en remoto — subir
+          const result = await this.syncSingleRegistro(reg.id);
+          if (result.success) {
+            subidos++;
+          } else {
+            fallidos++;
+            console.warn(`❌ repararSync: no se pudo subir ${reg.folio}:`, result.errors[0]?.error);
+          }
+        }
+      } catch (err) {
+        fallidos++;
+        console.warn(`❌ repararSync: error procesando ${reg.id}:`, err);
+      }
+
+      procesados++;
+      this._emitProgress({ total: todos.length, procesados, subidos, yaExistian, fallidos, done: false });
+    }
+
+    this._emitProgress({ total: todos.length, procesados, subidos, yaExistian, fallidos, done: true });
+    console.log(`✅ repararSync completado: ${subidos} subidos, ${yaExistian} ya existían, ${fallidos} fallidos`);
   }
 
   /**

@@ -114,7 +114,24 @@ export class SyncRegistrosUseCase {
         // Sincronizar cada registro
         for (const registro of unsyncedRegistros) {
           try {
-            const remoteResult = await this.remoteRepository.saveEntrada(registro);
+            let remoteResult: Result<any>;
+
+            if (registro.isCompleto()) {
+              // Registro completo: intentar UPDATE con salida primero
+              remoteResult = await this.remoteRepository.updateWithSalida(
+                registro.id!,
+                registro.pesoSalida!,
+                registro.fechaSalida!,
+                registro.observaciones
+              );
+              // Si no existe en remoto, crear entrada completa
+              if (!remoteResult.success) {
+                remoteResult = await this.remoteRepository.saveEntrada(registro);
+              }
+            } else {
+              // Solo entrada
+              remoteResult = await this.remoteRepository.saveEntrada(registro);
+            }
 
             if (remoteResult.success) {
               const registroRemoto = remoteResult.value;

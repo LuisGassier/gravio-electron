@@ -4,7 +4,7 @@ import { Button } from './ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog'
 import { Input } from './ui/input'
 import { Label } from './ui/label'
-import { Printer, Search, Calendar, ArrowLeft, Trash2, ChevronLeft, ChevronRight, FileSpreadsheet, Copy } from 'lucide-react'
+import { Printer, Search, Calendar, ArrowLeft, Trash2, ChevronLeft, ChevronRight, FileSpreadsheet, Copy, CloudUpload, CheckCircle2, AlertCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { container } from '@/application/DIContainer'
 import type { Registro } from '@/domain/entities/Registro'
@@ -47,6 +47,8 @@ export function HistorialPage({ onNavigate }: HistorialPageProps) {
   const [dbStats, setDbStats] = useState({ totalRecords: 0, completedRecords: 0, pendingRecords: 0 })
   const [isExporting, setIsExporting] = useState(false)
   const [showDuplicatesOnly, setShowDuplicatesOnly] = useState(false)
+  const [isSyncing, setIsSyncing] = useState(false)
+  const [repararProgress, setRepararProgress] = useState<{ procesados: number; total: number; done: boolean } | null>(null)
 
   // Paginación
   const [currentPage, setCurrentPage] = useState(1)
@@ -227,6 +229,96 @@ export function HistorialPage({ onNavigate }: HistorialPageProps) {
     setCurrentPage(1)
   }
 
+  // Fuerza la subida de TODOS los registros locales a Supabase,
+  // incluyendo los que tienen sincronizado=1 pero no llegaron a la nube.
+  // Corre en background — si te cambias de pantalla continúa igual.
+  const handleForzarSync = () => {
+    if (!window.confirm(
+      '¿Subir TODOS los registros locales a Supabase?\n\n' +
+      'Esto verificará cada registro y subirá los que falten en la nube, ' +
+      'incluso si están marcados como sincronizados.'
+    )) return
+
+    setRepararProgress({ procesados: 0, total: 0, done: false })
+
+    // Suscribirse al progreso — el servicio corre en background
+    const unsub = container.syncService.onRepararProgress((p) => {
+      setRepararProgress({ procesados: p.procesados, total: p.total, done: p.done })
+      if (p.done) {
+        unsub()
+        const partes = []
+        if (p.subidos > 0) partes.push(`${p.subidos} subidos`)
+        if (p.yaExistian > 0) partes.push(`${p.yaExistian} ya estaban`)
+        if (p.fallidos > 0) partes.push(`${p.fallidos} fallidos`)
+        if (p.fallidos === 0) {
+          toast.success('Reparación completada', { description: partes.join(', ') })
+        } else {
+          toast.warning('Reparación con errores', { description: partes.join(', ') })
+        }
+        loadHistorial()
+        loadDatabaseStats()
+        setTimeout(() => setRepararProgress(null), 3000)
+      }
+    })
+
+    // Disparar en background — no bloquea la UI ni depende de esta pantalla
+    container.syncService.repararSync()
+  }
+
+  const handleSyncPendientes = async () => {
+    const pendientes = registros.filter(r => !r.sincronizado)
+    if (pendientes.length === 0) {
+      toast.info('No hay registros pendientes de sincronizar')
+      return
+    }
+
+    setIsSyncing(true)
+    let subidos = 0
+    let yaExistian = 0
+    let fallidos = 0
+
+    toast.info(`Sincronizando ${pendientes.length} registro(s) pendientes...`)
+
+    for (const reg of pendientes) {
+      if (!reg.id) continue
+      try {
+        const result = await container.syncService.syncSingleRegistro(reg.id)
+        if (result.success) {
+          subidos++
+        } else {
+          // Si el error es duplicado (ya existe en Supabase), marcarlo como sincronizado localmente
+          const errorMsg = result.errors[0]?.error ?? ''
+          if (errorMsg.includes('duplicate') || errorMsg.includes('23505') || errorMsg.includes('already exists')) {
+            await window.electron.db.run(
+              'UPDATE registros SET sincronizado = 1 WHERE id = ?',
+              [reg.id]
+            )
+            yaExistian++
+          } else {
+            fallidos++
+          }
+        }
+      } catch {
+        fallidos++
+      }
+    }
+
+    setIsSyncing(false)
+    await loadHistorial()
+    await loadDatabaseStats()
+
+    const partes = []
+    if (subidos > 0) partes.push(`${subidos} subidos`)
+    if (yaExistian > 0) partes.push(`${yaExistian} ya existían en la nube`)
+    if (fallidos > 0) partes.push(`${fallidos} fallidos`)
+
+    if (fallidos === 0) {
+      toast.success('Sincronización completada', { description: partes.join(', ') })
+    } else {
+      toast.warning('Sincronización con errores', { description: partes.join(', ') })
+    }
+  }
+
   const handleCleanup = async () => {
     if (!window.confirm('¿Estás seguro de eliminar los registros antiguos? Se mantendrán solo los registros de hoy y ayer.')) {
       return
@@ -397,6 +489,30 @@ export function HistorialPage({ onNavigate }: HistorialPageProps) {
               <Copy className="w-4 h-4 mr-2" />
               {showDuplicatesOnly ? 'Mostrar Todos' : 'Ver Duplicados'}
             </Button>
+            <Button
+              variant="outline"
+              onClick={handleSyncPendientes}
+              disabled={isSyncing}
+              className="relative"
+            >
+              <CloudUpload className={`w-4 h-4 mr-2 ${isSyncing ? 'animate-pulse' : ''}`} />
+              {isSyncing
+                ? 'Sincronizando...'
+                : `Subir pendientes${registros.filter(r => !r.sincronizado).length > 0 ? ` (${registros.filter(r => !r.sincronizado).length})` : ''}`
+              }
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleForzarSync}
+              disabled={repararProgress !== null && !repararProgress.done}
+              title="Verifica y sube todos los registros locales, incluyendo los marcados como sincronizados"
+            >
+              <CloudUpload className={`w-4 h-4 mr-2 ${repararProgress && !repararProgress.done ? 'animate-pulse' : ''}`} />
+              {repararProgress && !repararProgress.done
+                ? `Reparando... ${repararProgress.procesados}/${repararProgress.total}`
+                : 'Reparar sync'
+              }
+            </Button>
           </div>
 
           {/* Tabla de registros */}
@@ -415,6 +531,7 @@ export function HistorialPage({ onNavigate }: HistorialPageProps) {
                   <thead className="bg-muted/50">
                     <tr className="border-b">
                       <th className="px-4 py-3 text-left text-sm font-semibold">Folio</th>
+                      <th className="px-4 py-3 text-center text-sm font-semibold">Nube</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold">Fecha Salida</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold">Vehículo</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold">Operador</th>
@@ -433,6 +550,12 @@ export function HistorialPage({ onNavigate }: HistorialPageProps) {
                       >
                         <td className="px-4 py-3 text-sm font-mono">
                           {registro.folio || <span className="text-muted-foreground">Sin folio</span>}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          {registro.sincronizado
+                            ? <CheckCircle2 className="w-4 h-4 text-success mx-auto" aria-label="Sincronizado" />
+                            : <AlertCircle className="w-4 h-4 text-warning mx-auto" aria-label="Pendiente de sincronizar" />
+                          }
                         </td>
                         <td className="px-4 py-3 text-sm">
                           {registro.fechaSalida ? formatDate(registro.fechaSalida) : '-'}

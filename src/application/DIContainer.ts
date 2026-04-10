@@ -239,6 +239,10 @@ class DIContainer {
         this.folioService,
         5 * 60 * 1000 // 5 minutos
       );
+      this._syncService.setRepositories(
+        this.sqliteRegistroRepository,
+        this.supabaseRegistroRepository
+      );
     }
     return this._syncService;
   }

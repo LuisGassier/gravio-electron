@@ -75,21 +75,38 @@ export class SupabaseRegistroRepository implements IRegistroRepository {
       if (error) {
         // Manejar error de duplicado (23505 = unique_violation)
         if (error.code === '23505') {
-          console.warn('⚠️ Registro duplicado - ya existe en Supabase:', registro.id);
-          // Buscar el registro existente para retornar el folio generado
+          console.warn('⚠️ 23505 al insertar registro:', registro.id, 'folio:', registro.folio);
+
+          // Verificar por ID si el mismo registro ya existe en Supabase
           if (registro.id) {
             const existingResult = await this.findById(registro.id);
             if (existingResult.success && existingResult.value) {
-              console.log('✅ Retornando registro existente con folio:', existingResult.value.folio);
-              return ResultFactory.ok(existingResult.value);
+              const remoto = existingResult.value;
+              // Confirmar que es el mismo registro comparando campos clave
+              const mismoRegistro =
+                remoto.placaVehiculo === registro.placaVehiculo &&
+                remoto.claveEmpresa === registro.claveEmpresa &&
+                Math.abs((remoto.pesoEntrada ?? 0) - (registro.pesoEntrada ?? 0)) < 1;
+
+              if (mismoRegistro) {
+                console.log(`✅ Confirmado: mismo registro ya en Supabase (ID=${registro.id}, folio=${remoto.folio}). Marcando sincronizado.`);
+                return ResultFactory.ok(remoto);
+              } else {
+                // Mismo ID pero datos distintos — conflicto real, reportar
+                console.error(`❌ CONFLICTO: ID=${registro.id} existe en Supabase pero con datos diferentes. Local folio=${registro.folio}, remoto folio=${remoto.folio}`);
+                return ResultFactory.fail(new Error(`Conflicto de datos: el registro ${registro.id} tiene datos distintos en Supabase`));
+              }
             }
+
+            // El ID no existe en Supabase pero hay 23505 → conflicto de folio entre registros distintos
+            console.error(`❌ CONFLICTO DE FOLIO: folio=${registro.folio} ya existe en Supabase asignado a otro registro`);
+            return ResultFactory.fail(new Error(`Conflicto de folio: ${registro.folio} ya está asignado a otro registro en Supabase`));
           }
         }
 
         // No lanzar error por problemas de RLS o permisos - loguear y continuar
         if (error.code === '42501' || error.message.includes('policy')) {
           console.warn('⚠️ Error de política RLS (continuando):', error.message);
-          // Retornar el registro original sin sincronizar
           return ResultFactory.ok(registro);
         }
 
