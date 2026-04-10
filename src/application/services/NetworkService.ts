@@ -9,7 +9,7 @@ import { supabase } from '../../lib/supabase'
 export class NetworkService {
   private _isOnline: boolean = true
   private lastCheck: Date = new Date()
-  private readonly checkIntervalMs: number = 30000 // 30 segundos
+  private readonly checkIntervalMs: number = 10000 // 10 segundos
 
   /**
    * Verifica si hay conexión a internet y Supabase está disponible
@@ -45,7 +45,7 @@ export class NetworkService {
 
       // 2. Intentar hacer ping a Supabase con timeout corto
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 5000) // 5 segundos timeout
+      const timeoutId = setTimeout(() => controller.abort(), 2000) // 2 segundos timeout
 
       try {
         // Hacer una query simple a Supabase

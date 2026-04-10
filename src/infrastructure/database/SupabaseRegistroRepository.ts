@@ -19,10 +19,19 @@ export class SupabaseRegistroRepository implements IRegistroRepository {
    */
   async saveEntrada(registro: Registro): Promise<Result<Registro>> {
     try {
+      // Folio temporal (TEMP-XXXXXXXX): el trigger de Supabase generará el definitivo.
+      // Folio normal: se respeta tal cual — es la fuente de verdad offline.
+      const esFolioTemporal = registro.folio?.startsWith('TEMP-') ?? true;
+      const folioParaSupabase = esFolioTemporal ? null : registro.folio;
+
+      if (esFolioTemporal) {
+        console.warn(`⚠️ saveEntrada: registro ${registro.id} tiene folio temporal (${registro.folio}) — Supabase generará el definitivo`);
+      }
+
       console.log('🔵 SupabaseRegistroRepository.saveEntrada - Intentando guardar:', {
         id: registro.id,
         placaVehiculo: registro.placaVehiculo,
-        folio: registro.folio || 'NULL (Supabase lo generará)',
+        folio: folioParaSupabase ?? '(Supabase generará)',
         claveOperador: registro.claveOperador,
         claveRuta: registro.claveRuta,
         claveConcepto: registro.claveConcepto,
@@ -30,7 +39,7 @@ export class SupabaseRegistroRepository implements IRegistroRepository {
 
       const data = {
         id: registro.id,
-        folio: registro.folio || null, // NULL para que Supabase genere el folio
+        folio: folioParaSupabase,
         clave_ruta: registro.claveRuta,
         ruta: registro.ruta,
         placa_vehiculo: registro.placaVehiculo,

@@ -7,15 +7,13 @@ import { supabase } from '../../lib/supabase'
 
 /**
  * Repositorio Supabase para FolioSequence
- * Usado cuando hay conectividad para obtener el último folio desde el servidor
- * 
- * NOTA: Esta tabla AÚN NO EXISTE en Supabase - se usará cuando se ejecute la migración
- * Por ahora, getMaxFolioNumberFromRegistros consulta directamente la tabla registros
+ * Lee/escribe la tabla folio_sequences en Supabase.
+ * Esa tabla se mantiene actualizada automáticamente vía trigger AFTER INSERT en registros.
+ * getMaxFolioNumberFromRegistros() es O(1) — 1 fila por índice, sin full-scan.
  */
 export class SupabaseFolioSequenceRepository implements IFolioSequenceRepository {
   /**
    * Guarda o actualiza una secuencia en Supabase
-   * NOTA: Tabla folio_sequences aún no existe - pendiente migración
    */
   async save(sequence: FolioSequence): Promise<Result<FolioSequence>> {
     try {
@@ -44,7 +42,6 @@ export class SupabaseFolioSequenceRepository implements IFolioSequenceRepository
 
   /**
    * Busca una secuencia por clave de empresa
-   * NOTA: Tabla folio_sequences aún no existe - pendiente migración
    */
   async findByClaveEmpresa(claveEmpresa: number): Promise<Result<FolioSequence | null>> {
     try {
@@ -68,8 +65,7 @@ export class SupabaseFolioSequenceRepository implements IFolioSequenceRepository
   }
 
   /**
-   * Obtiene todas las secuencias
-   * NOTA: Tabla folio_sequences aún no existe - pendiente migración
+   * Obtiene todas las secuencias (todas las empresas de un golpe — 14 filas max)
    */
   async findAll(): Promise<Result<FolioSequence[]>> {
     try {
@@ -97,31 +93,27 @@ export class SupabaseFolioSequenceRepository implements IFolioSequenceRepository
   }
 
   /**
-   * Obtiene el máximo número de folio de registros en Supabase para una empresa
-   * Extrae el número del formato PREF-0000001
-   * 
-   * ESTE MÉTODO SÍ FUNCIONA - consulta la tabla registros que ya existe
+   * Obtiene el último número de folio usado para una empresa desde folio_sequences.
+   * Lectura de 1 fila por índice — O(1), sin full-scan sobre registros.
    */
   async getMaxFolioNumberFromRegistros(claveEmpresa: number): Promise<Result<number>> {
     try {
-      // Usar la función de Supabase que ya existe: get_next_folio_number
-      // Esta función hace exactamente lo que necesitamos
-      const { data, error } = await supabase.rpc('get_next_folio_number', {
-        p_clave_empresa: claveEmpresa,
-      })
+      const { data, error } = await supabase
+        .from('folio_sequences')
+        .select('ultimo_numero')
+        .eq('clave_empresa', claveEmpresa)
+        .single()
 
       if (error) {
-        console.warn(`⚠️ Error al obtener max folio de Supabase:`, error.message)
+        if (error.code === 'PGRST116') {
+          // No existe aún la fila para esta empresa — contador en 0
+          return ResultFactory.ok(0)
+        }
+        console.warn(`⚠️ Error al obtener folio_sequences de Supabase:`, error.message)
         return ResultFactory.fail(new Error(`Error al obtener max folio: ${error.message}`))
       }
 
-      // get_next_folio_number retorna el SIGUIENTE número (max + 1)
-      // Necesitamos el ÚLTIMO usado, así que restamos 1
-      const ultimoNumero = Math.max(0, (data || 1) - 1)
-
-
-
-      return ResultFactory.ok(ultimoNumero)
+      return ResultFactory.ok(data.ultimo_numero ?? 0)
     } catch (error) {
       console.error(`❌ Error al obtener max folio de Supabase:`, error)
       return ResultFactory.fromError(error)
@@ -130,7 +122,6 @@ export class SupabaseFolioSequenceRepository implements IFolioSequenceRepository
 
   /**
    * Marca una secuencia como sincronizada
-   * NOTA: Tabla folio_sequences aún no existe - pendiente migración
    */
   async markAsSynchronized(claveEmpresa: number): Promise<Result<void>> {
     try {
@@ -154,7 +145,6 @@ export class SupabaseFolioSequenceRepository implements IFolioSequenceRepository
 
   /**
    * Obtiene secuencias no sincronizadas
-   * NOTA: Tabla folio_sequences aún no existe - pendiente migración
    */
   async findUnsynchronized(): Promise<Result<FolioSequence[]>> {
     try {

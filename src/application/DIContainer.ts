@@ -249,7 +249,6 @@ class DIContainer {
         this.sqliteFolioSequenceRepository,
         this.supabaseFolioSequenceRepository,
         this.sqliteEmpresaRepository,
-        this.networkService
       );
     }
     return this._folioService;
@@ -298,14 +297,20 @@ class DIContainer {
       console.warn('💡 Configura el puerto serial en el panel de Configuración');
     }
 
-    // Inicializar secuencias de folios (no bloqueante)
+    // Inicializar secuencias de folios con timeout 3s
     try {
-      console.log('🔄 Inicializando secuencias de folios...');
-      await this.folioService.initializeSequences();
+      console.log('🔄 Inicializando secuencias de folios (timeout 3s)...');
+      await Promise.race([
+        this.folioService.initializeSequences(),
+        new Promise<void>((_, reject) =>
+          setTimeout(() => reject(new Error('Timeout: initializeSequences tardó más de 3s')), 3000)
+        )
+      ]);
       console.log('✅ Secuencias de folios inicializadas');
     } catch (error) {
-      console.warn('⚠️ Error al inicializar secuencias de folios:', error);
-      console.warn('ℹ️ Se generarán folios offline cuando sea necesario');
+      const msg = error instanceof Error ? error.message : String(error);
+      console.warn(`⚠️ initializeSequences no completó: ${msg}`);
+      console.warn('ℹ️ Se usarán secuencias locales; sync en background al reconectar');
     }
 
     // Realizar sincronización inicial (solo una vez al abrir la app)
@@ -318,19 +323,12 @@ class DIContainer {
       console.warn('ℹ️ La aplicación continuará funcionando en modo offline');
     }
 
-    // Iniciar sincronización automática SOLO si está habilitada (no bloqueante)
+    // Auto-sync siempre activo: sube registros pendientes cada 5 minutos.
+    // Solo actúa si hay registros con sincronizado=0 — no consume Supabase si no hay nada pendiente.
     try {
-      const autoSyncEnabled = localStorage.getItem('autoSyncEnabled') === 'true';
-      console.log(`🔍 DIContainer: localStorage.autoSyncEnabled = "${localStorage.getItem('autoSyncEnabled')}" → ${autoSyncEnabled}`);
-
-      if (autoSyncEnabled) {
-        console.log('🔄 Iniciando sincronización automática periódica...');
-        this.syncService.startAutoSync();
-        console.log('✅ Sincronización automática periódica iniciada');
-      } else {
-        console.log('📋 Sincronización automática periódica deshabilitada (modo manual)');
-        console.log('ℹ️ Para activarla, ve a Configuración > Sincronización con la Nube');
-      }
+      console.log('🔄 Iniciando sincronización automática periódica...');
+      this.syncService.startAutoSync();
+      console.log('✅ Sincronización automática periódica iniciada (cada 5 min)');
     } catch (error) {
       console.warn('⚠️ Error al iniciar sincronización automática:', error);
     }
@@ -344,6 +342,16 @@ class DIContainer {
       console.warn('⚠️ Error al iniciar sincronización en tiempo real:', error);
       console.warn('ℹ️ Los cambios remotos no se sincronizarán automáticamente');
     }
+
+    // Sync reactivo de secuencias de folios al reconectar red
+    this.networkService.subscribeToNavigatorEvents((isOnline) => {
+      if (isOnline) {
+        console.log('🌐 Red restaurada - sincronizando folios en background...');
+        this.folioService.syncSequences().catch(err =>
+          console.warn('⚠️ Error en sync de folios al reconectar:', err)
+        );
+      }
+    });
 
     console.log('✅ Contenedor de dependencias inicializado');
   }

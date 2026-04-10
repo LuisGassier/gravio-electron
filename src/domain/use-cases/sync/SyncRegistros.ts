@@ -13,7 +13,7 @@ export interface SyncRegistrosOutput {
  *
  * Responsabilidades:
  * 1. Obtener todos los registros no sincronizados de SQLite
- * 2. Enviarlos a Supabase (el folio se genera allá si no existe)
+ * 2. Enviarlos a Supabase con el folio ya asignado (offline-first — SQLite es fuente de verdad)
  * 3. Marcar como sincronizados los exitosos
  * 4. Reportar errores sin bloquear otros registros
  */
@@ -72,17 +72,18 @@ export class SyncRegistrosUseCase {
         return ResultFactory.fail(remoteResult.error);
       }
 
-      // 3. Actualizar folio localmente si se generó
       const registroRemoto = remoteResult.value;
-      if (registroRemoto.folio && registroRemoto.folio !== registro.folio) {
-        console.log(`📝 Actualizando folio local: ${registroRemoto.folio} para registro ${registroId}`);
-        await this.localRepository.saveEntrada(registroRemoto);
+
+      // 3. Si tenía folio temporal, actualizar local con el folio definitivo de Supabase
+      if (registro.folio?.startsWith('TEMP-') && registroRemoto.folio) {
+        console.log(`📝 Reemplazando folio temporal ${registro.folio} → ${registroRemoto.folio}`);
+        await this.localRepository.saveEntrada({ ...registroRemoto, sincronizado: false } as any);
       }
 
       // 4. Marcar como sincronizado
       await this.localRepository.markAsSynced(registroId);
 
-      return ResultFactory.ok({ folio: registroRemoto.folio });
+      return ResultFactory.ok({ folio: registroRemoto.folio ?? registro.folio });
     } catch (error) {
       return ResultFactory.fromError(error);
     }
@@ -113,19 +114,15 @@ export class SyncRegistrosUseCase {
         // Sincronizar cada registro
         for (const registro of unsyncedRegistros) {
           try {
-            // Intentar guardar en Supabase
-            // Si es entrada, Supabase generará el folio
             const remoteResult = await this.remoteRepository.saveEntrada(registro);
 
             if (remoteResult.success) {
-              // Actualizar el registro local con el folio generado por Supabase
-              const registroConFolio = remoteResult.value;
-              if (registroConFolio.folio) {
-                console.log(`📝 Actualizando folio local: ${registroConFolio.folio} para registro ${registroConFolio.id}`);
-                await this.localRepository.saveEntrada(registroConFolio);
+              const registroRemoto = remoteResult.value;
+              // Si tenía folio temporal, actualizar el local con el folio definitivo de Supabase
+              if (registro.folio?.startsWith('TEMP-') && registroRemoto.folio) {
+                console.log(`📝 Reemplazando folio temporal ${registro.folio} → ${registroRemoto.folio}`);
+                await this.localRepository.saveEntrada({ ...registroRemoto, sincronizado: false } as any);
               }
-
-              // Marcar como sincronizado localmente
               await this.localRepository.markAsSynced(registro.id!);
               synced++;
             } else {

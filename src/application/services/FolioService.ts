@@ -3,128 +3,53 @@ import { ResultFactory } from '../../domain/shared/Result'
 import type { IFolioSequenceRepository } from '../../domain/repositories/IFolioSequenceRepository'
 import type { IEmpresaRepository } from '../../domain/repositories/IEmpresaRepository'
 import { FolioSequence } from '../../domain/entities/FolioSequence'
-import type { NetworkService } from './NetworkService'
 
 /**
  * Servicio de dominio: FolioService
- * 
+ *
  * Responsabilidades:
- * 1. Generar folios con estrategia online-first, offline-fallback
- * 2. Inicializar secuencias desde Supabase al arrancar
- * 3. Sincronizar contadores cuando vuelve la conectividad
- * 
- * Flujo de generación (online-first):
- * 1. Verificar conectividad con NetworkService
- * 2. Si online: intentar generar folio consultando Supabase (remoteRepository)
- * 3. Si falla o sin conexión: generar folio offline (localRepository)
- * 
+ * 1. Generar folios con estrategia offline-first (siempre local, atómico)
+ * 2. Inicializar secuencias desde Supabase al arrancar (con timeout)
+ * 3. Sincronizar contadores en background cuando hay conectividad
+ *
+ * Flujo de generación (offline-first):
+ * - Siempre usa getNextFolioOffline() — operación atómica en SQLite local
+ * - No bloquea en red; el folio se genera en <10ms independientemente de la conexión
+ *
  * Flujo offline:
  * - getNextFolioOffline() consulta folio_sequences en SQLite
  * - Si no existe la empresa, crea contador inicial con prefijo
  * - Incrementa ultimo_numero y marca sincronizado=0
  * - Formatea como PREF-0000001
- * 
- * Flujo online:
- * - getNextFolioOnline() consulta máximo folio en Supabase
- * - Actualiza secuencia local con ese número
- * - Genera siguiente folio y guarda en local
- * - Marca como sincronizado=1
+ *
+ * Sincronización en background:
+ * - syncSequences() reconcilia contadores locales vs Supabase (Math.max)
+ * - Se llama al arrancar (con timeout 3s) y al reconectar red
  */
 export class FolioService {
   private readonly localRepository: IFolioSequenceRepository
   private readonly remoteRepository: IFolioSequenceRepository
   private readonly empresaRepository: IEmpresaRepository
-  private readonly networkService: NetworkService
 
   constructor(
     localRepository: IFolioSequenceRepository,
     remoteRepository: IFolioSequenceRepository,
     empresaRepository: IEmpresaRepository,
-    networkService: NetworkService
   ) {
     this.localRepository = localRepository
     this.remoteRepository = remoteRepository
     this.empresaRepository = empresaRepository
-    this.networkService = networkService
   }
 
   /**
-   * Genera el siguiente folio para una empresa
-   * 
-   * Estrategia online-first con fallback offline:
-   * 1. Verificar conectividad
-   * 2. Si online: intentar getNextFolioOnline()
-   * 3. Si falla o sin conexión: getNextFolioOffline()
+   * Genera el siguiente folio para una empresa.
+   *
+   * Estrategia offline-first: siempre genera localmente con operación atómica.
+   * La sincronización con Supabase ocurre en background via syncSequences().
    */
   async getNextFolio(claveEmpresa: number): Promise<Result<string>> {
-    try {
-      // 1. Verificar conectividad
-      const isOnline = await this.networkService.isOnline()
-
-      // 2. Si hay conexión, intentar generar folio online
-      if (isOnline) {
-        console.log(`🌐 Intentando generar folio ONLINE para empresa ${claveEmpresa}...`)
-        
-        try {
-          const onlineResult = await this.getNextFolioOnline(claveEmpresa)
-          
-          if (onlineResult.success) {
-            console.log(`✅ Folio generado ONLINE: ${onlineResult.value}`)
-            return onlineResult
-          } else {
-            console.warn(`⚠️ Error al generar folio online:`, onlineResult.error?.message)
-            console.log(`🔄 Fallback a modo OFFLINE...`)
-          }
-        } catch (error) {
-          console.warn(`⚠️ Excepción al generar folio online:`, error)
-          console.log(`🔄 Fallback a modo OFFLINE...`)
-        }
-      } else {
-        console.log(`📴 Sin conexión - Generando folio OFFLINE para empresa ${claveEmpresa}`)
-      }
-
-      // 3. Fallback a offline (si no hay conexión o si online falló)
-      const offlineResult = await this.getNextFolioOffline(claveEmpresa)
-      
-      if (offlineResult.success) {
-        console.log(`✅ Folio generado OFFLINE: ${offlineResult.value}`)
-      }
-      
-      return offlineResult
-    } catch (error) {
-      console.error(`❌ Error crítico al generar folio:`, error)
-      return ResultFactory.fromError(error)
-    }
-  }
-
-  /**
-   * Genera el siguiente folio en modo ONLINE
-   * Usa generación local atómica incluso cuando hay conexión
-   * Supabase se usa solo para reconciliación, no para generación
-   */
-  private async getNextFolioOnline(claveEmpresa: number): Promise<Result<string>> {
-    try {
-      // 1. Primero sincronizar secuencia con Supabase (obtener máximo remoto)
-      const syncResult = await this.syncSequenceForEmpresa(claveEmpresa)
-      if (!syncResult.success) {
-        console.warn(`⚠️ No se pudo sincronizar secuencia con Supabase, usando local:`, syncResult.error?.message)
-        // Continuar con generación local aunque falle sincronización
-      }
-
-      // 2. Generar folio usando operación atómica local
-      // Esto garantiza que el folio es único localmente
-      const folioResult = await this.getNextFolioOffline(claveEmpresa)
-
-      if (!folioResult.success) {
-        return folioResult
-      }
-
-      console.log(`📋 Folio online (sincronizado + local): ${folioResult.value}`)
-
-      return folioResult
-    } catch (error) {
-      return ResultFactory.fromError(error)
-    }
+    console.log(`📋 Generando folio LOCAL para empresa ${claveEmpresa}...`)
+    return this.getNextFolioOffline(claveEmpresa)
   }
 
   /**

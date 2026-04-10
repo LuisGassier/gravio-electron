@@ -72,20 +72,18 @@ export class PesajeService {
 
       console.log(`✅ No hay registros pendientes para placa ${input.placaVehiculo}, se puede crear entrada`)
 
-      // 🎯 Generar folio offline usando FolioService
-      let folioGenerado: string | undefined;
-      try {
-        const folioResult = await this.folioService.getNextFolio(input.claveEmpresa);
-        if (folioResult.success) {
-          folioGenerado = folioResult.value;
-          console.log(`📋 Folio generado offline: ${folioGenerado} para empresa ${input.claveEmpresa}`);
-        } else {
-          console.warn(`⚠️ No se pudo generar folio offline:`, folioResult.error?.message);
-          // Continuar sin folio - Supabase lo generará al sincronizar
-        }
-      } catch (error) {
-        console.warn(`⚠️ Error al generar folio offline:`, error);
-        // Continuar sin folio
+      // 🎯 Generar folio offline — el registro siempre se crea aunque falle el folio
+      let folioGenerado: string;
+      const folioResult = await this.folioService.getNextFolio(input.claveEmpresa);
+      if (folioResult.success) {
+        folioGenerado = folioResult.value;
+        console.log(`📋 Folio generado: ${folioGenerado} para empresa ${input.claveEmpresa}`);
+      } else {
+        // Folio temporal — el registro NO se pierde. Al sincronizar con Supabase,
+        // el trigger generar_folio() asignará el folio definitivo (llega con folio=null).
+        // SyncRegistros.executeSingle() actualizará el folio local con el de Supabase.
+        folioGenerado = `TEMP-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+        console.warn(`⚠️ No se pudo generar folio normal, usando temporal: ${folioGenerado}`, folioResult.error?.message);
       }
 
       // 👤 Obtener usuario actual
@@ -115,22 +113,22 @@ export class PesajeService {
         return result;
       }
 
-      // 🚀 Sincronizar INMEDIATAMENTE con Supabase
+      // 🚀 Sincronizar en background — no bloquear al usuario
       const registroCreado = result.value;
       console.log(`✅ Entrada creada exitosamente: ID=${registroCreado.id}, Folio=${registroCreado.folio}, Placa=${registroCreado.placaVehiculo}`)
       if (registroCreado.id) {
-        console.log(`🚀 Sincronizando entrada ${registroCreado.id} con Supabase...`);
-        try {
-          const syncResult = await this.syncRegistrosUseCase.executeSingle(registroCreado.id);
-          if (syncResult.success) {
-            console.log(`✅ Entrada sincronizada con Supabase - Folio: ${syncResult.value.folio || folioGenerado}`);
-          } else {
-            console.warn(`⚠️ No se pudo sincronizar entrada con Supabase:`, syncResult.error?.message);
-            console.warn(`ℹ️ El registro se sincronizará automáticamente más tarde`);
-          }
-        } catch (error) {
-          console.warn(`⚠️ Error al sincronizar entrada:`, error);
-        }
+        const idParaSync = registroCreado.id;
+        this.syncRegistrosUseCase.executeSingle(idParaSync)
+          .then(syncResult => {
+            if (syncResult.success) {
+              console.log(`✅ Entrada sincronizada en background - Folio: ${syncResult.value.folio || folioGenerado}`);
+            } else {
+              console.warn(`⚠️ Sync background entrada falló (se reintentará):`, syncResult.error?.message);
+            }
+          })
+          .catch(error => {
+            console.warn(`⚠️ Error en sync background entrada (se reintentará):`, error);
+          });
       }
 
       return result;
@@ -195,19 +193,20 @@ export class PesajeService {
           pesoNeto: result.value.getPesoNeto()
         });
 
-        // 🚀 Sincronizar INMEDIATAMENTE con Supabase
+        // 🚀 Sincronizar en background — no bloquear al usuario
         if (result.value.id) {
-          console.log(`🚀 Sincronizando salida ${result.value.id} con Supabase...`);
-          try {
-            const syncResult = await this.syncRegistrosUseCase.executeSingle(result.value.id);
-            if (syncResult.success) {
-              console.log(`✅ Salida sincronizada con Supabase`);
-            } else {
-              console.warn(`⚠️ No se pudo sincronizar salida con Supabase:`, syncResult.error?.message);
-            }
-          } catch (error) {
-            console.warn(`⚠️ Error al sincronizar salida:`, error);
-          }
+          const idParaSync = result.value.id;
+          this.syncRegistrosUseCase.executeSingle(idParaSync)
+            .then(syncResult => {
+              if (syncResult.success) {
+                console.log(`✅ Salida sincronizada en background`);
+              } else {
+                console.warn(`⚠️ Sync background salida falló (se reintentará):`, syncResult.error?.message);
+              }
+            })
+            .catch(error => {
+              console.warn(`⚠️ Error en sync background salida (se reintentará):`, error);
+            });
         }
       } else {
         console.error('❌ PesajeService - Error al actualizar:', result.error);
