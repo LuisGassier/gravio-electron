@@ -98,8 +98,52 @@ export class SupabaseRegistroRepository implements IRegistroRepository {
               }
             }
 
-            // El ID no existe en Supabase pero hay 23505 → conflicto de folio entre registros distintos
-            console.error(`❌ CONFLICTO DE FOLIO: folio=${registro.folio} ya existe en Supabase asignado a otro registro`);
+            // El ID no existe en Supabase pero hay 23505 → el folio ya existe con otro ID
+            // Buscar por folio para confirmar que es el mismo dato
+            if (registro.folio) {
+              const { data: byFolio } = await supabase
+                .from('registros')
+                .select('id,folio,placa_vehiculo,clave_empresa,peso_entrada')
+                .eq('folio', registro.folio)
+                .eq('clave_empresa', registro.claveEmpresa)
+                .single();
+
+              if (byFolio) {
+                const mismosDatos =
+                  byFolio.placa_vehiculo === registro.placaVehiculo &&
+                  Math.abs((byFolio.peso_entrada ?? 0) - (registro.pesoEntrada ?? 0)) < 1;
+
+                if (mismosDatos) {
+                  // Si el registro local es completo y el remoto no tiene salida, actualizar por folio
+                  if (registro.isCompleto() && !byFolio.peso_salida) {
+                    console.log(`🔄 Folio ${registro.folio} existe en Supabase sin salida — actualizando por folio`);
+                    const { data: updated, error: updateErr } = await supabase
+                      .from('registros')
+                      .update({
+                        peso_salida: registro.pesoSalida,
+                        fecha_salida: registro.fechaSalida?.toISOString() || null,
+                        tipo_pesaje: 'completo',
+                        observaciones: registro.observaciones || null,
+                        updated_at: new Date().toISOString(),
+                      })
+                      .eq('folio', registro.folio)
+                      .eq('clave_empresa', registro.claveEmpresa)
+                      .select()
+                      .single();
+
+                    if (!updateErr && updated) {
+                      console.log(`✅ Salida actualizada en Supabase para folio ${registro.folio}`);
+                      const mapped = await this.mapRowToRegistro(updated);
+                      return mapped.success && mapped.value ? ResultFactory.ok(mapped.value) : ResultFactory.ok(registro);
+                    }
+                    console.warn(`⚠️ No se pudo actualizar salida por folio, marcando como sincronizado de todas formas`);
+                  }
+                  console.log(`✅ Folio ${registro.folio} ya existe en Supabase con ID diferente — marcando sincronizado`);
+                  return ResultFactory.ok(registro);
+                }
+              }
+            }
+            console.error(`❌ CONFLICTO DE FOLIO: folio=${registro.folio} ya existe en Supabase asignado a otro registro con datos distintos`);
             return ResultFactory.fail(new Error(`Conflicto de folio: ${registro.folio} ya está asignado a otro registro en Supabase`));
           }
         }

@@ -113,6 +113,10 @@ export class SyncService {
     const localRepo = this._localRepo!;
     const remoteRepo = this._remoteRepo!;
 
+    // Pausar auto-sync para evitar competencia
+    const autoSyncActivo = this.isAutoSyncActive();
+    if (autoSyncActivo) this.stopAutoSync();
+
     const todosResult = await localRepo.findAll();
     if (!todosResult.success || !todosResult.value) {
       console.error('❌ repararSync: no se pudo leer SQLite');
@@ -158,6 +162,9 @@ export class SyncService {
 
     this._emitProgress({ total: todos.length, procesados, subidos, yaExistian, fallidos, done: true });
     console.log(`✅ repararSync completado: ${subidos} subidos, ${yaExistian} ya existían, ${fallidos} fallidos`);
+
+    // Reanudar auto-sync si estaba activo
+    if (autoSyncActivo) this.startAutoSync();
   }
 
   /**

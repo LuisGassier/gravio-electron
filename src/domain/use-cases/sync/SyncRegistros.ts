@@ -57,9 +57,9 @@ export class SyncRegistrosUseCase {
           registro.observaciones
         );
         
-        // Si el UPDATE falla porque no existe, intentar INSERT
-        if (!remoteResult.success && remoteResult.error?.message.includes('no rows')) {
-          console.log(`📥 Registro no existe, creando entrada completa en Supabase`);
+        // Si el UPDATE falla (registro no existe en remoto), intentar INSERT
+        if (!remoteResult.success) {
+          console.log(`📥 UPDATE falló (${remoteResult.error?.message}), intentando INSERT`);
           remoteResult = await this.remoteRepository.saveEntrada(registro);
         }
       } else {
